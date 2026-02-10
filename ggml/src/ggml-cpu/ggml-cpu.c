@@ -2061,6 +2061,10 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 ggml_compute_forward_opt_step_sgd(params, tensor);
             }
             break;
+        case GGML_OP_PENALTIES:
+            {
+                // GPU sampling operation; no CPU implementation needed
+            } break;
         case GGML_OP_NONE:
             {
                 // nop
