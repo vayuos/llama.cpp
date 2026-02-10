@@ -118,7 +118,7 @@ endif()
 # general
 option(GGML_STATIC "ggml: static link libraries"                     OFF)
 option(GGML_NATIVE "ggml: optimize the build for the current system" ${GGML_NATIVE_DEFAULT})
-option(GGML_LTO    "ggml: enable link time optimization"             OFF)
+option(GGML_LTO    "ggml: enable link time optimization"             ON)
 option(GGML_CCACHE "ggml: use ccache if available"                   ON)
 
 # debug
@@ -202,7 +202,7 @@ option(GGML_CUDA_NO_PEER_COPY               "ggml: do not use peer to peer copie
 option(GGML_CUDA_NO_VMM                     "ggml: do not try to use CUDA VMM"                OFF)
 option(GGML_CUDA_FA                         "ggml: compile ggml FlashAttention CUDA kernels"  ON)
 option(GGML_CUDA_FA_ALL_QUANTS              "ggml: compile all quants for FlashAttention"     OFF)
-option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ${GGML_CUDA_GRAPHS_DEFAULT})
+option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ON)
 set   (GGML_CUDA_COMPRESSION_MODE "size" CACHE STRING
                                             "ggml: cuda link binary compression mode; requires cuda 12.8+")
 set_property(CACHE GGML_CUDA_COMPRESSION_MODE PROPERTY STRINGS "none;speed;balance;size")
@@ -265,8 +265,8 @@ option(GGML_ZENDNN                          "ggml: use ZenDNN"                  
 option(ZENDNN_ROOT                          "ggml: path to ZenDNN installation"               "")
 
 # extra artifacts
-option(GGML_BUILD_TESTS    "ggml: build tests"    ${GGML_STANDALONE})
-option(GGML_BUILD_EXAMPLES "ggml: build examples" ${GGML_STANDALONE})
+option(GGML_BUILD_TESTS    "ggml: build tests"    OFF)
+option(GGML_BUILD_EXAMPLES "ggml: build examples" OFF)
 
 #
 # dependencies

@@ -12,12 +12,35 @@ if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
+# Force Release build for optimization
+if (NOT XCODE AND NOT MSVC)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
-# Aggressive Optimization Flags
+# Aggressive Optimization Flags for Release Builds
 if (NOT MSVC)
+    # -O3: Maximum optimizations
+    # -ffast-math: Aggressive floating-point optimizations
+    # -fno-finite-math-only: Allow optimizations for non-finite values
+    # -funroll-loops: Unroll loops for reduced branch overhead
+    # -march=native: Optimize for native CPU architecture
+    # -flto: Link Time Optimization (enabled below for Release)
     set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native")
+    
+    # Enable LTO for Release builds
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -flto=auto -s")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=auto -s")
+        set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto=auto -s")
+    endif()
+endif()
+
+# Set CUDA architecture to Ada Lovelace (89) for Ada GPUs
+if (NOT CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 89 CACHE STRING "CUDA architectures to compile for" FORCE)
 endif()
 
 # Add path to modules
