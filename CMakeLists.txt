@@ -14,6 +14,12 @@ endif()
 
 message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
+# Aggressive Optimization Flags
+if (NOT MSVC)
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native")
+endif()
+
 # Add path to modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
@@ -104,12 +110,12 @@ option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 
 # extra artifacts
-option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_TOOLS    "llama: build tools"          ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES "llama: build examples"       ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_SERVER   "llama: build server example" ${LLAMA_STANDALONE})
-option(LLAMA_TOOLS_INSTALL  "llama: install tools"        ${LLAMA_TOOLS_INSTALL_DEFAULT})
-option(LLAMA_TESTS_INSTALL  "llama: install tests"        ON)
+option(LLAMA_BUILD_TESTS    "llama: build tests"          OFF)
+option(LLAMA_BUILD_TOOLS    "llama: build tools"          ON)
+option(LLAMA_BUILD_EXAMPLES "llama: build examples"       OFF)
+option(LLAMA_BUILD_SERVER   "llama: build server example" ON)
+option(LLAMA_TOOLS_INSTALL  "llama: install tools"        OFF)
+option(LLAMA_TESTS_INSTALL  "llama: install tests"        OFF)
 
 # 3rd party libs
 option(LLAMA_HTTPLIB    "llama: httplib for downloading functionality" ON)

@@ -33,7 +33,7 @@ if (CUDAToolkit_FOUND)
             list(APPEND CMAKE_CUDA_ARCHITECTURES 75-virtual 80-virtual 86-real)
 
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
-                list(APPEND CMAKE_CUDA_ARCHITECTURES 89-real)
+                set(CMAKE_CUDA_ARCHITECTURES 89)
             endif()
 
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.8")
