@@ -5,6 +5,7 @@
 #include "llama-grammar.h"
 
 #include "ggml-cpp.h"
+#include "ggml-backend.h"
 
 #include <array>
 #include <algorithm>
@@ -2629,6 +2630,8 @@ struct llama_sampler_penalties {
 
     // a frequency map to count token occurrences
     std::unordered_map<llama_token, int> token_count;
+
+    struct ggml_tensor * last_tokens_tensor = nullptr;
 };
 
 static const char * llama_sampler_penalties_name(const struct llama_sampler * /*smpl*/) {
@@ -2727,6 +2730,51 @@ static void llama_sampler_penalties_free(struct llama_sampler * smpl) {
     delete (llama_sampler_penalties *) smpl->ctx;
 }
 
+static bool llama_sampler_penalties_backend_init(struct llama_sampler * smpl, ggml_backend_buffer_type_t buft) {
+    GGML_UNUSED(smpl);
+    GGML_UNUSED(buft);
+    return true;
+}
+
+static void llama_sampler_penalties_backend_set_input(struct llama_sampler * smpl) {
+    auto * ctx = (llama_sampler_penalties *) smpl->ctx;
+    if (ctx->last_tokens_tensor) {
+        std::vector<llama_token> last_tokens = ctx->prev.to_vector();
+        if (!last_tokens.empty()) {
+            ggml_backend_tensor_set(ctx->last_tokens_tensor, last_tokens.data(), 0, last_tokens.size() * sizeof(llama_token));
+        }
+    }
+}
+
+static void llama_sampler_penalties_backend_apply(
+        struct llama_sampler      * smpl,
+        struct ggml_context       * ctx,
+        struct ggml_cgraph        * gf,
+        struct llama_sampler_data * data) {
+    auto * sampler_ctx = (llama_sampler_penalties *) smpl->ctx;
+    GGML_UNUSED(gf);
+
+    int n_last = sampler_ctx->prev.size();
+    if (n_last == 0) {
+        return;
+    }
+
+    struct ggml_tensor * last_tokens_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n_last);
+    sampler_ctx->last_tokens_tensor = last_tokens_tensor;
+
+    struct ggml_tensor * curl = ggml_penalties(
+        ctx,
+        data->logits,
+        last_tokens_tensor,
+        sampler_ctx->penalty_repeat,
+        sampler_ctx->penalty_freq,
+        sampler_ctx->penalty_present);
+
+    ggml_set_name(curl, "penalties");
+
+    data->logits = curl;
+}
+
 static struct llama_sampler_i llama_sampler_penalties_i = {
     /* .name              = */ llama_sampler_penalties_name,
     /* .accept            = */ llama_sampler_penalties_accept,
@@ -2734,10 +2782,10 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
     /* .reset             = */ llama_sampler_penalties_reset,
     /* .clone             = */ llama_sampler_penalties_clone,
     /* .free              = */ llama_sampler_penalties_free,
-    /* .backend_init      = */ nullptr,
+    /* .backend_init      = */ llama_sampler_penalties_backend_init,
     /* .backend_accept    = */ nullptr,
-    /* .backend_apply     = */ nullptr,
-    /* .backend_set_input = */ nullptr,
+    /* .backend_apply     = */ llama_sampler_penalties_backend_apply,
+    /* .backend_set_input = */ llama_sampler_penalties_backend_set_input,
 };
 
 struct llama_sampler * llama_sampler_init_penalties(
@@ -2762,6 +2810,7 @@ struct llama_sampler * llama_sampler_init_penalties(
             /* .penalty_present = */ penalty_present,
             /* .prev            = */ ring_buffer<llama_token>(penalty_last_n),
             /* .token_count     = */ {},
+            /* .last_tokens_tensor = */ nullptr,
         }
     );
 }
