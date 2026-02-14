@@ -1,16 +1,17 @@
-#include <algorithm>
-#include <cstdint>
-
 #include "argmax.cuh"
 #include "common.cuh"
+#include "sampling.h"
 #include "sum.cuh"
+
+#include <algorithm>
+#include <cstdint>
 
 static __global__ void argmax_f32(const float * __restrict__ x, int32_t * __restrict__ dst, const int64_t ncols) {
     const int64_t row = blockIdx.x;
 
-    float maxval = -FLT_MAX;
-    int   argmax = -1;
-    const float * rowx = x + row * ncols;
+    float         maxval = -FLT_MAX;
+    int           argmax = -1;
+    const float * rowx   = x + row * ncols;
 
     for (int32_t col = threadIdx.x; col < ncols; col += blockDim.x) {
         const float val = rowx[col];
@@ -21,7 +22,7 @@ static __global__ void argmax_f32(const float * __restrict__ x, int32_t * __rest
     }
 
 #pragma unroll
-    for (int offset = WARP_SIZE/2; offset > 0; offset >>= 1) {
+    for (int offset = WARP_SIZE / 2; offset > 0; offset >>= 1) {
         const float val = __shfl_xor_sync(0xFFFFFFFF, maxval, offset, WARP_SIZE);
         const int   col = __shfl_xor_sync(0xFFFFFFFF, argmax, offset, WARP_SIZE);
         if (val > maxval) {
@@ -50,7 +51,7 @@ static __global__ void argmax_f32(const float * __restrict__ x, int32_t * __rest
                 argmax = shared_argmax[lane_id];
             }
 #pragma unroll
-            for (int offset = WARP_SIZE/2; offset > 0; offset >>= 1) {
+            for (int offset = WARP_SIZE / 2; offset > 0; offset >>= 1) {
                 const float val = __shfl_xor_sync(0xFFFFFFFF, maxval, offset, WARP_SIZE);
                 const int   col = __shfl_xor_sync(0xFFFFFFFF, argmax, offset, WARP_SIZE);
                 if (val > maxval) {
@@ -70,7 +71,7 @@ void ggml_cuda_argmax(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0 = dst->src[0];
 
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_I32);
+    GGML_ASSERT(dst->type == GGML_TYPE_I32);
 
     GGML_ASSERT(ggml_is_contiguous(src0));
 
@@ -78,14 +79,28 @@ void ggml_cuda_argmax(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const int64_t nrows = ggml_nrows(src0);
 
     const float * src0_d = (const float *) src0->data;
-    int32_t     * dst_d  = (int32_t     *) dst->data;
+    int32_t *     dst_d  = (int32_t *) dst->data;
 
     cudaStream_t stream = ctx.stream();
 
     const int64_t num_blocks = nrows;
+
+    // Use optimized kernel for single-row large-vocabulary argmax
+    if (num_blocks == 1 && ne00 > 2048) {
+        // Allocate scratch: 256 blocks * (1 float + 1 int) * 4 bytes approx 2KB.
+        // cuda_argmax_kernel needs blocks+2 floats? No, checks implementation.
+        // Implementation: d_scratch needs blocks floats + blocks ints.
+        // Max blocks = 256. 256 * 8 = 2048 bytes.
+        // Allocating 4KB safety.
+        ggml_cuda_pool_alloc<float> scratch(ctx.pool(), 4096);
+        if (cuda_argmax_kernel(src0_d, dst_d, (int) ne00, scratch.ptr, stream) == 0) {
+            return;
+        }
+    }
+
     const int64_t num_threads = std::min<int64_t>(1024, (ne00 + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE);
-    const dim3 blocks_dim(num_threads, 1, 1);
-    const dim3 blocks_num(num_blocks, 1, 1);
+    const dim3    blocks_dim(num_threads, 1, 1);
+    const dim3    blocks_num(num_blocks, 1, 1);
 
     argmax_f32<<<blocks_num, blocks_dim, 0, stream>>>(src0_d, dst_d, ne00);
 }

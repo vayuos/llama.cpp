@@ -1135,7 +1135,7 @@ void ggml_compute_forward_add1(
         case GGML_TYPE_IQ3_S:
         case GGML_TYPE_IQ2_S:
             {
-                ggml_compute_forward_add1_q_f32(params, dst);
+                GGML_ABORT("CPU backend disabled for quantized decode-critical matmul. Use MMQ backend.");
             } break;
         default:
             {

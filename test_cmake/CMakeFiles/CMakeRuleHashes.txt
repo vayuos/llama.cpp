@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+8f2ddce381fd77adfd0b2cbde8a297f0 tools/server/index.html.gz.hpp
+494ca94d318b880d9731b557933ce877 tools/server/loading.html.hpp

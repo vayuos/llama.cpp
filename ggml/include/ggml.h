@@ -584,6 +584,8 @@ enum ggml_op {
     GGML_OP_GLU,
 
     GGML_OP_PENALTIES,
+    GGML_OP_SAMPLE_CANDIDATES,
+    GGML_OP_FUSED_MUL_MAT_BIAS_ACT,
 
     GGML_OP_COUNT,
 };
@@ -644,6 +646,9 @@ enum ggml_tensor_flag {
     GGML_TENSOR_FLAG_PARAM   = 4,   // ...contains trainable parameters
     GGML_TENSOR_FLAG_LOSS    = 8,   // ...defines loss for numerical optimization (multiple loss tensors add up)
     GGML_TENSOR_FLAG_COMPUTE = 16,  // ...must be computed
+    GGML_TENSOR_FLAG_DECODE_CRITICAL = 32, // ...must reside on GPU for high-performance decode
+    GGML_TENSOR_FLAG_FUSED_DEQUANT_MATMUL = 64, // ...must use fused dequantization + matmul
+    GGML_TENSOR_FLAG_NON_CRITICAL    = 128, // ...tasks that do not affect tokens/sec (must reside on CPU)
 };
 
 enum ggml_tri_type {
@@ -2292,6 +2297,9 @@ typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, 
 // If this is not called, or NULL is supplied, everything is output on stderr.
 GGML_API void ggml_log_get(ggml_log_callback * log_callback, void ** user_data);
 GGML_API void ggml_log_set(ggml_log_callback log_callback, void * user_data);
+
+GGML_API bool ggml_get_decode_mode(void);
+GGML_API void ggml_set_decode_mode(bool active);
 
 GGML_API struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor);
 

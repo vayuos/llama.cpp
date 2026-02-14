@@ -13,6 +13,30 @@ struct llama_hparams;
 struct llama_model;
 struct llama_context;
 
+// ============================================================================
+// KV CACHE MANAGEMENT - GPU-EXCLUSIVE DURING DECODE
+// ============================================================================
+//
+// CRITICAL INVARIANT:
+//
+// During decode (token generation), ALL KV cache must be GPU-resident.
+// Hybrid KV modes (CPU+GPU split, per-layer branching) are FORBIDDEN.
+//
+// Rules:
+//  1. Prefill phase: KV may be on CPU, GPU, or hybrid (flexible)
+//  2. Decode phase: KV MUST be GPU-only
+//  3. If KV on CPU at decode start: load FAILS (fail-early)
+//  4. No CPU KV fallback under memory pressure during decode
+//  5. No per-layer KV backend branching during decode
+//
+// Enforcement API:
+//  - freeze_kv_layout(): Freezes KV shape (immutable during decode)
+//  - enforce_gpu_only_kv(): Locks KV to GPU-only residency
+//  - Both must be called before decode phase begins
+//  - Both must be unlocked before returning to prefill/encode
+//
+// ============================================================================
+
 //
 // llama_kv_cache
 //
@@ -151,6 +175,7 @@ public:
     uint32_t get_n_stream() const;
 
     bool get_has_shift() const;
+    bool is_offloaded() const;
 
     //
     // graph_build API
@@ -199,6 +224,72 @@ public:
     void set_input_kq_mask   (ggml_tensor * dst, const llama_ubatch * ubatch, bool causal_attn) const;
     void set_input_pos_bucket(ggml_tensor * dst, const llama_ubatch * ubatch) const;
 
+    //
+    // KV Layout Freeze API - Enforce Immutability During Decode
+    //
+
+    /**
+     * Lock KV cache layout as immutable for decode phase
+     *
+     * Freezes KV cache shape, allocation, and configuration.
+     * Once locked, no KV mutations permitted during decode.
+     *
+     * @return 0 on success, -1 if already locked
+     */
+    int freeze_kv_layout();
+
+    /**
+     * Unlock KV cache layout, permit mutations (for encode/prefill phase)
+     *
+     * @return 0 on success, -1 if not locked
+     */
+    int unfreeze_kv_layout();
+
+    /**
+     * Check if KV cache layout is frozen
+     *
+     * @return 1 if frozen, 0 if not
+     */
+    int is_kv_layout_frozen() const;
+
+    //
+    // GPU-Only KV Residency API - Enforce Decode-Phase GPU Exclusivity
+    //
+
+    /**
+     * Lock KV cache to GPU-only residency for decode phase
+     *
+     * Enforces that all KV cache data remains GPU-resident during decode.
+     * No CPU-side KV buffer accesses are permitted once this is active.
+     *
+     * Rules:
+     *  - All KV data must be in GPU memory
+     *  - No CPU KV fallback is permitted
+     *  - No hybrid CPU+GPU KV modes allowed
+     *  - If KV was allocated on CPU, this fails and decode cannot start
+     *
+     * @return 0 on success (GPU KV confirmed)
+     *         -1 if KV is on CPU or mixed CPU/GPU (hybrid mode forbidden)
+     *         -2 if already locked
+     */
+    int enforce_gpu_only_kv();
+
+    /**
+     * Unlock GPU-only KV residency (for non-decode phases)
+     *
+     * Allows CPU KV access again (for prefill, encoding, model loading).
+     *
+     * @return 0 on success, -1 if not locked
+     */
+    int unlock_gpu_only_kv();
+
+    /**
+     * Check if KV is locked to GPU-only residency
+     *
+     * @return 1 if GPU-only locked, 0 if not
+     */
+    int is_gpu_only_kv_locked() const;
+
 private:
     const llama_model & model;
     const llama_hparams & hparams;
@@ -231,6 +322,40 @@ private:
 
     // this is the SWA type of the cache - not to be confused with the model SWA type
     const llama_swa_type swa_type = LLAMA_SWA_TYPE_NONE;
+
+    // =====================================================================
+    // KV CACHE LAYOUT FREEZING FOR DECODE PHASE
+    // =====================================================================
+    // KV cache layout (shape, strides, offsets, memory allocation) must be
+    // immutable during decode. Once decode begins, the following are frozen:
+    //  - Cache size and dimensions
+    //  - Memory allocation and pointers
+    //  - Layer configuration
+    //  - Sequence layout
+    // No runtime resizing or reconfiguration permitted.
+    // =====================================================================
+
+    // Flag: KV layout is frozen (immutable) for decode phase
+    bool kv_layout_frozen = false;
+
+    // =====================================================================
+    // GPU-ONLY KV RESIDENCY ENFORCEMENT FOR DECODE PHASE
+    // =====================================================================
+    // Hybrid KV cache modes (CPU+GPU split) are forbidden during decode.
+    // KV cache MUST be GPU-only during token generation.
+    //
+    // Enforcement rules:
+    //  - Decode must have all KV on GPU
+    //  - No CPU-side KV buffers permitted
+    //  - No per-layer KV backend branching (must be unconditionally GPU)
+    //  - If hybrid KV mode detected during decode: ABORT
+    //
+    // This flag locks the KV cache to GPU-only residency.
+    // Attempting to decode with CPU KV or hybrid modes fails at lock time.
+    // =====================================================================
+
+    // Flag: KV cache is locked to GPU-only residency for decode phase
+    bool kv_gpu_only_locked = false;
 
     // ggml contexts for the KV cache along with the allocated backend buffers:
     std::vector<std::pair<ggml_context_ptr, ggml_backend_buffer_ptr>> ctxs_bufs;
@@ -325,11 +450,15 @@ public:
     // llama_kv_cache_context specific API
     //
 
-    uint32_t get_n_kv() const;
+    uint32_t get_n_kv()   const;
+    uint32_t get_kv_size() const;
 
     // get views of the current state of the cache
     ggml_tensor * get_k(ggml_context * ctx, int32_t il) const;
     ggml_tensor * get_v(ggml_context * ctx, int32_t il) const;
+
+    ggml_tensor * get_k_fixed(ggml_context * ctx, int32_t il, uint32_t n_kv) const;
+    ggml_tensor * get_v_fixed(ggml_context * ctx, int32_t il, uint32_t n_kv) const;
 
     // store k_cur and v_cur in the cache based on the provided head location
     // note: the heads in k_cur and v_cur should be layed out contiguously in memory
@@ -352,6 +481,17 @@ public:
     void set_input_k_shift   (ggml_tensor * dst) const;
     void set_input_kq_mask   (ggml_tensor * dst, const llama_ubatch * ubatch, bool causal_attn) const;
     void set_input_pos_bucket(ggml_tensor * dst, const llama_ubatch * ubatch) const;
+
+    //
+    // KV Layout Freeze API
+    //
+
+    /**
+     * Get KV cache pointer for layout freeze tracking
+     */
+    llama_kv_cache * get_kv_cache() const {
+        return kv;
+    }
 
 private:
     llama_memory_status status;

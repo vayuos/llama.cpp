@@ -1,0 +1,1 @@
+/usr/bin/c++  -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native -O3 -DNDEBUG -flto=auto -s  -flto=auto -s "CMakeFiles/llama-minicpmv-cli.dir/deprecation-warning.cpp.o" -o ../../bin/llama-minicpmv-cli 

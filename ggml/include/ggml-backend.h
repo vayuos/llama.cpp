@@ -330,6 +330,9 @@ extern "C" {
     GGML_API bool                 ggml_backend_sched_alloc_graph(ggml_backend_sched_t sched, struct ggml_cgraph * graph); // returns success
     GGML_API enum ggml_status     ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
     GGML_API enum ggml_status     ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
+    // [STRICT] Autonomous Decode: Trigger a GPU-managed decode loop.
+    // The loop terminates when stop_tensor (GPU-resident) is non-zero.
+    GGML_API enum ggml_status     ggml_backend_sched_graph_compute_autonomous(ggml_backend_sched_t sched, struct ggml_cgraph * graph, struct ggml_tensor * stop_tensor);
     GGML_API void                 ggml_backend_sched_synchronize(ggml_backend_sched_t sched);
 
     // Reset all assignments and allocators - must be called before changing the node backends or allocating a new graph.
@@ -339,6 +342,31 @@ extern "C" {
 
     // Set a callback to be called for each resulting node during graph compute
     GGML_API void                 ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data);
+
+    // Assert that no part of the last graph computation executed on the CPU
+    GGML_API void                 ggml_backend_sched_assert_no_cpu_decode(ggml_backend_sched_t sched);
+
+    // Query whether a backend-specific decode-mode (GPU-driven token decode) is active.
+    // Returns true if decode-mode is currently active and CPU-driven decode steps are disallowed.
+    GGML_API bool                 ggml_backend_decode_mode_active(void);
+    GGML_API void                 ggml_backend_set_decode_mode(bool active);
+    // Force the scheduler to use a specific backend for all nodes (e.g. for decode graphs)
+    // If a node is not supported by the backend, graph allocation will fail/abort.
+    GGML_API void                 ggml_backend_sched_set_single_backend(ggml_backend_sched_t sched, int backend_id);
+
+    // Lock the backend scheduler to prevent any changes to backend selection.
+    // When locked, any attempt to change backends (via set_single_backend or otherwise) will abort.
+    GGML_API void                 ggml_backend_sched_lock_backends(ggml_backend_sched_t sched, bool locked);
+    
+    // Check if the backend scheduler is currently locked.
+    GGML_API bool                 ggml_backend_sched_is_locked(ggml_backend_sched_t sched);
+
+    // Verify that the current backend assignments match the cached/frozen state.
+    // Aborts if a mismatch is found.
+    GGML_API void                 ggml_backend_sched_check_consistency(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
+
+    // Dump the backend assignment for each node in the graph (INFO level).
+    GGML_API void                 ggml_backend_sched_dump_backends(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
 
     //
     // Utils

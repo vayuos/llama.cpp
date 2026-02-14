@@ -1,62 +1,63 @@
 #include "common.cuh"
 #include "ggml.h"
+#include "sampling.h"
 #include "softmax.cuh"
 
 #ifdef GGML_USE_HIP
-#include <hip/hip_cooperative_groups.h>
+#    include <hip/hip_cooperative_groups.h>
 #else
-#include <cooperative_groups.h>
-#include <cooperative_groups/reduce.h>
-#endif // GGML_USE_HIP
+#    include <cooperative_groups.h>
+#    include <cooperative_groups/reduce.h>
+#endif  // GGML_USE_HIP
 
 #include <cstdint>
 #include <utility>
 
-template <typename T>
-static __device__ __forceinline__ float t2f32(T val) {
+template <typename T> static __device__ __forceinline__ float t2f32(T val) {
     return (float) val;
 }
 
-template <>
-__device__ float __forceinline__ t2f32<half>(half val) {
+template <> __device__ float __forceinline__ t2f32<half>(half val) {
     return __half2float(val);
 }
 
 struct soft_max_params {
-
-    int64_t nheads;
+    int64_t  nheads;
     uint32_t n_head_log2;
-    int64_t ncols;
-    int64_t nrows_x;
-    int64_t nrows_y;
-    int64_t ne00;
-    int64_t ne01;
-    int64_t ne02;
-    int64_t ne03;
-    int64_t nb11;
-    int64_t nb12;
-    int64_t nb13;
+    int64_t  ncols;
+    int64_t  nrows_x;
+    int64_t  nrows_y;
+    int64_t  ne00;
+    int64_t  ne01;
+    int64_t  ne02;
+    int64_t  ne03;
+    int64_t  nb11;
+    int64_t  nb12;
+    int64_t  nb13;
 
     int64_t ne12;
     int64_t ne13;
-    float scale;
-    float max_bias;
-    float m0;
-    float m1;
+    float   scale;
+    float   max_bias;
+    float   m0;
+    float   m1;
 };
 
 // When ncols_template == 0 the bounds for the loops in this function are not known and can't be unrolled.
 // As we want to keep pragma unroll for all other cases we supress the clang transformation warning here.
 #ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wpass-failed"
-#endif // __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wpass-failed"
+#endif  // __clang__
 template <bool use_shared, int ncols_template, int block_size_template, typename T>
-static __global__ void soft_max_f32(
-        const float * x, const T * mask, const float * sinks, float * dst, const soft_max_params p) {
+static __global__ void soft_max_f32(const float *         x,
+                                    const T *             mask,
+                                    const float *         sinks,
+                                    float *               dst,
+                                    const soft_max_params p) {
     const int ncols = ncols_template == 0 ? p.ncols : ncols_template;
 
-    const int tid  = threadIdx.x;
+    const int tid = threadIdx.x;
 
     const int64_t i03 = blockIdx.z;
     const int64_t i02 = blockIdx.y;
@@ -69,18 +70,18 @@ static __global__ void soft_max_f32(
     const int64_t i12 = i02 % p.ne12;
     const int64_t i13 = i03 % p.ne13;
 
-    x    += int64_t(rowx)*ncols;
-    mask += (i11*p.nb11 + i12*p.nb12 + i13*p.nb13) / sizeof(T) * (mask != nullptr);
-    dst  += int64_t(rowx)*ncols;
+    x += int64_t(rowx) * ncols;
+    mask += (i11 * p.nb11 + i12 * p.nb12 + i13 * p.nb13) / sizeof(T) * (mask != nullptr);
+    dst += int64_t(rowx) * ncols;
 
     const int block_size = block_size_template == 0 ? blockDim.x : block_size_template;
 
     const float slope = get_alibi_slope(p.max_bias, i02, p.n_head_log2, p.m0, p.m1);
 
     extern __shared__ float data_soft_max_f32[];
-    float * buf_iw = data_soft_max_f32; // shared memory buffer for inter-warp communication
+    float *                 buf_iw = data_soft_max_f32;  // shared memory buffer for inter-warp communication
     // shared memory buffer to cache values between iterations:
-    float * vals = use_shared ? buf_iw + WARP_SIZE : dst;
+    float *                 vals   = use_shared ? buf_iw + WARP_SIZE : dst;
 
     float max_val = sinks ? sinks[i02] : -INFINITY;
 
@@ -92,16 +93,16 @@ static __global__ void soft_max_f32(
             break;
         }
 
-        const float val = x[col]*p.scale + (mask ? slope*t2f32(mask[col]) : 0.0f);
+        const float val = x[col] * p.scale + (mask ? slope * t2f32(mask[col]) : 0.0f);
 
         vals[col] = val;
-        max_val = max(max_val, val);
+        max_val   = max(max_val, val);
     }
 
     // find the max value in the block
     max_val = block_reduce<block_reduce_method::MAX, block_size_template>(max_val, buf_iw);
 
-    float tmp = 0.0f; // partial sum
+    float tmp = 0.0f;  // partial sum
 
 #pragma unroll
     for (int col0 = 0; col0 < ncols; col0 += block_size) {
@@ -151,9 +152,9 @@ static __device__ void soft_max_f32_parallelize_cols_single_row(const float * __
     const int col_start         = blockIdx.x * blockDim.x + tid;
     const int n_elem_per_thread = 4;
 
-    float     local_vals[n_elem_per_thread] = { -INFINITY, -INFINITY, -INFINITY, -INFINITY };
-    float     local_max                     = -INFINITY;
-    const int step_size                     = gridDim.x * blockDim.x;
+    float            local_vals[n_elem_per_thread] = { -INFINITY, -INFINITY, -INFINITY, -INFINITY };
+    float            local_max                     = -INFINITY;
+    const int        step_size                     = gridDim.x * blockDim.x;
     __shared__ float shared_vals[32];
 
     // Compute thread-local max
@@ -244,22 +245,25 @@ static __device__ void soft_max_f32_parallelize_cols_single_row(const float * __
 }
 
 #ifdef __clang__
-#pragma clang diagnostic pop
-#endif // __clang__
+#    pragma clang diagnostic pop
+#endif  // __clang__
 
-static __global__ void soft_max_back_f32(
-        const float * grad, const float * dstf, float * dst, const int ncols, const float scale) {
+static __global__ void soft_max_back_f32(const float * grad,
+                                         const float * dstf,
+                                         float *       dst,
+                                         const int     ncols,
+                                         const float   scale) {
     const int tid  = threadIdx.x;
     const int rowx = blockIdx.x;
 
-    grad += int64_t(rowx)*ncols;
-    dstf += int64_t(rowx)*ncols;
-    dst  += int64_t(rowx)*ncols;
+    grad += int64_t(rowx) * ncols;
+    dstf += int64_t(rowx) * ncols;
+    dst += int64_t(rowx) * ncols;
 
-    float dgf_dot = 0.0f; // dot product of dst from forward pass and gradients
+    float dgf_dot = 0.0f;  // dot product of dst from forward pass and gradients
 
     for (int col = tid; col < ncols; col += WARP_SIZE) {
-        dgf_dot += dstf[col]*grad[col];
+        dgf_dot += dstf[col] * grad[col];
     }
 
     dgf_dot = warp_reduce_sum(dgf_dot);
@@ -269,11 +273,17 @@ static __global__ void soft_max_back_f32(
     }
 }
 
-template<int... Ns, typename T>
-static void launch_soft_max_kernels(const float * x, const T * mask, const float * sinks, float * dst,
-                             const soft_max_params & p, cudaStream_t stream, dim3 block_dims, dim3 block_nums, size_t nbytes_shared)
-{
-    const int id       = ggml_cuda_get_device();
+template <int... Ns, typename T>
+static void launch_soft_max_kernels(const float *           x,
+                                    const T *               mask,
+                                    const float *           sinks,
+                                    float *                 dst,
+                                    const soft_max_params & p,
+                                    cudaStream_t            stream,
+                                    dim3                    block_dims,
+                                    dim3                    block_nums,
+                                    size_t                  nbytes_shared) {
+    const int    id    = ggml_cuda_get_device();
     const size_t smpbo = ggml_cuda_info().devices[id].smpbo;
 
     auto launch_kernel = [=](auto I) -> bool {
@@ -282,8 +292,7 @@ static void launch_soft_max_kernels(const float * x, const T * mask, const float
 
         if (p.ncols == ncols) {
             CUDA_SET_SHARED_MEMORY_LIMIT((soft_max_f32<true, ncols, block, T>), smpbo);
-            soft_max_f32<true, ncols, block><<<block_nums, block_dims, nbytes_shared, stream>>>
-                (x, mask, sinks, dst, p);
+            soft_max_f32<true, ncols, block><<<block_nums, block_dims, nbytes_shared, stream>>>(x, mask, sinks, dst, p);
             return true;
         }
         return false;
@@ -299,11 +308,11 @@ static void launch_soft_max_kernels(const float * x, const T * mask, const float
     soft_max_f32<true, 0, 0><<<block_nums, block_dims, nbytes_shared, stream>>>(x, mask, sinks, dst, p);
 }
 
-__launch_bounds__(8*WARP_SIZE, 1) static __global__ void soft_max_f32_parallelize_cols(const float * __restrict__ x,
-                                                     float * __restrict__ dst,
-                                                     float * __restrict__ tmp_maxs,
-                                                     float * __restrict__ tmp_sums,
-                                                     const soft_max_params p)
+__launch_bounds__(8 * WARP_SIZE, 1) static __global__ void soft_max_f32_parallelize_cols(const float * __restrict__ x,
+                                                                                         float * __restrict__ dst,
+                                                                                         float * __restrict__ tmp_maxs,
+                                                                                         float * __restrict__ tmp_sums,
+                                                                                         const soft_max_params p)
 // We loop over all instead of parallelizing across gridDim.y as cooperative groups
 // currently only support synchronizing the complete grid if not launched as a cluster group
 // (which requires CC > 9.0)
@@ -324,22 +333,33 @@ static void soft_max_f32_cuda(const float *                                x,
                               const soft_max_params &                      params,
                               cudaStream_t                                 stream,
                               [[maybe_unused]] ggml_backend_cuda_context & ctx) {
-    int nth = WARP_SIZE;
+    int           nth     = WARP_SIZE;
     const int64_t ncols_x = params.ncols;
 
-    while (nth < ncols_x && nth < CUDA_SOFT_MAX_BLOCK_SIZE) nth *= 2;
-    const dim3 block_dims(nth,     1, 1);
-    const dim3 block_nums(params.ne01, params.ne02, params.ne03);
-    const size_t nbytes_shared = (GGML_PAD(ncols_x, WARP_SIZE) + WARP_SIZE)*sizeof(float);
+    while (nth < ncols_x && nth < CUDA_SOFT_MAX_BLOCK_SIZE) {
+        nth *= 2;
+    }
+    const dim3   block_dims(nth, 1, 1);
+    const dim3   block_nums(params.ne01, params.ne02, params.ne03);
+    const size_t nbytes_shared = (GGML_PAD(ncols_x, WARP_SIZE) + WARP_SIZE) * sizeof(float);
     static_assert(CUDA_SOFT_MAX_BLOCK_SIZE == 1024, "These values need to be adjusted.");
 
-
-    const int id       = ggml_cuda_get_device();
+    const int    id    = ggml_cuda_get_device();
     const size_t smpbo = ggml_cuda_info().devices[id].smpbo;
 
-
     if (nbytes_shared <= smpbo) {
-        launch_soft_max_kernels<32, 64, 128, 256, 512, 1024, 2048, 4096>(x, mask, sinks, dst, params, stream, block_dims, block_nums, nbytes_shared);
+        // Optimized path for single-row softmax using sampling kernels
+        if (mask == nullptr && sinks == nullptr && dst != x && params.ne01 == 1 && params.ne02 == 1 &&
+            params.ne03 == 1) {
+            // Allocate scratch: 256*2 float = 2048 bytes minimum. Safe 4096.
+            ggml_cuda_pool_alloc<float> scratch(ctx.pool(), 4096);
+            if (cuda_softmax_kernel(x, dst, (int) ncols_x, scratch.ptr, stream) == 0) {
+                return;
+            }
+        }
+
+        launch_soft_max_kernels<32, 64, 128, 256, 512, 1024, 2048, 4096>(x, mask, sinks, dst, params, stream,
+                                                                         block_dims, block_nums, nbytes_shared);
     } else {
         // Parallelize across SMs for top-p/dist-sampling
         // The heuristic for parallelizing rows across SMs vs parallelizing single row & looping over all rows was done on the basis of a B6000 GPU and
@@ -363,11 +383,15 @@ static void soft_max_f32_cuda(const float *                                x,
     }
 }
 
-static void soft_max_back_f32_cuda(
-        const float * grad, const float * dstf, float * dst,
-        const int ncols, const int nrows, const float scale, cudaStream_t stream) {
+static void soft_max_back_f32_cuda(const float * grad,
+                                   const float * dstf,
+                                   float *       dst,
+                                   const int     ncols,
+                                   const int     nrows,
+                                   const float   scale,
+                                   cudaStream_t  stream) {
     const dim3 block_dims(WARP_SIZE, 1, 1);
-    const dim3 block_nums(nrows,     1, 1);
+    const dim3 block_nums(nrows, 1, 1);
 
     soft_max_back_f32<<<block_nums, block_dims, 0, stream>>>(grad, dstf, dst, ncols, scale);
 }
@@ -378,16 +402,17 @@ void ggml_cuda_op_soft_max(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src2 = dst->src[2];
 
     const float * src0_d = (const float *) src0->data;
-    const void  * src1_d = src1 ? (const void *) src1->data : nullptr;
-    const void  * src2_d = src2 ? (const void *) src2->data : nullptr;
-    float       *  dst_d = (float *) dst->data;
+    const void *  src1_d = src1 ? (const void *) src1->data : nullptr;
+    const void *  src2_d = src2 ? (const void *) src2->data : nullptr;
+    float *       dst_d  = (float *) dst->data;
 
     cudaStream_t stream = ctx.stream();
 
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+    GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
-    GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F16 || src1->type == GGML_TYPE_F32); // src1 contains mask and it is optional
+    GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F16 ||
+                src1->type == GGML_TYPE_F32);  // src1 contains mask and it is optional
 
     const int64_t nrows_x = ggml_nrows(src0);
     const int64_t nrows_y = src0->ne[1];
@@ -397,7 +422,7 @@ void ggml_cuda_op_soft_max(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     float scale    = 1.0f;
     float max_bias = 0.0f;
 
-    memcpy(&scale,    (const float *) dst->op_params + 0, sizeof(float));
+    memcpy(&scale, (const float *) dst->op_params + 0, sizeof(float));
     memcpy(&max_bias, (const float *) dst->op_params + 1, sizeof(float));
 
     const bool use_f16 = (src1 && src1->type == GGML_TYPE_F16);
@@ -412,29 +437,28 @@ void ggml_cuda_op_soft_max(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const uint32_t n_head      = src0->ne[2];
     const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head));
 
-    const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
+    const float m0 = powf(2.0f, -(max_bias) / n_head_log2);
     const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
 
-
     soft_max_params params = {};
-    params.nheads = src0->ne[2];
-    params.n_head_log2 = n_head_log2;
-    params.ncols = ne00;
-    params.nrows_x = nrows_x;
-    params.nrows_y = nrows_y;
-    params.ne00 = src0->ne[0];
-    params.ne01 = src0->ne[1];
-    params.ne02 = src0->ne[2];
-    params.ne03 = src0->ne[3];
-    params.nb11 = nb11;
-    params.nb12 = nb12;
-    params.nb13 = nb13;
-    params.ne12 = ne12;
-    params.ne13 = ne13;
-    params.scale = scale;
-    params.max_bias = max_bias;
-    params.m0 = m0;
-    params.m1 = m1;
+    params.nheads          = src0->ne[2];
+    params.n_head_log2     = n_head_log2;
+    params.ncols           = ne00;
+    params.nrows_x         = nrows_x;
+    params.nrows_y         = nrows_y;
+    params.ne00            = src0->ne[0];
+    params.ne01            = src0->ne[1];
+    params.ne02            = src0->ne[2];
+    params.ne03            = src0->ne[3];
+    params.nb11            = nb11;
+    params.nb12            = nb12;
+    params.nb13            = nb13;
+    params.ne12            = ne12;
+    params.ne13            = ne13;
+    params.scale           = scale;
+    params.max_bias        = max_bias;
+    params.m0              = m0;
+    params.m1              = m1;
 
     if (use_f16) {
         soft_max_f32_cuda(src0_d, (const half *) src1_d, (const float *) src2_d, dst_d, params, stream, ctx);
@@ -444,18 +468,18 @@ void ggml_cuda_op_soft_max(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
 }
 
 void ggml_cuda_op_soft_max_back(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
-    const ggml_tensor * src0 = dst->src[0]; // grad
-    const ggml_tensor * src1 = dst->src[1]; // forward pass output
+    const ggml_tensor * src0 = dst->src[0];  // grad
+    const ggml_tensor * src1 = dst->src[1];  // forward pass output
 
     const float * src0_d = (const float *) src0->data;
     const float * src1_d = (const float *) src1->data;
-    float       * dst_d  = (float       *) dst->data;
+    float *       dst_d  = (float *) dst->data;
 
     cudaStream_t stream = ctx.stream();
 
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+    GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
     const int64_t ncols = src0->ne[0];
     const int64_t nrows = ggml_nrows(src0);
@@ -463,7 +487,7 @@ void ggml_cuda_op_soft_max_back(ggml_backend_cuda_context & ctx, ggml_tensor * d
     float scale    = 1.0f;
     float max_bias = 0.0f;
 
-    memcpy(&scale,    (const float *) dst->op_params + 0, sizeof(float));
+    memcpy(&scale, (const float *) dst->op_params + 0, sizeof(float));
     memcpy(&max_bias, (const float *) dst->op_params + 1, sizeof(float));
 
     GGML_ASSERT(max_bias == 0.0f);

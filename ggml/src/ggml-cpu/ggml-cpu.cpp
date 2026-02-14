@@ -427,6 +427,10 @@ static bool ggml_backend_cpu_device_supports_op(ggml_backend_dev_t dev, const st
     }
 
     // check extra buffer types
+    if (op->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL) {
+        return false;
+    }
+
     // note: only the first sources are checked for extra buffer types to reduce overhead, increase if necessary
     for (int i = 0; i < 4; i++) {
         if (op->src[i] && op->src[i]->buffer &&

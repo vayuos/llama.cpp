@@ -940,6 +940,14 @@ extern "C" {
             struct llama_context * ctx,
               struct llama_batch   batch);
 
+    // [STRICT] Autonomous Decode: GPU-managed escape from CPU control.
+    // The CPU initiates the decode and then waits for the GPU to signal completion.
+    // Progression, sampling, and state updates occur entirely on the GPU.
+    LLAMA_API int32_t llama_decode_autonomous(
+            struct llama_context * ctx,
+              struct llama_batch   batch,
+                           int     n_predict);
+
     // Set the number of threads used for decoding
     // n_threads is the number of threads used for generation (single token)
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
@@ -1212,6 +1220,9 @@ extern "C" {
         struct ggml_tensor * probs;
         struct ggml_tensor * sampled;
         struct ggml_tensor * candidates;
+
+        // [STRICT] autonomous decode state
+        struct ggml_tensor * last_tokens;
     };
 
     // user code can implement the interface below in order to create custom llama_sampler
@@ -1383,7 +1394,15 @@ extern "C" {
                              int32_t   penalty_last_n,   // last n tokens to penalize (0 = disable penalty, -1 = context size)
                                float   penalty_repeat,   // 1.0 = disabled
                                float   penalty_freq,     // 0.0 = disabled
+                               float   penalty_freq,     // 0.0 = disabled
                                float   penalty_present); // 0.0 = disabled
+    
+    LLAMA_API int32_t llama_sampler_get_penalties_last_n(const struct llama_sampler * smpl);
+    LLAMA_API void    llama_sampler_get_penalties_prev(const struct llama_sampler * smpl, std::vector<llama_token> & prev);
+
+    LLAMA_API int32_t llama_sampler_get_top_k(const struct llama_sampler * smpl);
+    LLAMA_API float   llama_sampler_get_temp(const struct llama_sampler * smpl);
+    LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);
 
     ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
     LLAMA_API struct llama_sampler * llama_sampler_init_dry(

@@ -33,6 +33,18 @@ static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type) 
     }
 }
 
+
+static __device__ __forceinline__ float ggml_cuda_apply_activation(float x, ggml_unary_op op) {
+    switch (op) {
+        case GGML_UNARY_OP_SILU:    return ggml_cuda_op_silu_single(x);
+        case GGML_UNARY_OP_GELU:    return ggml_cuda_op_gelu_single(x);
+        case GGML_UNARY_OP_RELU:    return fmaxf(0.0f, x);
+        case GGML_UNARY_OP_SIGMOID: return 1.0f / (1.0f + expf(-x));
+        case GGML_UNARY_OP_TANH:    return tanhf(x);
+        default: return x;
+    }
+}
+
 static constexpr __device__ int get_vdr_mmvq(ggml_type type) {
     switch (type) {
         case GGML_TYPE_Q4_0:    return VDR_Q4_0_Q8_1_MMVQ;
@@ -187,19 +199,21 @@ static __global__ void mul_mat_vec_q(
     bool use_gate = false;
     bool use_bias = false;
     bool use_gate_bias = false;
+    ggml_glu_op glu_op = ggml_glu_op::GGML_GLU_OP_SWIGLU;
+    ggml_unary_op act_op = GGML_UNARY_OP_COUNT;
     const void * vgate = nullptr;
     const float * x_bias = nullptr;
     const float * gate_bias = nullptr;
-    ggml_glu_op active_glu;
 
     if constexpr (has_fusion) {
-        use_gate      = fusion.gate      != nullptr;
-        use_bias      = fusion.x_bias    != nullptr;
-        use_gate_bias = fusion.gate_bias != nullptr && use_gate;
+        use_gate = fusion.gate != nullptr;
+        use_bias = fusion.x_bias != nullptr;
+        use_gate_bias = fusion.gate_bias != nullptr;
+        glu_op = fusion.glu_op;
+        act_op = fusion.act_op;
         vgate         = fusion.gate;
         x_bias        = (const float *) fusion.x_bias;
         gate_bias     = (const float *) fusion.gate_bias;
-        active_glu    = fusion.glu_op;
     }
 
 
@@ -325,11 +339,8 @@ static __global__ void mul_mat_vec_q(
                     result += x_biases[j];
                 }
                 if (use_gate) {
-                    float gate_value = tmp_gate[j][threadIdx.x];
-                    if (use_gate_bias) {
-                        gate_value += gate_biases[j];
-                    }
-                    switch (active_glu) {
+                    const float gate_value = tmp_gate[j][threadIdx.x] + gate_biases[j];
+                    switch (glu_op) {
                         case GGML_GLU_OP_SWIGLU:
                             result *= ggml_cuda_op_silu_single(gate_value);
                             break;
@@ -351,7 +362,7 @@ static __global__ void mul_mat_vec_q(
     }
 
     if constexpr (!has_fusion) {
-        GGML_UNUSED_VARS(use_gate, use_bias, use_gate_bias, active_glu, gate_bias, x_bias, tmp_gate);
+        GGML_UNUSED_VARS(use_gate, use_bias, use_gate_bias, glu_op, gate_bias, x_bias, tmp_gate);
     }
 }
 
@@ -684,6 +695,11 @@ void ggml_cuda_mul_mat_vec_q(
             fusion_local.gate_bias = fusion->gate_bias->data;
         }
         fusion_local.glu_op = fusion->glu_op;
+        if (fusion->rms_w) {
+            fusion_local.rms_w = fusion->rms_w->data;
+            fusion_local.rms_eps = fusion->rms_eps;
+        }
+        fusion_local.act_op = fusion->act_op;
     }
 
     // If src0 is a temporary compute buffer, clear any potential padding.
@@ -703,7 +719,7 @@ void ggml_cuda_mul_mat_vec_q(
         const int64_t s11 = src1->nb[1] / ts_src1;
         const int64_t s12 = src1->nb[2] / ts_src1;
         const int64_t s13 = src1->nb[3] / ts_src1;
-        quantize_row_q8_1_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded, ne11, ne12, ne13, stream);
+        quantize_row_q8_1_rms_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded, ne11, ne12, ne13, fusion_local.rms_eps, (const float *) fusion_local.rms_w, stream);
     }
 
     const int64_t s01 = src0->nb[1] / ts_src0;
@@ -759,6 +775,8 @@ void ggml_cuda_op_mul_mat_vec_q(
     const int stride_col_y = src1_padded_row_size / QK8_1;
 
     ggml_cuda_mm_fusion_args_device fusion_local{};
+    fusion_local.act_op = GGML_UNARY_OP_COUNT;
+
     mul_mat_vec_q_switch_type(
         src0_dd_i, src0->type, src1_ddq_i, nullptr, fusion_local, dst_dd_i, ne00, row_diff, src1_ncols, stride_row_x, stride_col_y, nrows_dst,
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, stream);

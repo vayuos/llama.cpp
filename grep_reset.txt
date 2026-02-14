@@ -1,0 +1,20 @@
+195:void ggml_backend_buffer_reset(ggml_backend_buffer_t buffer) {
+197:    if (buffer->iface.reset) {
+198:        buffer->iface.reset(buffer);
+627:    /* .reset           = */ NULL,
+699:    bool is_reset;  // true if the scheduler has been reset since the last graph split
+997:    // reset splits
+1000:    sched->is_reset       = false;
+1853:    ggml_backend_sched_reset(sched);
+1883:void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
+1885:    // reset state for the next run
+1886:    if (!sched->is_reset) {
+1887:        ggml_hash_set_reset(&sched->hash_set);
+1891:        sched->is_reset = true;
+1901:    ggml_backend_sched_reset(sched);
+1922:    ggml_backend_sched_reset(sched);
+2007:    if (!sched->is_reset && !sched->is_alloc) {
+2008:        ggml_backend_sched_reset(sched);
+2197:    sched->is_reset = false;
+2530:    /* .reset           = */ NULL,
+2542:    /* .reset           = */ NULL,

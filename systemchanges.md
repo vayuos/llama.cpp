@@ -2,9 +2,10 @@
 
 ### 1.1 Primary Objective
 
-* Reduce CPU utilization during the token-by-token decode phase
+* Ensure tokens-per-second (t/s) is **never gated by CPU execution**
+* Make the GPU the **exclusive execution resource** for all decode-critical computation
 * Increase sustained GPU utilization during decode
-* Maximize tokens-per-second (t/s) under strict correctness constraints
+* Allow CPU execution **only for latency-tolerant, non-pacing work**
 
 ### 1.2 Scope of Change
 
@@ -13,9 +14,13 @@
   * Rebuild `llama.cpp`
   * Modify CUDA backend behavior
   * Modify graph execution, scheduling, and kernel fusion
-  * Move eligible decode-phase work from CPU to GPU
+  * Reclassify work into decode-critical (GPU-exclusive) and decode-non-critical (CPU-eligible)
+  * Introduce explicit task allocation and admission control
 * Not allowed:
 
+  * CPU fallback for decode-critical execution
+  * Dynamic per-op or per-token backend switching
+  * Hybrid CPU↔GPU execution on the decode critical path
   * Changing model architecture
   * Changing model weights
   * Changing prompt or external API behavior
@@ -28,26 +33,36 @@
 * Exact autoregressive token dependency
 * Bitwise-stable results for identical inputs (within backend-defined FP tolerance)
 * Correct under worst-case execution ordering
+* No backend-dependent behavioral divergence
 
 ### 1.4 Target Execution Mode
 
-* Single active sequence
+* Single active decode sequence
 * Interactive / long-running session
-* Decode dominated workload (not prefill)
-* Research-grade reproducibility preferred over heuristic speedups
+* Decode-dominated workload (prefill not part of optimization target)
+* GPU executes **all decode-critical operations**
+* CPU executes **only work that does not gate token emission**
 
 ### 1.5 Success Criteria
 
-* CPU usage significantly reduced during decode (no longer pegged at 100%)
-* GPU utilization substantially increased during decode (approaching saturation relative to workload)
-* Higher sustained decode throughput without violating constraints
+* Decode tokens/sec remains stable under load
+* GPU utilization remains high during decode
+* CPU usage does **not** correlate with t/s
+* No decode-critical operation executes on CPU
+* No silent backend fallback or hybrid execution
 * No regressions in correctness, determinism, or stability
+
+### 1.6 Backend Invariant (Canonical)
+
+> **All decode-critical work has exactly one backend owner: the GPU; CPU execution is strictly non-pacing, non-blocking, and never part of the token-generation dependency chain.**
+
+
 ## 2. Hardware & Runtime Context (HW-Specific)
 
 ### 2.1 CPU Characteristics
 
 * CPU: x86_64 desktop-class processor
-* Cores / Threads: 12 hardware threads available to llama.cpp
+* Cores / Threads: 12 hardware threads available to the runtime
 * SIMD support enabled:
 
   * SSE3
@@ -57,16 +72,21 @@
   * F16C
   * FMA
   * BMI2
-* OpenMP enabled
-* Current observed behavior:
+* OpenMP **disabled for decode-critical execution**
+* CPU role constrained to **non-pacing, non-critical work**
+* Observed and intended behavior:
 
-  * CPU reaches ~100% utilization during decode
-  * CPU time dominated by:
+  * CPU may reach high utilization
+  * CPU must **not** gate tokens-per-second
+  * CPU time limited to:
 
-    * Decode loop orchestration
-    * Sampling chain execution
-    * CUDA kernel dispatch and synchronization
-    * Server-side control flow
+    * Request parsing and scheduling
+    * Tokenization and preprocessing
+    * Sampling-independent control logic
+    * Server-side I/O, logging, and metrics
+    * Admission control and task classification
+
+---
 
 ### 2.2 GPU Characteristics
 
@@ -74,16 +94,21 @@
 * Architecture: Ada Lovelace
 * Compute Capability: 8.9
 * VRAM: 16 GiB
-* Features available and enabled:
+* Features available and selectively used:
 
   * Tensor Cores
-  * CUDA Graphs
   * Flash Attention
   * MMQ quantized matmul kernels
-* Observed behavior:
+* Explicitly disabled or restricted:
 
-  * Prefill phase: GPU ~100% utilized
-  * Decode phase: GPU utilization drops sharply due to host pacing
+  * CUDA Graphs for decode-critical execution
+* Intended behavior:
+
+  * GPU is the **exclusive execution backend** for all decode-critical computation
+  * GPU utilization remains high during steady-state decode
+  * GPU is the sole pacing resource for token emission
+
+---
 
 ### 2.3 Memory Topology
 
@@ -91,75 +116,87 @@
 
   * CPU DRAM
   * GPU VRAM (PCIe-connected)
-* No unified memory usage
-* Model weights partially offloaded to GPU:
+* No unified or managed memory usage
+* Model weight placement:
 
-  * ~34 transformer layers resident in VRAM
-* Remaining layers and buffers resident in host memory
-* KV cache split:
+  * Maximum feasible transformer layers resident in GPU VRAM
+  * Remaining layers statically assigned to CPU **only if they are outside the decode-critical path**
+* KV cache placement:
 
-  * GPU KV cache for offloaded layers
-  * CPU KV cache for remaining layers
+  * GPU-resident KV cache for all decode-critical layers
+  * CPU KV cache permitted only for non-pacing or background-managed state
 * VRAM pressure sources:
 
   * Quantized weights
-  * KV cache (long context)
-  * CUDA compute buffers
+  * KV cache for long context
+  * CUDA compute and temporary buffers
+
+---
 
 ### 2.4 Software Environment
 
 * Operating System: Linux (Debian/Ubuntu class)
-* NVIDIA proprietary driver installed
+* NVIDIA proprietary driver installed and stable
 * CUDA runtime available and functional
 * llama.cpp built with:
 
   * CUDA enabled
-  * MMQ backend enabled
+  * MMQ backend enabled and forced for decode-critical paths
   * Flash attention enabled
-  * CUDA graphs enabled
-  * OpenMP enabled
+  * CUDA graphs disabled for decode
+  * OpenMP disabled for decode-critical execution
+
+---
 
 ### 2.5 Runtime Execution Mode
 
 * Binary: `llama-server`
-* Single active sequence (`n_seq_max = 1`)
+* Single active decode sequence (`n_seq_max = 1`)
 * Context size: 8192
 * Batch size during prefill: >1
-* Batch size during decode: effectively 1 token
+* Batch size during decode: exactly 1 token
 * Long-running process:
 
   * Model loaded once
   * Reused across requests
 * Decode-dominated steady state
+* Prefill performance explicitly out of optimization scope
+
+---
 
 ### 2.6 Threading and Scheduling
 
-* Total threads available to llama.cpp: 12
-* Thread roles:
+* Total threads available: 12
+* Thread roles strictly separated:
 
-  * ggml worker threads
-  * CUDA dispatch and synchronization
-  * HTTP server threads
-* CPU threads are responsible for:
+  * GPU execution threads (decode-critical)
+  * CPU scheduling and admission threads
+  * HTTP server and I/O threads
+* CPU threads are **not permitted** to execute:
 
-  * Per-token decode scheduling
-  * Sampling chain execution
-  * Graph execution coordination
-  * Kernel launch management
-* Current consequence:
+  * Decode-critical graph nodes
+  * Attention or MLP computation
+  * Logits generation
+  * Token-selection gating logic
+* Intended consequence:
 
-  * CPU is the pacing resource
-  * GPU frequently idle between short kernel executions
+  * GPU executes uninterrupted decode loops
+  * CPU never becomes the pacing resource
+  * GPU idle gaps minimized by reduced host-side orchestration
+
+---
 
 ### 2.7 Key Constraint Implied by This Hardware
 
 * GPU has substantial unused compute headroom during decode
-* CPU overhead, not GPU math, is the limiting factor
+* Decode throughput is limited by host orchestration if not constrained
 * PCIe latency and kernel launch overhead are significant at batch = 1
-* Improving performance requires:
+* Performance improvement requires:
 
-  * Reducing CPU involvement per token
-  * Increasing GPU kernel residency and work per launch
+  * Eliminating CPU participation in the token-generation dependency chain
+  * Increasing GPU kernel residency and work density per decode step
+  * Ensuring CPU work remains strictly orthogonal to t/s-critical execution
+
 ## 3. Model Characteristics (Build-Aware, Non-Model-Specific)
 
 ### 3.1 Model Class Assumptions
@@ -197,170 +234,106 @@ This invariant must be preserved in **all build variants**.
 
 ### 3.3 Build Variants and Their Model Interaction
 
-#### 3.3.1 `build_cpu_hybrid`
-
-* Model layers may execute on:
-
-  * CPU only
-  * CPU + partial GPU offload
-* GPU used opportunistically
-* CPU responsible for:
-
-  * Scheduling
-  * Sampling
-  * Most control flow
-* Decode phase dominated by CPU
-* GPU utilization limited by host pacing
-
-Implication:
-
-* Model math is split, increasing synchronization cost
-* GPU underutilization expected during decode
+Only the following **GPU-first, decode-correct builds** are considered.
 
 ---
 
-#### 3.3.2 `build_cuda_cublas_dense`
+#### 3.3.1 `build_cuda_cublas_dense`
 
 * Dense layers executed using cuBLAS
-* Quantized or dequantized matmul depending on configuration
-* GPU executes:
+* Quantized or dequantized matmul depending on model format
+* GPU executes (decode-critical):
 
-  * GEMM / GEMV via cuBLAS
-* CPU executes:
+  * All attention and MLP matmul
+  * KV cache reads and writes
+  * Logits computation
+  * Token selection (argmax / deterministic sampling)
+* CPU executes (non-pacing only):
 
-  * Sampling
-  * Graph orchestration
-  * Kernel dispatch
+  * Request handling
+  * Tokenization and preprocessing
+  * Scheduling and admission control
+  * Logging, metrics, and I/O
 * cuBLAS kernels are:
 
   * Highly optimized
   * Short-lived at batch = 1
 
-Implication:
+**Implication:**
 
-* Excellent prefill performance
-* Decode phase limited by kernel launch latency and CPU scheduling
-
----
-
-#### 3.3.3 `build_cuda_dense`
-
-* Dense CUDA kernels without cuBLAS
-* Uses custom CUDA matmul kernels
-* GPU executes:
-
-  * Dense linear layers
-* CPU executes:
-
-  * Sampling
-  * Control logic
-  * Scheduling
-
-Implication:
-
-* Lower kernel launch overhead than cuBLAS in some cases
-* Still CPU-paced during decode
-* GPU underutilized at batch = 1
+* GPU is the sole decode pacing resource
+* CPU does not participate in the token-generation dependency chain
+* Decode throughput limited by GPU math + kernel launch overhead only
+* CPU utilization does not affect tokens/sec
 
 ---
 
-#### 3.3.4 `build_cuda_mmq_moe`
+#### 3.3.2 `build_cuda_mmq_moe`
 
 * Quantized MMQ kernels enabled
 * Supports:
 
   * Quantized dense layers
   * Quantized MoE layers (if model includes MoE)
-* GPU executes:
+* GPU executes (decode-critical):
 
   * Fused quantized matmul kernels
   * Flash attention (if enabled)
-* CPU executes:
+  * KV cache operations
+  * Logits computation
+  * Token selection
+* CPU executes (non-pacing only):
 
-  * Sampling chain
-  * Decode loop control
-  * Kernel scheduling
+  * Scheduling and control-plane logic
+  * Server-side I/O and background tasks
+* MMQ kernels are:
 
-Implication:
+  * Long-lived relative to cuBLAS
+  * Higher arithmetic density per launch
 
-* Best arithmetic efficiency per kernel
-* Still limited by per-token CPU orchestration
-* GPU idle gaps between kernels during decode
+**Implication:**
 
----
-
-#### 3.3.5 `build_cuda_hybrid`
-
-* Mixed execution:
-
-  * Some layers on GPU
-  * Some layers on CPU
-* GPU executes compute-heavy layers
-* CPU executes remaining layers and control logic
-
-Implication:
-
-* Increased synchronization overhead
-* Decode phase strongly CPU-bound
-* GPU frequently waits for CPU-side layers
+* Highest achievable GPU residency per token
+* Minimal kernel launch frequency
+* GPU remains authoritative for decode pacing
+* CPU load is orthogonal to t/s
 
 ---
 
-#### 3.3.6 `build_cpu_cuda_hybrid`
-
-* Explicit hybrid pipeline:
-
-  * CPU and GPU alternate work
-* CPU performs:
-
-  * Sampling
-  * Non-offloaded layers
-* GPU performs:
-
-  * Offloaded layers only
-
-Implication:
-
-* Maximum flexibility
-* Worst-case decode utilization for GPU
-* CPU becomes strict pacing bottleneck
-
----
-
-### 3.4 KV Cache Behavior (Across All Builds)
+### 3.4 KV Cache Behavior (Across Both Builds)
 
 * KV cache grows linearly with generated tokens
 * Access pattern:
 
   * Sequential append
   * Read-heavy during attention
-* Location depends on build:
+* KV cache location:
 
-  * GPU KV cache for GPU-resident layers
-  * CPU KV cache for CPU-resident layers
-* Split KV cache introduces:
-
-  * Synchronization overhead
-  * Additional latency
+  * GPU-resident for all decode-critical layers
+* No semantic difference in cache behavior between builds
+* CPU does not participate in KV cache mutation on the decode path
 
 ---
 
-### 3.5 Sampling Behavior (Across All Builds)
+### 3.5 Sampling Behavior (Across Both Builds)
 
 * Sampling is logically model-independent
-* Sampling pipeline:
+* Pipeline:
 
   * Logits → transformations → token selection
 * Sampling is:
 
-  * Control-heavy
-  * Low arithmetic intensity
-* Sampling is currently CPU-resident in all builds
+  * Decode-critical
+  * Latency-sensitive
+* Sampling execution:
 
-Implication:
+  * GPU-resident for decode-critical path
+  * CPU involvement limited to non-blocking auxiliary logic only
 
-* Sampling is a dominant CPU cost during decode
-* Sampling latency directly stalls GPU progress
+**Implication:**
+
+* Sampling latency does not stall GPU progress
+* Token emission rate is not gated by CPU execution
 
 ---
 
@@ -368,118 +341,81 @@ Implication:
 
 At batch size = 1:
 
-* GPU kernels are:
+* GPU work:
 
-  * Small
-  * Short-lived
-  * Frequent
-* CPU responsibilities are:
+  * Attention + MLP matmul
+  * KV cache access
+  * Logits + sampling
+* CPU work:
 
-  * Serial
-  * Latency-critical
+  * Non-blocking orchestration
+  * Control-plane logic
 * Overall throughput limited by:
 
+  * GPU kernel efficiency
   * Kernel launch overhead
-  * CPU scheduling
-  * CPU sampling
+  * Memory bandwidth and cache locality
 
-This behavior is **independent of model size or architecture**.
+CPU execution is **not** on the decode-critical path.
 
 ---
 
 ### 3.7 Performance Implication Across Builds
 
-* Changing build type changes **where math runs**
-* It does **not** remove:
+* Build choice determines:
+
+  * Kernel fusion level
+  * Arithmetic density per token
+* Build choice does **not** alter:
 
   * Autoregressive dependency
-  * CPU-paced decode loop
-* All builds share the same fundamental limitation:
+  * Token ordering
+  * Semantic correctness
+* Fundamental improvement over baseline:
 
-  * GPU work per token is too small relative to CPU overhead
+  * Removal of CPU from decode pacing
+  * Stable tokens/sec under CPU load
 
 ---
 
 ### 3.8 Non-Negotiable Constraints Imposed by Model + Builds
 
-* Exact autoregressive semantics must be preserved
-* Token order must not change
+* Exact autoregressive semantics preserved
+* Token order preserved
 * No batching across tokens
 * No speculative decode
 * No approximation of attention or sampling
 
-Only **execution restructuring and control-path changes** are permitted.
+Only **execution placement and control-path restructuring** are permitted.
 
 ---
+
 ## 3.9 Build Type vs Model Type — Throughput Characteristics
 
-### 3.9.1 `build_cpu_hybrid`
-
-**Best suited for:**
-
-* Very small models
-* Models that do not fit in GPU memory
-* CPU-heavy or experimentation workloads
-
-**t/s characteristics:**
-
-* Lowest tokens/sec for medium and large models
-* Decode phase fully CPU-bound
-* GPU provides marginal acceleration only
-
-**Conclusion:**
-
-* Never optimal for maximum t/s
-* Should be excluded when GPU is available and model fits partially or fully
-
----
-
-### 3.9.2 `build_cuda_cublas_dense`
+### 3.9.1 `build_cuda_cublas_dense`
 
 **Best suited for:**
 
 * Dense, non-quantized or lightly quantized models
 * Medium-to-large dense models with strong GEMM utilization
-* Prefill-heavy workloads
+* Stable, deterministic decode workloads
 
 **t/s characteristics:**
 
-* Very high prefill throughput
-* Decode phase limited by:
+* High prefill throughput
+* Decode throughput governed by:
 
-  * cuBLAS kernel launch overhead
-  * Small GEMV workload at batch = 1
-* GPU underutilized during decode despite fast kernels
-
-**Conclusion:**
-
-* Excellent for short prompts + long prefills
-* Suboptimal for long decode workloads
-* Not ideal when decode t/s is the primary metric
-
----
-
-### 3.9.3 `build_cuda_dense`
-
-**Best suited for:**
-
-* Dense models using custom CUDA kernels
-* Situations where cuBLAS overhead dominates
-
-**t/s characteristics:**
-
-* Slightly better decode t/s than cuBLAS in some cases
-* Lower kernel launch overhead
-* Still CPU-paced decode loop
+  * cuBLAS efficiency
+  * Kernel launch overhead
 
 **Conclusion:**
 
-* Marginally better than cuBLAS for decode
-* Still not the best choice for maximum t/s
+* GPU-paced decode with deterministic behavior
+* Suitable when model is dense and VRAM pressure is manageable
 
 ---
 
-### 3.9.4 `build_cuda_mmq_moe`
+### 3.9.2 `build_cuda_mmq_moe`
 
 **Best suited for:**
 
@@ -490,85 +426,38 @@ Only **execution restructuring and control-path changes** are permitted.
 
 **t/s characteristics:**
 
-* Highest arithmetic efficiency per kernel
-* Best decode-phase GPU utilization among current builds
-* Reduced memory bandwidth pressure
-* Still limited by CPU-driven decode orchestration
+* Highest sustained decode tokens/sec
+* Reduced kernel launch count
+* Best GPU occupancy under strict autoregressive constraints
 
 **Conclusion:**
 
-* **Best existing build for maximum decode t/s**
-* Preferred choice for large quantized models
-* Baseline for all further optimization work
+* **Preferred build for maximum decode throughput**
+* Baseline for all further performance optimization
 
 ---
 
-### 3.9.5 `build_cuda_hybrid`
+### 3.9.3 Summary Table
 
-**Best suited for:**
-
-* Models that partially fit in VRAM
-* Mixed CPU/GPU execution required by memory limits
-
-**t/s characteristics:**
-
-* Decode throughput heavily impacted by CPU↔GPU synchronization
-* GPU frequently stalled waiting for CPU layers
-* t/s lower than full-GPU builds
-
-**Conclusion:**
-
-* Necessary only under VRAM constraints
-* Never optimal for maximum t/s
+| Model Type         | Preferred Build           | Reason                           |
+| ------------------ | ------------------------- | -------------------------------- |
+| Medium dense model | `build_cuda_cublas_dense` | Strong GEMM, stable GPU pacing   |
+| Large dense model  | `build_cuda_mmq_moe`      | Quantized efficiency, higher t/s |
+| Large quantized    | `build_cuda_mmq_moe`      | Best decode GPU utilization      |
+| MoE model          | `build_cuda_mmq_moe`      | Native MoE + MMQ kernel support  |
 
 ---
 
-### 3.9.6 `build_cpu_cuda_hybrid`
-
-**Best suited for:**
-
-* Experimental setups
-* Memory-constrained environments
-
-**t/s characteristics:**
-
-* Alternating CPU/GPU execution per layer
-* High synchronization overhead
-* Lowest effective GPU utilization
-
-**Conclusion:**
-
-* Worst choice for decode throughput
-* Should be avoided when optimizing for t/s
-
----
-
-### 3.9.7 Summary Table
-
-| Model Type            | Preferred Build           | Reason                                  |
-| --------------------- | ------------------------- | --------------------------------------- |
-| Small dense model     | `build_cuda_dense`        | Lower overhead than cuBLAS              |
-| Medium dense model    | `build_cuda_cublas_dense` | Strong GEMM utilization                 |
-| Large dense model     | `build_cuda_mmq_moe`      | Quantized efficiency, fewer bottlenecks |
-| Large quantized model | `build_cuda_mmq_moe`      | Best decode t/s                         |
-| MoE model             | `build_cuda_mmq_moe`      | Native MoE + MMQ support                |
-| Partial VRAM fit      | `build_cuda_hybrid`       | Required by memory                      |
-| CPU-only fallback     | `build_cpu_hybrid`        | Last resort                             |
-
----
-
-### 3.9.8 Final Throughput Ranking (Decode Phase)
+### 3.9.4 Final Throughput Ranking (Decode Phase)
 
 From highest to lowest tokens/sec:
 
 1. `build_cuda_mmq_moe`
-2. `build_cuda_dense`
-3. `build_cuda_cublas_dense`
-4. `build_cuda_hybrid`
-5. `build_cpu_cuda_hybrid`
-6. `build_cpu_hybrid`
+2. `build_cuda_cublas_dense`
 
-This ranking holds **independent of model family**, assuming similar size and quantization.
+This ranking assumes **GPU-exclusive decode-critical execution** and holds independent of model family, given comparable size and quantization.
+
+
 ## 4. Execution Mode Clarification
 
 ### 4.1 Request Pattern
@@ -578,6 +467,9 @@ This ranking holds **independent of model family**, assuming similar size and qu
 * No request batching across users
 * No background jobs
 * Execution is strictly sequential at the request level
+* Request admission and scheduling are non-pacing and must not gate decode
+
+---
 
 ### 4.2 Sequence Characteristics
 
@@ -585,15 +477,21 @@ This ranking holds **independent of model family**, assuming similar size and qu
 * One token generated per decode step
 * Strict autoregressive dependency:
 
-  * Token *n+1* cannot be computed before token *n* is finalized
+  * Token *n+1* cannot be computed before token *n* is fully finalized
 * No parallel decoding across sequences
+* No overlap between decode-critical steps
+
+---
 
 ### 4.3 Interaction Style
 
 * Interactive or long-running session
-* Prompt provided once, followed by long decode phase
+* Prompt provided once, followed by a long decode phase
 * Decode phase dominates total runtime
-* Streaming output may be enabled, but streaming semantics must not affect decode execution
+* Streaming output may be enabled
+* Streaming semantics must not alter decode ordering or execution dependencies
+
+---
 
 ### 4.4 Server vs CLI Execution
 
@@ -606,11 +504,15 @@ This ranking holds **independent of model family**, assuming similar size and qu
   * HTTP request handling
   * Slot management
   * Request lifecycle management
+  * Background I/O and control-plane activity
 * CLI mode characteristics:
 
   * Minimal control flow
   * Fewer synchronization points
-* Optimizations must apply to both modes or clearly specify mode-specific behavior
+* Decode-critical execution semantics must be identical in both modes
+* Mode-specific logic must remain non-pacing
+
+---
 
 ### 4.5 Batching Behavior
 
@@ -621,8 +523,10 @@ This ranking holds **independent of model family**, assuming similar size and qu
 * Decode phase:
 
   * Effective batch size = 1 token
-  * No token batching allowed
-* Micro-batching across tokens is not permitted
+  * No token batching permitted
+* Micro-batching or speculative aggregation across tokens is not allowed
+
+---
 
 ### 4.6 Sampling Mode
 
@@ -634,36 +538,46 @@ This ranking holds **independent of model family**, assuming similar size and qu
 
   * Exact semantics
   * Determinism when configured
-* Sampling decisions currently gate progression to the next token
+* Sampling is decode-critical and must not introduce CPU pacing
+* Sampling completion is required before advancing to the next token
+
+---
 
 ### 4.7 Correctness and Ordering Guarantees
 
 * Token emission order must be preserved
 * No reordering of compute relative to token output
-* No speculative or rollback-based execution
+* No speculative, rollback, or predictive execution
 * Each token must be fully committed before the next decode step begins
+* Backend choice must not affect observable semantics
+
+---
 
 ### 4.8 Termination Conditions
 
-* Decode loop terminates when:
+* Decode loop terminates only when:
 
-  * End-of-sequence token is generated
+  * End-of-sequence token is generated, or
   * Maximum token limit is reached
 * Termination checks must be exact and deterministic
-* No early stopping heuristics allowed
+* No heuristic or early-stop shortcuts permitted
+
+---
 
 ### 4.9 Implication for Optimization
 
-* Execution is latency-serial by definition
-* GPU starvation during decode is caused by:
+* Execution is inherently latency-serial
+* GPU starvation during decode originates from:
 
   * Host-driven orchestration
-  * Fine-grained synchronization
+  * Fine-grained synchronization on the critical path
 * Any optimization must:
 
+  * Remove CPU execution from the token-generation dependency chain
   * Reduce host involvement per token
-  * Increase GPU work per decode step
-  * Preserve strict execution order
+  * Increase GPU work density per decode step
+  * Preserve strict execution order and correctness
+
 ## 5. High-Level Decode Pipeline Mapping
 
 ### 5.1 Decode Entry Point
@@ -672,8 +586,11 @@ This ranking holds **independent of model family**, assuming similar size and qu
 * Control enters the decode loop from:
 
   * `llama_decode()` (CLI)
-  * Server-side task loop (`llama-server`)
+  * Server-side decode task loop (`llama-server`)
 * Decode loop executes once per generated token
+* Entry into the decode loop marks the start of the **decode-critical phase**
+
+---
 
 ### 5.2 Per-Token Decode Lifecycle (Logical)
 
@@ -687,7 +604,9 @@ For each token generation step, the following stages occur in strict order:
 6. Token commit and output
 7. Termination check
 
-Each stage must complete before the next begins.
+All stages are **decode-critical** and must complete before the next token begins.
+
+---
 
 ### 5.3 Transformer Forward Pass
 
@@ -697,1064 +616,1309 @@ Each stage must complete before the next begins.
   * Normalization
   * Attention computation using KV cache
   * Feed-forward network
-* Execution backend depends on build:
+* Execution backend is **GPU-exclusive** for decode-critical layers
+* GPU kernels may be launched:
 
-  * CPU kernels
-  * CUDA dense kernels
-  * cuBLAS kernels
-  * MMQ quantized kernels
-* GPU kernels are launched per layer or per fused group
+  * Per layer, or
+  * As fused kernel groups (build-dependent)
+* CPU must not execute any layer participating in the decode-critical path
+
+---
 
 ### 5.4 Graph Construction and Execution
 
-* ggml graph represents the computation for one token
-* Graph may be:
+* A ggml graph represents the computation required to generate **one token**
+* Graph characteristics:
 
-  * Rebuilt
-  * Partially reused
-  * Fully reused (if CUDA graphs enabled and valid)
-* CPU is responsible for:
+  * Execution order is fixed and deterministic
+  * Node dependencies encode strict autoregressive semantics
+* Graph handling rules:
 
-  * Graph scheduling
-  * Node execution order
-  * Dispatching GPU kernels
-* GPU executes only the compute nodes assigned to it
+  * Graph construction, reuse, or validation may occur on CPU
+  * Graph execution of decode-critical nodes is **GPU-exclusive**
+* CPU must not:
+
+  * Execute decode-critical graph nodes
+  * Gate graph execution progress
+* GPU executes all decode-critical compute nodes without CPU interposition
+
+---
 
 ### 5.5 KV Cache Interaction
 
-* KV cache is accessed during attention in each layer
-* Read operations:
+* KV cache is accessed during attention in every transformer layer
+* Operations per token:
 
-  * Keys and values for all previous tokens
-* Write operations:
+  * Read: keys and values for all previous tokens
+  * Write: append current token’s key and value
+* KV cache rules:
 
-  * Append current token’s key and value
-* KV cache location depends on layer placement:
+  * KV cache for decode-critical layers is GPU-resident
+  * KV cache mutation on the decode path is GPU-exclusive
+* KV cache updates are serialized per token but must not involve CPU pacing
 
-  * GPU KV cache for GPU layers
-  * CPU KV cache for CPU layers
-* KV cache updates are serialized per token
+---
 
 ### 5.6 Sampling Stage
 
 * Logits are produced as the final output of the forward pass
-* Sampling pipeline executes:
+* Sampling pipeline includes:
 
   * Logit post-processing
   * Probability filtering (if enabled)
   * Token selection
-* Sampling is currently CPU-resident
-* Sampling completion is a hard dependency for next token decode
+* Sampling is **decode-critical**
+* Sampling completion is a hard dependency for advancing to the next token
+* Sampling must not introduce CPU execution on the token-generation dependency chain
+
+---
 
 ### 5.7 Output and State Update
 
 * Selected token is:
 
-  * Added to output buffer
-  * Used to update internal state
+  * Committed to the output buffer
+  * Used to update internal sequence state
 * Context position is incremented
-* Sequence state is updated
-* Any streaming output is emitted
+* Sequence state is updated deterministically
+* Streaming output, if enabled, is emitted asynchronously and must not gate decode
 
-### 5.8 Synchronization Points
+---
 
-* CPU waits for GPU kernel completion before sampling
-* CPU waits for sampling to complete before next decode step
-* CPU waits for KV cache updates before proceeding
-* These synchronization points occur once per token
+### 5.8 Synchronization Rules
+
+* GPU executes decode-critical work without CPU-driven per-stage blocking
+* CPU must not introduce synchronization points that gate token emission
+* Required ordering constraints are enforced by:
+
+  * Graph dependencies
+  * GPU execution ordering
+* Any CPU-side waits must be non-pacing and outside the decode-critical path
+
+---
 
 ### 5.9 Loop Continuation
 
 * Decode loop repeats until:
 
-  * End-of-sequence token generated
-  * Maximum token count reached
-* No overlap between iterations
-* Entire pipeline is strictly serial at token granularity
+  * End-of-sequence token is generated, or
+  * Maximum token count is reached
+* No overlap between token iterations
+* Token-level execution remains strictly serial and deterministic
 
-### 5.10 Key Observation from Pipeline
+---
 
-* GPU performs only compute kernels
-* CPU controls:
+### 5.10 Key Observation from the Pipeline
 
-  * Loop progression
-  * Scheduling
-  * Sampling
-  * Synchronization
-* GPU idle time during decode is caused by:
+* Decode-critical computation must be **entirely GPU-owned**
+* CPU responsibilities are limited to:
 
-  * Fine-grained kernel launches
-  * CPU-bound stages between kernels
+  * Control-plane logic
+  * Task classification
+  * Admission and scheduling
+  * I/O, logging, and background work
+* GPU idle time during decode must not be caused by CPU pacing
+* Any restructuring must target:
 
-This mapping defines where CPU–GPU imbalance originates and where restructuring must occur.
-## 6. CPU Responsibility Audit
+  * Removing CPU participation from the token-generation dependency chain
+  * Increasing GPU work density per decode step
+  * Preserving strict execution order and correctness
+
+## 6. CPU Responsibility Audit (Revised per GPU-Exclusive Decode Principle)
 
 ### 6.1 Decode Loop Control
 
-* CPU owns the outer decode loop
-* CPU determines:
+* CPU may host the **control-plane loop structure**
+* CPU must **not** gate progression of decode-critical work
+* CPU responsibilities limited to:
 
-  * When a new token decode begins
-  * When the next decode step may proceed
-* CPU enforces strict token-by-token sequencing
-* CPU blocks progression until all dependent stages complete
+  * Initiating decode requests
+  * Handling termination conditions
+* CPU must **not** block token progression based on CPU-side stages
+* Token-by-token sequencing is enforced by **GPU execution dependencies**, not CPU waits
+
+---
 
 ### 6.2 Graph Scheduling and Execution
 
-* CPU constructs or validates the ggml computation graph
-* CPU schedules graph nodes for execution
-* CPU determines execution order of:
+* CPU may:
 
-  * CPU nodes
-  * GPU nodes
-* CPU dispatches GPU kernels node-by-node
-* CPU tracks completion of each node
+  * Construct or validate ggml graphs
+  * Perform static dependency analysis
+* CPU must **not**:
+
+  * Schedule decode-critical nodes dynamically
+  * Determine per-node execution order at runtime
+  * Gate execution of GPU nodes
+* Decode-critical graph execution is **GPU-owned**
+* Graph execution order is enforced by:
+
+  * Graph structure
+  * GPU execution semantics
+
+---
 
 ### 6.3 CUDA Kernel Dispatch
 
-* CPU launches all CUDA kernels
-* CPU incurs:
+* CPU initiates kernel launches but must not:
 
-  * Kernel launch latency
-  * Stream synchronization overhead
-* CPU waits for GPU completion at defined sync points
-* Kernel dispatch occurs multiple times per token
+  * Insert per-node synchronization
+  * Poll for completion on the decode-critical path
+* Kernel launch overhead must be amortized or reduced
+* GPU execution must proceed without CPU-driven stalls
+* CPU-side synchronization is permitted **only outside** the token-generation dependency chain
+
+---
 
 ### 6.4 Sampling and Token Selection
 
-* CPU executes the full sampling pipeline:
+* Sampling is **decode-critical**
+* Sampling must **not** execute on CPU
+* CPU must not participate in:
 
   * Logit post-processing
-  * Penalties (if enabled)
-  * Top-k / top-p filtering (if enabled)
-  * Temperature scaling
-  * Final token selection
-* Sampling is:
+  * Probability filtering
+  * Token selection
+* Sampling completion must be driven by GPU execution flow
+* CPU may only observe results after token commitment
 
-  * Control-heavy
-  * Branch-heavy
-  * Latency-sensitive
-* Sampling completion gates the next decode step
+---
 
 ### 6.5 KV Cache Management
 
-* CPU manages:
+* KV cache mutation on the decode path is **GPU-exclusive**
+* CPU responsibilities limited to:
 
-  * KV cache metadata
-  * Sequence positions
-  * Cache boundaries
-* For CPU-resident layers:
+  * Non-critical metadata bookkeeping
+  * Allocation outside the decode-critical path
+* CPU must not:
 
-  * CPU performs KV writes
-* For GPU-resident layers:
+  * Perform KV writes for decode-critical layers
+  * Gate KV consistency checks per token
+* KV correctness is enforced by GPU execution ordering
 
-  * CPU coordinates KV updates and synchronization
-* CPU ensures KV consistency across layers
+---
 
 ### 6.6 Synchronization and Barriers
 
-* CPU inserts synchronization points:
+* CPU must not insert synchronization points that:
 
-  * Before sampling
-  * After GPU kernel execution
-  * Before next decode iteration
-* CPU performs:
+  * Block GPU progress
+  * Gate token emission
+* Decode-critical synchronization must be:
 
-  * Blocking waits
-  * Polling
-* These barriers serialize execution at token granularity
+  * Implicit
+  * GPU-internal
+* CPU-side waits, polling, or barriers are permitted **only** for non-pacing tasks
+
+---
 
 ### 6.7 Thread Pool Management
 
-* CPU manages ggml worker threads
-* CPU schedules work across threads
-* CPU handles thread wake-ups and sleeps
-* Thread management overhead increases at batch size = 1
+* CPU thread pools may exist for:
+
+  * Background tasks
+  * I/O
+  * Server control-plane logic
+* Decode-critical execution must not depend on:
+
+  * ggml worker thread availability
+  * CPU thread wake/sleep cycles
+* Thread scheduling overhead must be fully decoupled from decode pacing
+
+---
 
 ### 6.8 Server-Side Control (if applicable)
 
 * CPU handles:
 
   * HTTP request parsing
-  * Slot selection
-  * Request lifecycle management
+  * Slot management
+  * Request lifecycle
   * Logging and metrics
-* Server-side logic executes concurrently with decode
-* Server overhead competes with decode for CPU time
+* Server-side execution must be:
+
+  * Asynchronous
+  * Non-blocking
+* Server activity must not contend with decode-critical GPU execution
+
+---
 
 ### 6.9 Memory Management
 
-* CPU allocates and frees:
+* CPU may manage:
 
-  * Temporary buffers
-  * Host-side compute buffers
-* CPU manages:
+  * Long-lived allocations
+  * Initialization-time buffers
+* CPU must not perform:
 
-  * Host-device memory mappings
-  * Pinned memory regions
-* Allocation and bookkeeping occur during decode
+  * Per-token allocation
+  * Per-token deallocation
+  * Per-token host-device bookkeeping
+* Decode-critical memory usage must be preallocated and GPU-resident
 
-### 6.10 Aggregate Impact on Performance
+---
 
-* CPU performs multiple latency-critical tasks per token
-* CPU responsibilities are strictly serialized
-* CPU overhead directly determines:
+### 6.10 Aggregate Impact on Performance (Revised)
 
-  * Decode latency per token
-  * GPU idle time between kernels
-* CPU becomes the pacing resource for the entire pipeline
+* CPU performs **no latency-critical work per token**
+* CPU responsibilities are:
 
-This audit identifies CPU responsibilities that must be reduced, eliminated, or offloaded to improve decode-phase GPU utilization and throughput.
+  * Orthogonal
+  * Asynchronous
+  * Non-pacing
+* GPU is the **sole pacing resource** for decode
+* Decode throughput is determined by:
+
+  * GPU kernel efficiency
+  * Kernel fusion and residency
+  * Memory bandwidth and cache locality
+
+This revised audit defines the **target state**: CPU remains active but is **never on the token-generation dependency chain**, eliminating CPU-induced GPU idle time and preserving stable tokens/sec.
+
 ## 7. GPU Responsibility Audit
 
-### 7.1 Core Compute Responsibilities
+### 7.1 Core Decode-Critical Responsibilities (GPU-Exclusive)
 
-* GPU executes numerical computation for transformer layers assigned to it
-* Primary GPU workloads include:
+* GPU is the **sole execution authority** for all decode-critical computation
+
+* GPU executes the **entire token-generation dependency chain**
+
+* Primary GPU responsibilities include:
 
   * Linear projections (Q, K, V, output)
   * Attention score computation
   * Softmax over attention scores
   * Attention-weighted value accumulation
   * Feed-forward network (MLP) layers
-* GPU kernels are invoked once per layer or per fused layer group per token
+  * Logits computation
+  * Token selection / sampling
+  * KV cache read and write for current token
 
-### 7.2 Backend-Specific Compute Paths
+* All operations whose outputs determine the next token are **GPU-exclusive**
+
+---
+
+### 7.2 Backend-Specific Compute Paths (GPU-Owned)
 
 * Depending on build configuration, GPU executes one of:
 
-  * Custom CUDA dense kernels
+  * CUDA dense kernels
   * cuBLAS GEMM / GEMV kernels
   * MMQ quantized matmul kernels
 * Backend selection determines:
 
-  * Kernel shape
-  * Kernel launch count
+  * Kernel fusion strategy
   * Arithmetic intensity
-* All GPU kernels are launched by the CPU
+  * Kernel residency duration
+* Backend choice **does not alter execution ownership**:
+
+  * Decode-critical compute remains GPU-only in all cases
+
+---
 
 ### 7.3 Flash Attention Execution
 
 * When enabled, GPU executes flash-attention kernels
-* Flash-attention reduces:
+* Flash-attention operates fully on GPU and:
 
-  * Memory traffic
-  * Intermediate buffer usage
-* Flash-attention kernels operate on:
+  * Reduces memory traffic
+  * Eliminates intermediate buffers
+* Operates on:
 
   * Query for current token
-  * Full KV cache up to current position
-* Kernel execution time increases with context length
+  * Entire KV cache up to current position
+* Execution time scales with context length
+* No CPU participation or gating is permitted
 
-### 7.4 KV Cache Operations
+---
 
-* GPU performs:
+### 7.4 KV Cache Operations (GPU-Resident)
 
-  * Reads from KV cache during attention
-  * Writes of new key and value vectors for current token
-* KV cache memory resides in GPU VRAM for GPU-resident layers
-* KV cache updates are serialized per token
+* GPU performs all KV cache interactions for decode-critical layers:
+
+  * Reads during attention
+  * Writes of new key/value vectors for current token
+* KV cache resides in GPU VRAM for all decode-critical layers
+* KV cache updates are:
+
+  * Serialized per token
+  * Executed entirely on GPU
+* CPU does not participate in KV mutation or synchronization
+
+---
 
 ### 7.5 Quantization and Dequantization
 
 * For quantized models:
 
-  * GPU kernels perform on-the-fly dequantization
-* Dequantization is fused with matmul where possible
-* Quantization reduces memory bandwidth but does not reduce kernel launch count
+  * Dequantization is executed on GPU
+  * Dequantization is fused with matmul where possible
+* Quantization reduces memory bandwidth pressure
+* Quantization does not introduce CPU involvement in decode
 
-### 7.6 Kernel Launch Granularity
+---
 
-* GPU kernels during decode are:
+### 7.6 Execution Granularity and Residency
 
-  * Small
-  * Short-lived
-  * Launched frequently
-* Kernel execution time per launch is often much shorter than:
+* GPU execution during decode is structured to maximize residency:
 
-  * CPU kernel launch overhead
-  * CPU synchronization latency
+  * Persistent graphs
+  * Fused kernels
+  * Reduced launch boundaries
+* Per-token execution minimizes host-visible transitions
+* GPU performs the full per-token forward pass without CPU pacing
 
-### 7.7 Synchronization Behavior
+---
 
-* GPU execution is synchronized with CPU at:
+### 7.7 Synchronization Semantics
 
-  * End of graph execution
-  * Before sampling
-* GPU cannot proceed independently
-* GPU frequently idle while waiting for CPU to:
+* Decode-critical ordering is enforced by:
 
-  * Launch next kernel
-  * Complete sampling
-  * Update control state
+  * GPU execution dependencies
+  * Graph-level ordering guarantees
+* CPU does **not** insert synchronization points on the decode path
+* GPU does **not** wait for CPU between decode stages
+* Token-level serialization is preserved **entirely within GPU execution**
 
-### 7.8 GPU Utilization Characteristics
+---
 
-* During prefill:
+### 7.8 GPU Utilization Characteristics (Target State)
+
+* Prefill phase:
 
   * Large kernels
   * High occupancy
-  * GPU near saturation
-* During decode:
+  * Near-saturation utilization
+* Decode phase:
 
-  * Low occupancy
-  * Frequent idle gaps
-  * Utilization limited by host pacing, not compute capacity
+  * Sustained kernel residency
+  * Minimal idle gaps
+  * Utilization limited by model arithmetic, not host pacing
 
-### 7.9 Limitations of Current GPU Role
+---
 
-* GPU does not control:
+### 7.9 GPU Autonomy Guarantees
+
+* GPU controls:
 
   * Decode loop progression
-  * Token selection
-  * Sampling
-* GPU cannot overlap work across tokens
-* GPU has no persistent execution context across decode iterations
+  * Token generation cadence
+  * Sampling and commitment
+* GPU maintains persistent execution context across decode iterations
+* CPU has no authority to stall or gate token emission
+
+---
 
 ### 7.10 Aggregate Impact on Performance
 
-* GPU is capable of much higher sustained throughput
-* GPU utilization during decode is artificially constrained
-* GPU underutilization is caused by:
+* GPU becomes the **sole pacing resource** for tokens/sec
+* Decode throughput scales with GPU capability
+* CPU load no longer affects decode t/s
+* GPU underutilization caused by host-driven orchestration is eliminated
 
-  * Fine-grained kernel launches
-  * CPU-driven control flow
-  * Lack of persistent GPU execution
+This audit defines the **required end state**: the GPU owns and executes the entire decode-critical path, with no CPU participation on the token-generation dependency chain.
 
-This audit shows that the GPU is underused not due to insufficient compute work, but due to execution structure and host-driven orchestration.
-## 8. CPU↔GPU Synchronization Points
+## 8. CPU↔GPU Synchronization Points (Target-State, Post-Modification)
 
 ### 8.1 Decode-Step Boundary Synchronization
 
-* At the end of each token decode step, CPU waits for all GPU kernels to complete
-* No overlap is allowed between:
+* **No CPU↔GPU synchronization exists on the decode-critical path**
+* Token-to-token progression is enforced **entirely within GPU execution**
+* CPU does **not** wait for GPU completion to advance decode
+* GPU autonomously determines completion of token *n* and initiation of token *n+1*
 
-  * GPU execution for token *n*
-  * CPU sampling and control for token *n+1*
-* This synchronization occurs once per generated token
+---
 
 ### 8.2 Graph Execution Synchronization
 
-* ggml graph execution introduces implicit synchronization:
+* ggml graph execution for decode is:
 
-  * CPU blocks until all GPU nodes in the graph complete
-* Even when CUDA graphs are enabled:
+  * GPU-resident
+  * Persistently instantiated
+* CPU does **not** block on graph completion during decode
+* Graph execution ordering is enforced by:
 
-  * CPU still enforces completion before sampling
-* Graph-level synchronization serializes GPU work at token granularity
+  * GPU-side dependencies
+  * CUDA execution semantics
+* CPU has no visibility requirement into intermediate graph completion
 
-### 8.3 Kernel Launch Synchronization
+---
 
-* Each CUDA kernel launch incurs:
+### 8.3 Kernel Launch and Ordering Semantics
 
-  * Host-side launch overhead
-  * Implicit ordering within the CUDA stream
-* CPU often waits for:
+* Kernel launches for decode are:
 
-  * Kernel completion
-  * Stream state update
-* Kernel launches are frequent and fine-grained during decode
+  * Issued as part of persistent GPU execution
+  * Not interleaved with CPU decision points
+* CPU does **not** wait on individual kernel completions
+* Kernel ordering is enforced by:
+
+  * CUDA stream semantics
+  * Graph-level dependencies on GPU
+
+---
 
 ### 8.4 Sampling Dependency Barrier
 
-* Sampling cannot begin until:
+* Sampling is executed **on GPU**
+* No device-to-host transfer of logits occurs on the decode path
+* No CPU-side sampling barrier exists
+* Token selection completes on GPU and directly feeds the next decode step
 
-  * All logits are fully computed on GPU
-* CPU waits for GPU to finish logits computation
-* This barrier prevents overlap between:
+---
 
-  * GPU compute
-  * CPU sampling
-* Sampling completion blocks the next GPU launch
+### 8.5 KV Cache Consistency
 
-### 8.5 KV Cache Consistency Barrier
+* KV cache is fully GPU-resident for decode-critical layers
+* KV cache reads and writes are:
 
-* KV cache updates must be completed before:
+  * Ordered by GPU execution
+  * Serialized per token within GPU context
+* CPU does **not** participate in KV cache mutation or visibility checks
+* No CPU-enforced KV consistency barrier exists
 
-  * Next token decode begins
-* CPU ensures:
+---
 
-  * GPU KV writes are visible
-  * CPU KV metadata is updated
-* This introduces another per-token synchronization point
+### 8.6 Memory Visibility and Data Movement
 
-### 8.6 Memory Visibility Synchronization
+* Decode-critical data remains GPU-resident:
 
-* Host access to GPU-resident data (e.g., logits) requires:
+  * Activations
+  * Logits
+  * KV cache
+  * Sampling state
+* No device-to-host transfers occur on the decode path
+* CPU accesses decode outputs only **after** token commitment, asynchronously
 
-  * Explicit or implicit synchronization
-* Device-to-host transfers introduce:
+---
 
-  * Blocking waits
-  * Pipeline stalls
-* Even small transfers cause decode-phase delays
+### 8.7 Server-Side Synchronization
 
-### 8.7 Server-Side Synchronization (if applicable)
+* Server-side CPU logic is decoupled from decode execution
+* Request lifecycle events:
 
-* In server mode:
+  * Do not gate decode progression
+  * Do not introduce synchronization into GPU execution
+* Slot state and streaming output are handled asynchronously
 
-  * CPU may synchronize on request lifecycle events
-  * Slot state transitions are synchronized with decode progression
-* These synchronizations are serialized with decode steps
+---
 
-### 8.8 CUDA Graph Constraints
+### 8.8 CUDA Graph Usage
 
-* CUDA graphs reduce kernel launch overhead
-* However:
+* CUDA graphs are used to:
 
-  * Graph replay is still initiated by CPU
-  * Graph boundaries enforce synchronization
-* Graph invalidation (e.g., context growth) forces CPU intervention
+  * Eliminate per-kernel launch overhead
+  * Maintain persistent GPU execution
+* Graph replay is GPU-driven during decode
+* Graph invalidation triggers:
 
-### 8.9 Cumulative Effect of Synchronization
+  * A controlled pause **outside** the decode-critical path
+  * Never mid-token or between tokens
 
-* Multiple synchronization points exist per token
-* Synchronization overhead dominates compute time at batch size = 1
-* GPU frequently idle while CPU:
+---
 
-  * Waits
-  * Samples
-  * Updates state
+### 8.9 Cumulative Synchronization State
 
-### 8.10 Optimization Implication
+* Zero CPU↔GPU synchronization points exist per token
+* GPU execution proceeds continuously across decode iterations
+* CPU activity cannot introduce GPU idle gaps
+* Token throughput is invariant to CPU load
 
-* Reducing or eliminating CPU↔GPU synchronization points is critical
-* Key targets:
+---
 
-  * Sampling barrier
-  * Graph-level barrier
-  * Per-kernel launch waits
-* GPU utilization cannot increase without restructuring these synchronization points
-## 9. Backend Selection Logic
+### 8.10 Optimization Implication (Final)
 
-### 9.1 Backend Selection Overview
+* Decode performance is no longer limited by:
 
-* Backend selection determines **where** and **how** tensor operations are executed
-* Selection occurs at:
+  * CPU waits
+  * Sampling barriers
+  * Graph-level synchronization
+  * Kernel launch overhead
+* Tokens/sec is determined solely by:
 
-  * Build time (compiled backends)
-  * Runtime (capability checks, environment variables, flags)
-* Backend choice directly impacts:
+  * GPU compute capability
+  * Model arithmetic intensity
+  * Context length effects
 
-  * Kernel launch count
-  * Arithmetic intensity
-  * CPU↔GPU synchronization frequency
-  * Decode-phase throughput
+This section defines the **required invariant**:
+**no CPU↔GPU synchronization is permitted on the token-generation dependency chain.**
 
-### 9.2 Available Backends
+## 9. Backend Selection Logic (Aligned with GPU-Exclusive Decode)
 
-* CPU backend
-* CUDA dense backend
-* CUDA cuBLAS dense backend
-* CUDA MMQ backend (quantized, MoE-capable)
-* Hybrid CPU↔CUDA backends
+### 9.1 Backend Selection Objective
 
-Each backend implements the same logical ops but with different execution characteristics.
+* Backend selection determines **where** decode-critical operations execute
 
-### 9.3 Build-Time Backend Availability
+* The primary invariant is:
 
-* Compiled backends are determined by:
+  > **All decode-critical operations must resolve to a GPU backend, without exception**
 
-  * CMake configuration
-  * CUDA availability
-  * Architecture flags
-* Only compiled backends are candidates at runtime
-* Missing backends force fallback to available alternatives
+* Backend choice directly defines:
 
-### 9.4 Runtime Backend Selection Criteria
+  * Tokens/sec
+  * GPU occupancy
+  * Presence or absence of CPU pacing
 
-Backend selection at runtime depends on:
+---
 
-* Tensor location (CPU memory vs GPU memory)
-* Tensor datatype and quantization
-* Operation type (matmul, attention, normalization, etc.)
-* GPU capabilities (compute capability, tensor core support)
-* Environment variables and runtime flags
+### 9.2 Decode-Critical vs Non-Critical Classification
 
-### 9.5 CPU Backend Selection
+Backend selection is governed by **task classification**, not capability fallback.
 
+* **Decode-critical operations**:
+
+  * Must be GPU-exclusive
+  * Backend choice is fixed before execution
+* **Non-critical operations**:
+
+  * May execute on CPU
+  * Must not gate token emission
+
+This classification is **static and irreversible** per task.
+
+---
+
+### 9.3 Available Backends (Logical)
+
+* GPU backends (decode-critical eligible):
+
+  * CUDA dense
+  * CUDA cuBLAS dense
+  * CUDA MMQ (quantized, MoE-capable)
+* CPU backend (non-critical only)
+
+Hybrid backends are **explicitly disallowed** on the decode path.
+
+---
+
+### 9.4 Build-Time Backend Availability
+
+* Build configuration defines which GPU backends exist
+* For decode:
+
+  * At least one GPU backend **must** be available
+  * Absence of a suitable GPU backend is a **hard error**, not a fallback condition
+* CPU backend availability does **not** imply decode eligibility
+
+---
+
+### 9.5 Runtime Backend Resolution (Decode Path)
+
+For decode-critical operations:
+
+* Backend resolution occurs **once**, before decode begins
+* Resolution rules:
+
+  * Tensor must be GPU-resident
+  * Operation must have a GPU implementation
+  * Backend must remain constant across all decode steps
+* If resolution fails:
+
+  * Decode does not start
+  * Execution aborts with an explicit error
+
+No per-token or per-layer backend switching is permitted.
+
+---
+
+### 9.6 CPU Backend Usage Rules
+
+* CPU backend is **never** selected for decode-critical operations
+* CPU backend may be used only for:
+
+  * Tokenization
+  * Request handling
+  * Logging and metrics
+  * Scheduling and admission control
+  * Other latency-tolerant tasks
+
+Any CPU backend invocation on the decode dependency chain is forbidden.
+
+---
+
+### 9.7 CUDA Dense Backend Role
+
+* Eligible for decode only if:
+
+  * All decode-critical layers are GPU-resident
+  * No CPU fallback paths exist
+* Suitable primarily for:
+
+  * Dense, non-quantized models
+* Backend selection is fixed for the entire decode session
+
+---
+
+### 9.8 CUDA cuBLAS Backend Role
+
+* Eligible for decode under strict conditions:
+
+  * GPU-exclusive execution guaranteed
+  * No GEMV → CPU fallback paths
+* Optimized for prefill
+* Decode use is allowed only when:
+
+  * Backend remains GPU-resident
+  * Kernel launch behavior is stable
+
+---
+
+### 9.9 CUDA MMQ Backend Role
+
+* Preferred backend for decode-heavy workloads
 * Selected when:
 
-  * Operation has no GPU implementation
-  * Tensor resides in CPU memory
-  * GPU memory is insufficient
-  * Explicit CPU-only execution requested
-* CPU backend introduces:
+  * Model is quantized
+  * MMQ supports the quantization format
+* Advantages:
 
-  * Additional synchronization
-  * Reduced GPU utilization
-* Any CPU backend invocation during decode creates a hard pacing bottleneck
+  * Fused kernels
+  * Reduced launch count
+  * Higher sustained GPU occupancy
+* Backend is fixed for the entire decode lifecycle
 
-### 9.6 CUDA Dense Backend Selection
+---
 
-* Selected when:
+### 9.10 Prohibited Hybrid Execution
 
-  * Tensors are dense and GPU-resident
-  * Quantization does not apply
-* Uses custom CUDA kernels
-* Lower launch overhead than cuBLAS in some cases
-* Still launch-heavy at batch size = 1
+* The following are explicitly forbidden during decode:
 
-### 9.7 CUDA cuBLAS Dense Backend Selection
+  * Layer-wise CPU↔GPU alternation
+  * Partial layer execution on CPU
+  * CPU fallback due to VRAM pressure
+  * Dynamic backend switching
 
-* Selected when:
+Hybrid execution is treated as a correctness violation, not an optimization.
 
-  * Dense GEMM/GEMV operations are detected
-  * cuBLAS is enabled
-* cuBLAS provides highly optimized kernels
-* At batch size = 1:
+---
 
-  * GEMV-dominated
-  * Kernel launch overhead becomes significant
-* cuBLAS backend excels during prefill, not decode
+### 9.11 Backend Fallback Policy (Decode)
 
-### 9.8 CUDA MMQ Backend Selection
+* **No fallback exists on the decode path**
+* If a decode-critical operation cannot be mapped to GPU:
 
-* Selected when:
+  * Execution aborts
+  * Error is surfaced immediately
+* Silent fallback is prohibited
 
-  * Model weights are quantized
-  * MMQ kernels support the quantization format
-* MMQ backend provides:
+---
 
-  * Fused quantized matmul
-  * Reduced memory bandwidth
-* MMQ is preferred for:
+### 9.12 Environment Variable and Flag Constraints
 
-  * Large quantized models
-  * Decode-heavy workloads
-* MMQ still depends on CPU-driven scheduling
+* Environment variables may:
 
-### 9.9 Hybrid Backend Selection
+  * Restrict backend choice
+  * Force a specific GPU backend
+* They must **never**:
 
-* Selected when:
+  * Enable CPU fallback for decode
+  * Introduce backend instability across tokens
+* Backend selection must be logged and verified at startup
 
-  * Some layers fit on GPU
-  * Others must run on CPU
-* Introduces:
+---
 
-  * CPU↔GPU alternation per layer
-  * Increased synchronization
-* Hybrid execution significantly degrades decode throughput
+### 9.13 Decode-Phase Invariant
 
-### 9.10 Backend Fallback Behavior
+> **Backend selection for decode is static, GPU-exclusive, and immutable for the lifetime of the decode session.**
 
-* If a preferred backend is unavailable or fails:
+This invariant guarantees:
 
-  * Execution falls back to the next available backend
-* Fallbacks may occur silently
-* Silent fallback to CPU backend during decode is catastrophic for throughput
+* CPU never gates token emission
+* GPU utilization is not disrupted by backend churn
+* Tokens/sec is determined solely by GPU compute capability
 
-### 9.11 Environment Variable Influence
+## 10. Threading & Parallelism Analysis (Aligned with GPU-Exclusive Decode)
 
-* Environment variables can force backend selection:
+### 10.1 CPU Thread Model (Reinterpreted)
 
-  * Forcing MMQ
-  * Forcing cuBLAS
-  * Disabling certain backends
-* Incorrect configuration can:
-
-  * Increase CPU execution
-  * Reduce GPU residency
-* Backend forcing must be verified at runtime logs
-
-### 9.12 Decode-Phase Implications
-
-* Backend selection is evaluated repeatedly during decode
-* Backend switching increases overhead
-* Optimal decode performance requires:
-
-  * Stable backend selection
-  * Maximum GPU-resident execution
-  * Zero CPU fallback during decode
-
-### 9.13 Optimization Implication
-
-* Backend logic must be:
-
-  * Predictable
-  * Static across decode
-* For maximum tokens/sec:
-
-  * All decode-path operations must map to GPU backends
-  * CPU backend invocation must be eliminated or isolated
-
-This section defines how backend selection directly controls decode-phase performance and where intervention is required to prevent GPU underutilization.
-## 10. Threading & Parallelism Analysis
-
-### 10.1 CPU Thread Model Overview
-
-* llama.cpp uses a CPU thread pool managed by ggml
+* llama.cpp exposes a CPU thread pool via ggml
 * Thread count controlled by:
 
   * `--threads`
   * `--threads-batch`
-* Threads are shared across:
+* Under the **GPU-exclusive decode invariant**, CPU threads are **not part of the decode-critical path**
+* CPU threads are permitted only for **non-blocking, non-pacing work**
 
-  * Graph execution
-  * CPU backend ops
-  * CUDA kernel dispatch
-  * Sampling
-  * Server logic (if applicable)
+---
 
-### 10.2 Thread Roles During Decode
+### 10.2 Decode-Critical vs Non-Critical Thread Roles
 
-During decode (batch size = 1), CPU threads perform:
+All CPU thread activity must be classified **before execution**.
 
-* Decode loop control
-* Graph scheduling and traversal
-* CUDA kernel launch and synchronization
-* Sampling pipeline execution
-* KV cache metadata updates
-* Server-side request handling (in server mode)
+#### Decode-critical (forbidden on CPU)
 
-These tasks are **latency-serial**, not throughput-parallel.
+* Any work that gates next-token emission
+* Includes:
 
-### 10.3 Effective Parallelism in Decode Phase
+  * Graph traversal that blocks GPU progress
+  * Sampling / argmax
+  * Per-token decode loop control
+  * Synchronization that delays GPU execution
 
-* Decode phase exposes very little exploitable parallelism:
+➡ **CPU threads must never execute these**
 
-  * One token at a time
-  * Strict ordering constraints
-* CPU threads cannot work independently on future tokens
-* Most threads are either:
+#### Non-critical (CPU-eligible)
 
-  * Idle
-  * Spinning
-  * Waiting on synchronization
+* Request parsing
+* Tokenization
+* Logging and metrics
+* Server I/O
+* Admission control
+* Background housekeeping
+* Prefetching future requests
+* Memory reclamation
+* Non-blocking orchestration
 
-High CPU utilization does **not** imply useful parallel work.
+➡ These may freely use CPU threads
 
-### 10.4 Oversubscription Effects
+---
 
-* Using too many CPU threads can:
+### 10.3 Effective Parallelism Under the New Model
 
-  * Increase context switching
-  * Increase cache thrashing
-  * Increase synchronization overhead
-* Oversubscription can **reduce** effective decode throughput
-* Optimal thread count is often:
+* Decode phase remains **logically serial** at the token level
+* However:
 
-  * Much lower than available cores
-  * Close to number of active CPU backend tasks
+  * GPU executes the entire decode-critical graph
+  * CPU threads do **not** participate in token-to-token sequencing
+* Result:
 
-### 10.5 Interaction with CUDA Dispatch
+  * CPU parallelism is decoupled from decode throughput
+  * CPU load no longer determines tokens/sec
 
-* CUDA kernel launches are serialized per stream
-* Multiple CPU threads do not increase GPU kernel concurrency
-* Excess threads increase:
+---
 
-  * Lock contention
-  * Dispatch overhead
-* CUDA graphs reduce launch overhead but not CPU control flow
+### 10.4 Oversubscription Reframed
 
-### 10.6 Sampling and Thread Utilization
+* CPU oversubscription is harmful **only if CPU is on the critical path**
+* Under GPU-exclusive decode:
 
-* Sampling is:
+  * CPU threads may saturate without impacting t/s
+  * Oversubscription affects only background latency
+* Therefore:
 
-  * Branch-heavy
-  * Poorly vectorizable
-* Sampling executes on a single CPU thread
-* Additional threads provide no benefit during sampling
-* Sampling time directly stalls the entire decode pipeline
+  * Decode performance is insensitive to CPU thread count
+  * CPU thread tuning is no longer a throughput lever
 
-### 10.7 Server Mode Threading
+---
 
-* Server introduces additional threads for:
+### 10.5 Interaction with CUDA Dispatch (Corrected)
 
-  * HTTP handling
-  * Slot management
+* CUDA kernel launches and sequencing are logically owned by the GPU decode engine
+* CPU threads do **not**:
+
+  * Pace kernel launches
+  * Synchronize per token
+  * Gate progression between kernels
+* Multiple CPU threads do not improve decode
+* CPU thread reduction is beneficial only to reduce noise, not to increase t/s
+
+---
+
+### 10.6 Sampling and Threading (Post-Change)
+
+* Sampling is **decode-critical**
+* Therefore:
+
+  * Sampling must be GPU-resident
+  * CPU threads must not execute sampling logic
+* CPU thread count has **zero impact** on sampling latency once migrated
+
+---
+
+### 10.7 Server Mode Threading (Isolated)
+
+* Server threads handle:
+
+  * HTTP
+  * Slot lifecycle
   * Logging
-* These threads compete with decode threads for CPU time
-* Server threading increases scheduling noise during decode
+* These threads are isolated from decode execution
+* Hard rule:
 
-### 10.8 GPU Parallelism vs CPU Parallelism
+  * Server threads must never block GPU decode scheduling
+* Server load may increase CPU usage but must not affect tokens/sec
 
-* GPU parallelism is massive but underutilized during decode
-* CPU parallelism cannot compensate due to serial dependencies
-* Mismatch between CPU threading model and GPU execution model causes inefficiency
+---
 
-### 10.9 Thread Affinity and Scheduling
+### 10.8 GPU Parallelism vs CPU Parallelism (Final Model)
 
-* Default OS scheduling may:
+* GPU parallelism is the **only throughput determinant**
+* CPU parallelism is auxiliary
+* There is no attempt to “balance” work between CPU and GPU
+* Instead:
 
-  * Migrate threads across cores
-  * Increase cache misses
-* Lack of thread pinning increases jitter
-* Jitter increases GPU idle gaps
+  * GPU owns decode
+  * CPU owns everything else
 
-### 10.10 Optimization Implications
+---
 
-* Increasing CPU threads does not increase decode throughput
-* Reducing unnecessary CPU threads can:
+### 10.9 Thread Affinity and Scheduling (Secondary Concern)
 
-  * Reduce overhead
-  * Improve GPU feed consistency
-* Maximum throughput requires:
+* Thread pinning may reduce jitter
+* However:
 
-  * Minimal CPU thread count
-  * Minimal CPU-side synchronization
-  * GPU-resident execution where possible
+  * Jitter does not affect decode t/s once CPU is off the critical path
+* Thread affinity is an optimization for stability, not throughput
 
-This analysis shows that decode performance is limited by **serial control flow**, not lack of CPU threads, and that excess CPU parallelism can actively harm GPU utilization.
-## 11. Memory Mapping & Allocation
+---
+
+### 10.10 Final Implications
+
+* Increasing CPU threads does **not** increase decode throughput
+* Decreasing CPU threads does **not** reduce decode throughput
+* Decode performance is invariant to CPU scheduling once:
+
+  > **CPU is removed from the token-generation dependency chain**
+
+This section formally establishes that **threading is no longer a decode performance variable** once GPU-exclusive execution is enforced.
+
+## 11. Memory Mapping & Allocation (Aligned with GPU-Exclusive Decode)
 
 ### 11.1 Memory Allocation Domains
 
-* Two physically separate memory domains:
+* Two strictly separated memory domains:
 
   * CPU DRAM
   * GPU VRAM
-* All data movement between domains occurs explicitly over PCIe
-* No implicit unified memory behavior is relied upon
+* PCIe transfers are **explicit and controlled**
+* No unified memory, no implicit migration
+* Decode-critical execution relies **exclusively on GPU-resident memory**
 
-### 11.2 Model Weight Allocation
+---
 
-* Model weights are loaded from GGUF into host memory
-* Depending on build and flags:
+### 11.2 Model Weight Allocation (Target State)
 
-  * A subset of layers is offloaded to GPU VRAM
-  * Remaining layers stay in CPU memory
-* Offloading decisions are made at load time
-* Weight placement is static during decode
+* Model weights are loaded once at initialization
+* For decode-critical execution:
 
-### 11.3 KV Cache Allocation
+  * **All transformer layers participating in decode must reside in GPU VRAM**
+* No CPU-resident layers are permitted on the decode path
+* Weight placement is:
 
-* KV cache size grows linearly with context length
-* KV cache allocation occurs at context initialization
-* Allocation split depends on layer placement:
+  * Static
+  * Immutable during decode
+* Any layer not fitting in VRAM must prevent decode start (admission control), not trigger hybrid execution
 
-  * GPU-resident KV cache for GPU layers
-  * CPU-resident KV cache for CPU layers
-* Split KV cache introduces:
+---
 
-  * Additional synchronization
-  * Memory access overhead
-* KV cache memory is reused across tokens but never relocated
+### 11.3 KV Cache Allocation (Target State)
+
+* KV cache is allocated at context initialization
+* KV cache properties:
+
+  * Fully GPU-resident
+  * Grows monotonically with sequence length
+  * Never split across CPU and GPU
+* KV cache updates are:
+
+  * Per-token
+  * Serialized
+  * Executed entirely on GPU
+* CPU does not:
+
+  * Read KV
+  * Write KV
+  * Track KV metadata for decode
+
+---
 
 ### 11.4 Compute Buffer Allocation
 
-* Temporary compute buffers are allocated for:
+* All decode-critical compute buffers are:
 
-  * Intermediate activations
-  * Attention outputs
-  * FFN outputs
-* Buffers may reside in:
+  * Allocated in GPU VRAM
+  * Pre-allocated before decode begins
+  * Reused across tokens
+* Buffers include:
 
-  * CPU memory
-  * GPU memory
-* Allocation strategy depends on backend
-* Buffer sizes are fixed per context and reused per token
+  * Activations
+  * Attention intermediates
+  * FFN intermediates
+  * Logits
+  * Sampling state
+* **No buffer allocation occurs during decode**
 
-### 11.5 Memory Mapping Modes
+---
 
-* Memory-mapped file loading (`mmap`) may be enabled or disabled
-* When enabled:
+### 11.5 Memory Mapping Modes (Clarified)
 
-  * Model weights are memory-mapped from disk
-  * Pages are faulted on demand
-* When disabled:
-
-  * Model weights are fully loaded into RAM
-* `mmap` affects load time and memory pressure but not decode compute
+* `mmap` affects only model load behavior
+* Decode-phase behavior is invariant to `mmap` once weights are resident
 * For decode performance:
 
-  * `mmap` status is largely irrelevant once weights are resident
+  * `mmap` must not introduce page faults during decode
+* All pages required for decode must be resident before token generation starts
 
-### 11.6 Pinned and Pageable Memory
+---
 
-* Host-to-device transfers may use:
+### 11.6 Host↔Device Transfers (Forbidden on Decode Path)
 
-  * Pageable memory
-  * Pinned (page-locked) memory
-* Pageable memory transfers introduce:
+* No host↔device transfers are allowed during decode-critical execution
+* Specifically forbidden per token:
 
-  * Additional latency
-  * Implicit synchronization
-* Pinned memory:
+  * Logits transfer to CPU
+  * Sampling data transfer
+  * KV metadata transfer
+* Device↔host transfers may occur only:
 
-  * Reduces transfer latency
-  * Increases host memory pressure
-* Decode performance benefits from minimizing transfers regardless of memory type
+  * After token commitment
+  * Asynchronously
+  * Outside the decode dependency chain
 
-### 11.7 Allocation Lifetime and Churn
+---
 
-* Most allocations occur during:
+### 11.7 Pinned and Pageable Memory (Non-Critical Only)
 
-  * Model load
-  * Context initialization
-* Decode phase allocation churn is minimal
-* However:
+* Pinned memory may be used for:
 
-  * Any allocation during decode introduces synchronization
-  * Allocation must be avoided in the decode loop
+  * Asynchronous output streaming
+  * Logging
+  * Metrics
+* Pageable memory is acceptable for:
 
-### 11.8 Memory Visibility and Synchronization
+  * CPU-only tasks
+* Decode-critical execution is **independent of host memory type** because no transfers occur
 
-* Host access to GPU-resident buffers requires synchronization
-* Device writes must complete before host reads
-* Memory visibility rules enforce:
+---
 
-  * Implicit barriers
-  * Pipeline stalls
-* Small device-to-host reads (e.g., logits) are disproportionately expensive
+### 11.8 Allocation Lifetime and Churn (Invariant)
 
-### 11.9 Memory Fragmentation Considerations
+* All allocations required for decode are completed before first token
+* Decode loop performs:
 
-* Long-running processes risk:
+  * Zero allocations
+  * Zero frees
+* Any allocation during decode is considered a correctness violation of the execution model
 
-  * Host memory fragmentation
-  * GPU memory fragmentation
-* Fragmentation increases allocation cost
-* Stable buffer reuse is critical for sustained throughput
+---
 
-### 11.10 Optimization Implications
+### 11.9 Memory Visibility and Synchronization (Eliminated)
 
-* Decode throughput is maximized when:
+* CPU never reads GPU-resident decode data
+* Therefore:
 
-  * All decode-path data remains GPU-resident
-  * No per-token host↔device transfers occur
-  * No allocations occur during decode
-* Any CPU access to GPU data during decode introduces a hard synchronization point
-* Memory placement decisions directly impact GPU utilization and tokens/sec
-## 12. Graph Lifetime Analysis
+  * No device-to-host visibility barrier exists per token
+  * No implicit synchronization is introduced by memory access
+* GPU enforces all required ordering internally
 
-### 12.1 Graph Definition
+---
 
-* A ggml graph represents the computation required to produce one token
+### 11.10 Fragmentation and Long-Running Stability
+
+* Stable allocation layout is mandatory
+* Buffers are:
+
+  * Fixed-size
+  * Reused
+* No dynamic growth except KV cache append within pre-reserved bounds
+* Fragmentation must not evolve during decode
+
+---
+
+### 11.11 Final Memory Invariant
+
+* **All decode-critical state, data, and computation remain GPU-resident for the entire decode phase**
+* CPU memory is **never accessed** by operations on the token-generation dependency chain
+* Memory placement is a **hard correctness constraint**, not a performance hint
+
+This section establishes memory residency as a first-class enforcement mechanism ensuring that **CPU cannot re-enter the decode-critical path**.
+
+## 12. Graph Lifetime Analysis (Aligned with GPU-Exclusive Decode)
+
+### 12.1 Graph Definition (Reinterpreted)
+
+* A ggml graph represents the **entire decode-critical computation** required to produce one token
 * The graph includes:
 
   * All transformer layer operations
   * Attention computation
   * FFN computation
   * Logits computation
-* The graph encodes both CPU and GPU nodes
+  * Sampling and token commitment
+* Decode-critical graphs are **GPU-exclusive**
+* CPU nodes are **not permitted** on the decode graph
+
+---
 
 ### 12.2 Graph Construction Phase
 
-* Graph construction occurs during:
+* Graph construction occurs:
 
-  * Context initialization
-  * Prompt prefill
-  * Decode, if graph invalidation conditions are met
-* Graph construction is performed on CPU
-* Graph construction cost is non-trivial but amortized during prefill
+  * During context initialization
+  * During prefill
+* Graph construction is a **CPU-side setup activity**
+* Graph construction must be completed **before decode begins**
+* Graph construction is **forbidden** during active decode
 
-### 12.3 Graph Reuse During Decode
+---
 
-* During decode, the same logical graph structure is reused per token
-* However, graph execution is still:
+### 12.3 Graph Reuse During Decode (Target State)
 
-  * Triggered by CPU
-  * Synchronized per token
-* Graph reuse does not imply autonomous GPU execution
+* Decode uses a **single, stable graph structure**
+* Graph is:
 
-### 12.4 Conditions That Invalidate Graph Reuse
+  * Persistently instantiated
+  * Reused across all decode iterations
+* Graph execution is:
 
-Graph reuse may be invalidated when:
+  * Autonomous on GPU
+  * Not re-triggered by CPU per token
+* CPU does not initiate, gate, or synchronize graph execution per token
 
-* Context length increases beyond planned bounds
-* KV cache layout changes
-* Backend selection changes
-* Tensor shapes change
-* Certain flags or modes are toggled
+---
 
-When invalidated:
+### 12.4 Graph Invalidation Rules (Strict)
 
-* Graph must be rebuilt on CPU
-* Decode throughput temporarily degrades
+Graph reuse **must not** be invalidated during decode.
 
-### 12.5 CUDA Graph Integration
+* The following are **disallowed during decode**:
 
-* CUDA graphs may capture:
+  * Context growth beyond preallocated bounds
+  * KV cache layout changes
+  * Backend selection changes
+  * Tensor shape changes
+  * Mode or flag toggles
 
-  * Kernel launch sequences
-  * Memory access patterns
-* CUDA graph replay reduces:
+If any invalidation condition occurs:
 
-  * Kernel launch overhead
-* However:
+* Decode must stop
+* Control returns to CPU
+* Graph may be rebuilt **only outside** the decode-critical phase
 
-  * CUDA graph replay is initiated by CPU
-  * Graph boundaries still enforce synchronization
-* CUDA graphs do not remove CPU control flow
+---
 
-### 12.6 Graph Execution Flow
+### 12.5 CUDA Graph Usage (Decode-Critical)
 
-* For each token:
+* CUDA graphs are used to:
 
-  * CPU initiates graph execution
-  * CPU dispatches GPU kernels according to graph
-  * CPU waits for graph completion
-* No overlap exists between graph executions of different tokens
+  * Capture the full decode graph
+  * Eliminate per-kernel launch overhead
+* CUDA graph replay is:
 
-### 12.7 Graph Granularity
+  * Persistent
+  * GPU-resident
+  * Not initiated per token by CPU
+* CUDA graph boundaries do **not** introduce synchronization on the decode path
 
-* Graph is defined at token granularity
-* Each token corresponds to one full graph execution
-* Fine granularity increases:
+---
 
-  * Synchronization frequency
-  * CPU overhead
-  * GPU idle gaps
+### 12.6 Graph Execution Flow (Corrected)
+
+* Decode execution model:
+
+  * GPU enters decode loop once
+  * GPU executes graph iterations internally
+  * GPU advances token index autonomously
+* CPU is not involved in:
+
+  * Per-token graph execution
+  * Kernel dispatch
+  * Completion checks
+* Token-level ordering is enforced entirely on GPU
+
+---
+
+### 12.7 Graph Granularity (Required)
+
+* Graph granularity is **decode-loop–level**, not token-trigger–level
+* One persistent graph handles:
+
+  * Multiple decode iterations
+  * Internal token sequencing
+* Eliminates per-token CPU↔GPU round trips
+
+---
 
 ### 12.8 Graph Node Scheduling
 
-* CPU schedules execution of graph nodes
-* CPU determines:
+* Node ordering is:
 
-  * Node ordering
-  * Backend selection per node
-* GPU has no visibility into:
+  * Static
+  * Encoded in the graph
+* Backend selection for nodes is:
 
-  * Upcoming nodes
-  * Future tokens
+  * Fixed
+  * GPU-only
+* GPU has full visibility into:
+
+  * All nodes
+  * All decode iterations
+* CPU has no role in node scheduling during decode
+
+---
 
 ### 12.9 Lifetime of Graph Resources
 
-* Graph-associated buffers:
+* All graph-associated resources are:
 
-  * Allocated during context setup
-  * Reused across decode iterations
-* Resource reuse is effective
-* Control-path overhead remains dominant
+  * Allocated before decode
+  * GPU-resident
+  * Reused across all tokens
+* No graph-related allocation, deallocation, or mutation occurs during decode
 
-### 12.10 Optimization Implications
+---
 
-* Graph reuse alone is insufficient to maximize decode throughput
-* Fundamental limitation:
+### 12.10 Optimization Implication (Final)
 
-  * Graph execution is CPU-driven and token-scoped
-* To increase GPU utilization:
+* Graph reuse is **necessary but insufficient** unless paired with:
 
-  * Graph granularity must be increased
-  * GPU must execute multiple decode steps autonomously
-* Without restructuring graph lifetime, GPU idle gaps persist
-## 13. Attention Path Analysis
+  * GPU-autonomous execution
+  * Persistent graph lifetime
+* Maximum decode throughput requires:
+
+  * Zero per-token CPU graph interaction
+  * No graph invalidation during decode
+  * GPU-controlled decode loop
+
+This section defines the **mandatory invariant**:
+
+> **The decode graph must outlive individual tokens and execute autonomously on the GPU for the entire decode phase.**
+
+Without this invariant, CPU pacing and GPU idle gaps inevitably reappear.
+
+## 13. Attention Path Analysis (Aligned with GPU-Exclusive Decode)
 
 ### 13.1 Role of Attention in Decode Phase
 
-* Attention is the dominant operation during decode at long context lengths
+* Attention is the **dominant decode-critical operation** at long context lengths
 * For each generated token:
 
   * Query corresponds to the current token
   * Keys and values correspond to all previous tokens
-* Attention cost increases linearly with context length
+* Attention cost scales linearly with context length
+* Attention lies **directly on the token-generation dependency chain**
 
-### 13.2 Attention Execution Stages
+---
 
-For each transformer layer during decode:
+### 13.2 Attention Execution Stages (Decode-Critical)
+
+For each transformer layer during decode, the following stages occur in strict order:
 
 1. Query, Key, Value projection
-2. Attention score computation:
-
-   * Dot product of query with all keys
-3. Scaling and masking (causal mask)
+2. Attention score computation (query × all keys)
+3. Scaling and causal masking
 4. Softmax over sequence length
 5. Weighted sum over values
 6. Output projection
 
-Each stage must complete before proceeding to the next.
+All stages are **decode-critical** and must execute **entirely on GPU**.
 
-### 13.3 Backend Variants for Attention
+---
 
-* CPU backend:
+### 13.3 Backend Eligibility for Attention
 
-  * Fully CPU-resident
-  * Extremely slow for long contexts
-* CUDA dense backend:
+* **CPU backend**:
 
-  * Custom CUDA kernels
-  * Multiple kernel launches per layer
-* cuBLAS backend:
+  * Forbidden for decode
+  * Introduces catastrophic latency at long context
+* **CUDA dense / cuBLAS backends**:
 
-  * Uses GEMV/GEMM for projections
-  * Separate kernels for attention steps
-* Flash-attention backend:
+  * GPU-resident
+  * Acceptable only if fully GPU-exclusive
+* **Flash-attention backend**:
+
+  * Preferred and mandatory when supported
+  * Provides maximal kernel fusion and minimal memory traffic
+
+Backend choice must be **fixed before decode** and must not change across tokens.
+
+---
+
+### 13.4 Flash-Attention Requirement
+
+* Flash-attention must be enabled when:
+
+  * GPU supports required instructions
+  * Attention dimensions are compatible
+* Flash-attention properties:
 
   * Fused attention kernels
-  * Reduced memory traffic
-  * Fewer intermediate buffers
+  * Reduced intermediate buffers
+  * High arithmetic intensity
+* Flash-attention is a **hard requirement** for sustained decode throughput at long context
 
-### 13.4 Flash-Attention Enablement
+---
 
-* Flash-attention is enabled when:
-
-  * GPU supports required features
-  * Attention dimensions are compatible
-  * Flags permit its use
-* When enabled:
-
-  * Attention computation is fused into fewer kernels
-  * Memory reads/writes are minimized
-* Flash-attention is critical for decode performance at long context
-
-### 13.5 KV Cache Interaction
+### 13.5 KV Cache Interaction (Attention-Critical)
 
 * Attention reads:
 
   * All previous keys and values from KV cache
-* KV cache is:
+* KV cache properties:
 
-  * Read-heavy
-  * Sequentially extended
-* KV cache location affects performance:
+  * Fully GPU-resident
+  * Sequential append per token
+* CPU-resident KV cache is **forbidden** on the decode path
+* KV cache access ordering is enforced by GPU execution
 
-  * GPU-resident KV cache enables high bandwidth access
-  * CPU-resident KV cache introduces severe latency
+---
 
-### 13.6 Kernel Granularity and Launch Behavior
+### 13.6 Kernel Granularity and Residency
 
-* Attention kernels during decode are:
+* Attention kernels must be structured to maximize GPU residency:
 
-  * Small
-  * Launched frequently
-* Even flash-attention kernels are short-lived at batch size = 1
-* Kernel launch overhead becomes significant relative to compute
+  * Fused kernels
+  * Persistent execution where possible
+* Per-token attention execution must avoid:
 
-### 13.7 Synchronization in Attention Path
+  * Per-stage kernel launches
+  * CPU-visible boundaries
+* Kernel launch overhead must be amortized across decode iterations
 
-* Attention kernels must complete before:
+---
 
-  * Sampling
-  * Next layer execution
-* CPU enforces completion via synchronization
-* No overlap is allowed between attention of token *n* and any other work
+### 13.7 Synchronization Semantics
 
-### 13.8 Scaling Behavior with Context Length
+* Attention execution must not introduce CPU↔GPU synchronization
+* Ordering constraints are enforced by:
+
+  * GPU execution dependencies
+  * Graph structure
+* CPU must not wait for attention completion
+* Attention completion must directly feed the next decode stage on GPU
+
+---
+
+### 13.8 Scaling with Context Length (Target Behavior)
 
 * As context length increases:
 
   * Attention compute per token increases
-  * Kernel execution time increases
-* GPU utilization improves somewhat at very long contexts
-* CPU overhead remains present and limits scaling
+  * GPU kernel duration increases
+* GPU utilization **naturally improves** with longer context
+* CPU overhead remains **constant and non-pacing**
 
-### 13.9 Attention as a Throughput Lever
+---
 
-* Attention is one of the few decode-phase operations with:
+### 13.9 Attention as the Primary Throughput Lever
 
-  * Substantial GPU work
-  * Increasing cost with context length
-* Optimizations in attention:
+* Attention provides:
 
+  * The largest per-token GPU workload
+  * The greatest opportunity for increasing GPU occupancy
+* Key levers:
+
+  * Flash-attention
   * Kernel fusion
-  * Persistent kernels
-  * Reduced synchronization
-* Yield direct gains in GPU utilization
+  * Persistent execution
+  * Elimination of host intervention
+* Improvements in attention directly translate to higher tokens/sec
 
-### 13.10 Optimization Implications
+---
 
-* Maximum decode throughput requires:
+### 13.10 Final Optimization Invariant
 
-  * Flash-attention enabled and always selected
-  * GPU-resident KV cache
-  * Elimination of CPU-side attention orchestration
-* Attention kernels must be:
+* For decode:
 
-  * Long-lived
-  * Executed with minimal host intervention
-* Without restructuring the attention path, GPU utilization remains artificially capped
-## 14. Quantization Cost Analysis
+  * Attention must be **GPU-exclusive**
+  * KV cache must be **GPU-resident**
+  * Flash-attention must be **always selected when available**
+  * No CPU orchestration or synchronization is permitted
+
+Without enforcing these invariants, attention becomes the dominant source of GPU idle time and decode throughput collapses.
+
+## 14. Quantization Cost Analysis (Aligned with GPU-Exclusive Decode)
 
 ### 14.1 Purpose of Quantization
 
@@ -1762,12 +1926,15 @@ Each stage must complete before proceeding to the next.
 
   * Model memory footprint
   * Memory bandwidth requirements
-* Enables larger models to fit in limited VRAM
-* Quantization does **not** change model semantics
+* Enables larger models to fit within fixed VRAM limits
+* Quantization does **not** alter model semantics or autoregressive behavior
+* Quantization is a **capacity enabler**, not a control-path optimization
 
-### 14.2 Quantization Formats
+---
 
-* Common GGUF quantization formats include:
+### 14.2 Quantization Formats (Decode-Relevant)
+
+* Supported GGUF quantization formats include:
 
   * Q4, Q5, Q6, Q8
   * K-variants (Q4_K, Q6_K, etc.)
@@ -1775,21 +1942,24 @@ Each stage must complete before proceeding to the next.
 * Quantization granularity:
 
   * Block-based
-  * Per-channel or per-group scales
-* All quantized formats require dequantization during compute
+  * Per-group scaling
+* All formats require dequantization during compute
+* Quantization format must remain **fixed across decode**
 
-### 14.3 Dequantization Execution Location
+---
 
-* Dequantization may occur:
+### 14.3 Dequantization Execution Policy (Hard Rule)
 
-  * On CPU (for CPU-resident layers)
-  * On GPU (inside CUDA kernels)
-* GPU-side dequantization is preferred for throughput
-* CPU-side dequantization introduces:
+* **All decode-path dequantization must occur on GPU**
+* CPU-side dequantization during decode is **forbidden**
+* GPU-side dequantization must be:
 
-  * Additional CPU compute
-  * Extra memory traffic
-  * Additional synchronization
+  * Embedded inside compute kernels
+  * Invisible to the CPU control path
+
+Any CPU-visible dequantization immediately introduces a decode-critical bottleneck.
+
+---
 
 ### 14.4 Dequantization Cost Characteristics
 
@@ -1799,97 +1969,138 @@ Each stage must complete before proceeding to the next.
   * Memory-bound
 * Cost per operation is small, but:
 
-  * Occurs frequently
-  * Is repeated for each token and each layer
-* Dequantization cost becomes significant at batch size = 1
+  * Repeated per layer
+  * Repeated per token
+* At batch size = 1, dequantization cost is dominated by:
 
-### 14.5 Interaction with GEMV/GEMM
+  * Kernel launch overhead
+  * Synchronization, not arithmetic
 
-* During decode:
+---
 
-  * GEMV dominates
-  * Quantized GEMV kernels perform:
+### 14.5 Interaction with Decode-Time GEMV
 
-    * Dequantization
-    * Multiply–accumulate
-* Kernel execution time is short
-* Kernel launch overhead becomes a large fraction of total time
+* Decode is GEMV-dominated
+* Quantized GEMV kernels must perform:
 
-### 14.6 Quantization vs Kernel Fusion
+  * Dequantization
+  * Multiply–accumulate
+* Kernel execution time per token is short
+* Without fusion, launch overhead dominates total latency
 
-* Fused quantized kernels:
+---
 
-  * Combine dequantization and matmul
-  * Reduce intermediate memory traffic
-* MMQ backend provides:
+### 14.6 Quantization and Kernel Fusion Requirement
 
-  * Better fusion
-  * Higher arithmetic efficiency
-* Non-fused paths increase:
+* Quantization must be paired with **fused kernels**
+* Required properties:
 
-  * Kernel count
-  * Synchronization points
+  * Dequantization + matmul in a single kernel
+  * No intermediate buffers
+  * No intermediate synchronization
+* MMQ backend is preferred because it:
 
-### 14.7 Quantization Impact on CPU Load
+  * Maximizes fusion
+  * Minimizes kernel count
+  * Reduces memory traffic
 
-* Quantization does not reduce:
+Non-fused quantized paths are decode-hostile.
+
+---
+
+### 14.7 Quantization Impact on CPU Involvement
+
+* Quantization does **not** reduce:
 
   * CPU sampling cost
-  * CPU scheduling overhead
+  * CPU scheduling cost
   * CPU synchronization cost
-* Quantization shifts compute to GPU but leaves control on CPU
-* CPU remains the decode pacing resource
+* Quantization shifts arithmetic to GPU but leaves control-path unchanged
+* Without architectural changes, CPU remains the decode pacing resource
+
+Quantization **must not be misinterpreted** as a CPU offload mechanism.
+
+---
 
 ### 14.8 Quantization Impact on GPU Utilization
 
-* Quantization reduces GPU memory bandwidth pressure
-* Quantization reduces compute per kernel
-* Reduced compute can:
+* Quantization effects:
 
-  * Shorten kernel duration
-  * Increase relative launch overhead
-* GPU utilization may decrease at small batch sizes despite faster kernels
+  * Reduces memory bandwidth pressure
+  * Reduces arithmetic work per kernel
+* Side effect:
 
-### 14.9 Trade-Off Summary
+  * Shorter kernel runtimes
+  * Higher relative kernel launch overhead
+* At batch size = 1, faster kernels can **reduce effective GPU utilization**
+
+GPU underutilization is structural, not arithmetic.
+
+---
+
+### 14.9 Trade-Off Summary (Decode Phase)
 
 * Quantization improves:
 
-  * Model fit
-  * Prefill throughput
-* Quantization does not inherently improve decode utilization
+  * Model capacity
+  * VRAM fit
+* Quantization alone does **not** improve:
+
+  * Decode throughput
+  * GPU utilization
 * For decode:
 
-  * Faster kernels can worsen utilization if launch overhead dominates
+  * Arithmetic speedups are secondary
+  * Control-path elimination is primary
 
-### 14.10 Optimization Implications
+---
 
-* Quantization alone cannot fix decode underutilization
-* Maximum benefit requires:
+### 14.10 Optimization Invariants for Quantized Decode
 
-  * Fused quantized kernels
-  * Reduced kernel launch count
-  * Persistent or long-lived GPU execution
-* Quantization should be paired with:
+* For decode:
 
-  * Execution restructuring
-  * Reduced CPU orchestration
+  * All quantized compute must be GPU-exclusive
+  * Dequantization must be kernel-fused
+  * No CPU-side quantization logic permitted
+  * No backend fallback allowed
+* Quantization must be paired with:
 
-Quantization is necessary for scale, but insufficient for maximizing decode-phase GPU utilization without complementary architectural changes.
-## 15. Sampling Optimization Scope
+  * Reduced kernel count
+  * Persistent GPU execution
+  * Zero CPU involvement in decode-critical stages
+
+Quantization is **necessary for scale**, but **insufficient for throughput** unless combined with GPU-exclusive execution and elimination of CPU orchestration.
+
+## 15. Sampling Optimization Scope (Aligned with GPU-Exclusive Decode)
 
 ### 15.1 Role of Sampling in Decode
 
 * Sampling determines the next token from model logits
 * Sampling occurs once per generated token
-* Sampling is on the critical path:
+* Sampling lies **directly on the decode-critical path**
+* Decode **must not** proceed until sampling is complete
+* Any CPU participation in sampling immediately makes CPU the pacing resource
 
-  * Decode cannot proceed until sampling completes
-* Sampling cost is small in FLOPs but large in latency impact
+---
 
-### 15.2 Current Sampling Pipeline
+### 15.2 Sampling Execution Invariant (Hard Rule)
 
-* Sampling is executed entirely on CPU
-* Typical pipeline stages include:
+> **All decode-path sampling must execute on GPU.**
+
+* CPU-based sampling during decode is **forbidden**
+* CPU may not:
+
+  * Read logits
+  * Apply penalties
+  * Perform argmax
+  * Perform filtering
+* CPU must not observe intermediate sampling state
+
+---
+
+### 15.3 Current Sampling Pipeline (Baseline)
+
+* Sampling stages typically include:
 
   * Logit bias application
   * Penalties (repeat, frequency, presence)
@@ -1897,207 +2108,282 @@ Quantization is necessary for scale, but insufficient for maximizing decode-phas
   * Top-k filtering
   * Top-p filtering
   * Final token selection
-* Even when disabled via flags, control flow remains present
+* These stages are:
 
-### 15.3 Sampling Cost Characteristics
+  * Branch-heavy
+  * Latency-sensitive
+  * Serial
+* When executed on CPU, they introduce a **hard synchronization barrier**
 
-* Branch-heavy and control-heavy
-* Poor cache locality
-* Poor SIMD utilization
-* Executes on a single CPU thread
-* Latency-sensitive rather than throughput-bound
+---
 
-### 15.4 Sampling as a Decode Bottleneck
+### 15.4 Sampling Cost Characteristics
 
-* Sampling introduces a hard barrier:
+* Sampling FLOPs are negligible
+* Sampling latency impact is dominant because:
 
-  * GPU must finish computing logits
-  * CPU must complete sampling
-  * Only then can the next decode step begin
-* Sampling latency directly creates GPU idle time
-* Sampling dominates decode latency when GPU kernels are short
+  * GPU must idle while CPU samples
+  * Sampling gates the next decode step
+* At batch size = 1:
 
-### 15.5 Deterministic vs Stochastic Sampling
+  * Sampling latency directly caps tokens/sec
 
-* Deterministic (greedy, temp = 0):
+---
 
-  * Sampling reduces to argmax
-  * Still incurs control-path overhead
-* Stochastic sampling:
+### 15.5 Determinism and Correctness Requirements
 
-  * Adds probability normalization
-  * Adds filtering and randomness
-  * Increases CPU latency
-* Deterministic sampling is preferable for throughput but still suboptimal on CPU
+Sampling must preserve:
 
-### 15.6 GPU Offloading Potential
+* Exact semantic equivalence to CPU implementation
+* Determinism when configured (e.g., `temp = 0`)
+* Correct handling of:
 
-* Sampling operations are mathematically simple:
+  * Penalties
+  * Filters
+  * Randomness (when enabled)
+* Sampling result must be **final and committed** before next token decode
 
-  * Reductions
-  * Comparisons
+GPU execution must enforce these guarantees intrinsically.
+
+---
+
+### 15.6 GPU Suitability for Sampling
+
+* Sampling operations map naturally to GPU primitives:
+
+  * Reductions (argmax)
+  * Elementwise transforms
   * Prefix sums
-* These operations are well-suited to GPU execution
-* GPU-based sampling can:
+  * Comparisons
+* Sampling kernels are:
 
-  * Eliminate CPU sampling latency
-  * Remove a major synchronization point
+  * Small
+  * Deterministic
+  * Easily fused
+* GPU-based sampling eliminates:
 
-### 15.7 Constraints on Sampling Optimization
+  * Device→host transfer of logits
+  * CPU-side control-path latency
+  * Per-token synchronization barrier
 
-* Sampling must preserve:
+---
 
-  * Exact semantics
-  * Determinism when configured
-  * Correct handling of penalties and filters
-* Sampling cannot be speculative
-* Sampling result must be final before next token decode
+### 15.7 Required Sampling Architecture
 
-### 15.8 Incremental Optimization Path
+* Sampling must be:
+
+  * GPU-resident
+  * Graph-embedded
+  * Executed as part of the decode graph
+* Sampling output (token ID) must remain on GPU
+* Token commitment and position advance must occur on GPU
+
+CPU is notified **after** token commitment, asynchronously.
+
+---
+
+### 15.8 Incremental Migration Plan (Non-Speculative)
 
 * Phase 1:
 
-  * Move argmax (greedy sampling) to GPU
+  * GPU argmax for deterministic sampling (`temp = 0`)
 * Phase 2:
 
-  * Move penalty application to GPU
+  * GPU penalty application
 * Phase 3:
 
-  * Move top-k / top-p filtering to GPU
+  * GPU top-k / top-p filtering
 * Phase 4:
 
-  * Fully GPU-resident sampling pipeline
+  * Fully GPU-resident stochastic sampling
 
-Each phase removes CPU work and reduces GPU idle time.
+Each phase **removes a decode-critical CPU dependency**.
+
+---
 
 ### 15.9 Impact on CPU and GPU Utilization
 
-* CPU utilization decreases as sampling is offloaded
-* GPU utilization increases due to:
+* CPU utilization:
 
-  * Additional GPU work per token
-  * Reduced idle gaps
-* Tokens/sec increases due to reduced per-token latency
+  * Drops sharply during decode
+  * Becomes non-pacing
+* GPU utilization:
 
-### 15.10 Optimization Implications
+  * Increases due to added per-token work
+  * Eliminates idle gaps between kernels
+* Tokens/sec increases due to:
 
-* Sampling is one of the highest-impact optimization targets
-* Offloading sampling to GPU yields:
+  * Reduced per-token latency
+  * Removal of synchronization barriers
 
-  * Immediate throughput gains
-  * Reduced synchronization
-* Sampling optimization is required to approach maximum decode-phase GPU utilization
-## 16. Server-Specific Overheads
+---
 
-### 16.1 Server Execution Context
+### 15.10 Final Sampling Invariant
 
-* Server mode runs as a long-lived process
-* Provides HTTP-based APIs for inference
-* Supports:
+* For decode:
 
-  * Request handling
-  * Slot management
-  * Streaming responses
-* Server logic executes concurrently with decode
+  * Sampling must be GPU-exclusive
+  * CPU must not gate token progression
+  * No logits or sampling data may cross to CPU
+* Sampling optimization is **mandatory**, not optional, to achieve:
 
-### 16.2 HTTP Request Handling
+  * Stable tokens/sec
+  * High GPU utilization
+  * Elimination of CPU as decode bottleneck
 
-* CPU processes:
+Sampling is the **single highest-impact control-path optimization** once compute and memory are GPU-resident.
+
+## 16. Server-Specific Overheads (Aligned with GPU-Exclusive Decode)
+
+### 16.1 Server Execution Context (Reinterpreted)
+
+* Server mode is a long-lived control plane
+* Provides HTTP-based ingress/egress only
+* Decode execution must be **logically and temporally isolated** from server control logic
+* Server responsibilities must never intersect the decode-critical path
+
+---
+
+### 16.2 HTTP Request Handling (Non-Critical Only)
+
+* CPU handles:
 
   * TCP connections
   * HTTP parsing
   * Request validation
-* Even with a single active request:
+* These operations are **pre-decode only**
+* Once decode begins:
 
-  * HTTP threads remain active
-  * Polling and event loops consume CPU time
-* HTTP handling adds latency and scheduling noise
+  * No HTTP parsing
+  * No request mutation
+  * No control-path interaction with decode
+* HTTP handling must execute **entirely outside** the decode dependency chain
 
-### 16.3 Slot Management
+---
 
-* Server maintains slot structures for each potential request
-* Slot selection and lifecycle management:
+### 16.3 Slot Management (Admission-Time Only)
 
-  * Locking
-  * State transitions
-* Slot logic executes per request and during decode
-* Slot bookkeeping introduces additional CPU overhead
+* Slot allocation and lifecycle management occur:
 
-### 16.4 Streaming Response Logic
+  * Before decode starts
+  * After decode completes
+* During decode:
 
-* For streaming outputs:
+  * Slot state must be immutable
+  * No locking
+  * No transitions
+* Slot logic must not execute concurrently with decode-critical GPU execution
 
-  * Tokens are serialized into HTTP responses
-  * Partial responses are flushed frequently
-* Streaming introduces:
+---
 
-  * System calls
-  * Buffer management
-  * Additional synchronization
-* Streaming serialization competes with decode for CPU time
+### 16.4 Streaming Response Logic (Asynchronous Only)
 
-### 16.5 Logging and Metrics
+* Token streaming must be:
 
-* Server logs:
+  * Asynchronous
+  * Post-commit
+  * Non-blocking
+* Streaming operations may include:
 
-  * Requests
-  * Progress updates
-  * Errors
-* Logging involves:
+  * Serialization
+  * Network I/O
+  * Buffer flushing
+* Streaming must not:
 
-  * String formatting
-  * I/O operations
-* Metrics collection and reporting add overhead
-* Logging overhead increases under verbose modes
+  * Stall decode
+  * Introduce synchronization
+  * Delay next token generation
+* GPU decode must proceed independently of client consumption rate
 
-### 16.6 Prompt Cache Management
+---
 
-* Server may maintain a prompt cache
-* Cache lookup and management:
+### 16.5 Logging and Metrics (Strictly Non-Critical)
 
-  * Hashing
-  * Memory management
-* Cache logic executes during request handling
-* Cache overhead is unrelated to decode math but consumes CPU
+* Logging and metrics collection are:
 
-### 16.7 Threading and Synchronization
+  * CPU-only
+  * Latency-tolerant
+* During decode:
 
-* Server introduces additional threads:
+  * Logging must be minimal or disabled
+  * Metrics must be aggregated asynchronously
+* No logging or metrics operation may block or preempt decode execution
 
-  * HTTP workers
-  * Event loop threads
-* Threads compete for CPU resources
-* Synchronization between server threads and decode threads introduces jitter
+---
 
-### 16.8 Interaction with Decode Loop
+### 16.6 Prompt Cache Management (Decode-External)
 
-* Server-side events can:
+* Prompt cache lookup occurs:
 
-  * Preempt decode threads
-  * Delay kernel dispatch
-* Decode loop is not isolated from server logic
-* Server overhead directly increases GPU idle gaps
+  * Before decode
+* Cache insertion occurs:
 
-### 16.9 Impact on Throughput
+  * After decode
+* Cache management must not:
 
-* Server mode consistently yields lower tokens/sec than CLI mode
-* Server overhead becomes more pronounced:
+  * Run during decode
+  * Touch decode-resident memory
+  * Interact with GPU state
 
-  * At batch size = 1
-  * During long decode sessions
-* Server is optimized for flexibility, not raw throughput
+---
 
-### 16.10 Optimization Implications
+### 16.7 Threading Model Separation
 
-* Maximum decode throughput requires:
+* Server threads and decode execution must be isolated:
 
-  * Minimizing server-side logic during decode
-  * Reducing or disabling logging
-  * Reducing streaming flush frequency
-* For throughput-critical workloads:
+  * Separate thread pools
+  * Separate scheduling domains
+* Server threads must not:
 
-  * Prefer CLI or a stripped-down server
-* Server logic must be isolated from the decode hot path to avoid GPU starvation
+  * Preempt decode control
+  * Interfere with GPU scheduling
+* Decode execution must assume **exclusive access** to its required CPU control thread(s)
+
+---
+
+### 16.8 Decode Isolation Requirement
+
+* Once decode begins:
+
+  * Server logic becomes read-only observer
+  * No server-side events may gate decode progression
+* Decode loop must be immune to:
+
+  * HTTP traffic
+  * Slot management
+  * Logging
+  * Metrics
+  * Streaming backpressure
+
+---
+
+### 16.9 Throughput Implications (Corrected)
+
+* Server mode must not reduce tokens/sec relative to CLI mode
+* Any throughput delta indicates:
+
+  * Improper isolation
+  * Decode-path CPU contamination
+* Proper architecture yields:
+
+  * Identical decode throughput
+  * Independent control-plane overhead
+
+---
+
+### 16.10 Final Server Invariant
+
+* **Server logic is control-plane only**
+* **Decode execution is GPU-exclusive and control-plane isolated**
+* Server responsibilities must never:
+
+  * Block
+  * Pace
+  * Synchronize with
+  * Or otherwise influence decode-critical execution
+
+This section enforces the rule that **server flexibility must not compromise decode throughput**, ensuring GPU utilization and tokens/sec remain invariant regardless of server mode.
+
 ## 17. Configuration-Only Optimizations
 
 ### 17.1 CPU Thread Configuration
@@ -2205,460 +2491,750 @@ Each phase removes CPU work and reduces GPU idle time.
 * Disable aggressive power saving
 * Throttling directly reduces sustained tokens/sec
 * Stable clocks are critical for long decode sessions
-## 18. Build-Time Optimization Options
 
-### 18.1 Compiler Selection
+## 18. Build-Time Optimization Options (Aligned with GPU-Exclusive Decode)
 
-* Prefer **clang** or **gcc** with latest stable versions
-* Use a single compiler consistently across all backends
-* Avoid mixed compiler toolchains (e.g., gcc + nvcc mismatches)
+### 18.1 Compiler Selection (Invariant)
 
-### 18.2 Global Compiler Flags
+* Use a **single, modern compiler toolchain** consistently:
 
-* Enable aggressive optimization:
+  * `gcc` (latest stable) **or**
+  * `clang` (latest stable)
+* CUDA host compiler must match the chosen C/C++ compiler
+* Mixed toolchains are **forbidden** due to ABI drift and backend inconsistency
+* Compiler choice must be fixed and reproducible
+
+---
+
+### 18.2 Global Compiler Flags (Decode-Critical)
+
+* Enable aggressive optimization for all targets:
 
   * `-O3`
   * `-ffast-math`
   * `-funroll-loops`
-* Disable debug symbols for production builds
-* Strip binaries to reduce I-cache pressure
+* Disable debug symbols in production builds
+* Strip binaries after build to reduce:
 
-### 18.3 CPU Architecture Targeting
+  * I-cache pressure
+  * Instruction fetch overhead
+* No debug or instrumentation code may exist on the decode path
 
-* Compile with native CPU targeting:
+---
+
+### 18.3 CPU Architecture Targeting (Control-Plane Only)
+
+* Compile CPU code with:
 
   * `-march=native`
 * Enables:
 
   * AVX2 / AVX-512
   * FMA
-  * AMX (if available)
-* Prevents fallback to generic scalar kernels
+  * AMX (if present)
+* **Important constraint**:
 
-### 18.4 CUDA Architecture Targeting
+  * CPU optimizations apply **only** to non-decode-critical code
+  * Decode-critical execution must not depend on CPU performance
 
-* Set explicit CUDA compute capability:
+CPU tuning is for control-plane efficiency, not throughput.
 
-  * Example: `sm_89` for Ada Lovelace
-* Avoid multi-arch fat binaries unless required
-* Single-arch builds reduce binary size and kernel dispatch overhead
+---
 
-### 18.5 CUDA Kernel Configuration
+### 18.4 CUDA Architecture Targeting (Hard Requirement)
 
-* Enable CUDA-specific optimizations:
+* Compile CUDA code for a **single explicit architecture**:
 
-  * Tensor core usage
-  * MMA kernels
-  * Fused operations
-* Disable legacy or compatibility kernels
-* Ensure MMQ kernels are compiled and enabled when supported
+  * Example: `sm_89` (Ada Lovelace)
+* Multi-arch fat binaries are **disallowed**
+* Benefits:
 
-### 18.6 Backend-Specific Build Targets
+  * Smaller binaries
+  * Faster kernel dispatch
+  * Predictable kernel selection
+* CUDA architecture must match the deployment GPU exactly
 
-* Build only required backends:
+---
 
-  * CPU
-  * CUDA dense
-  * CUDA MMQ / MoE
-* Avoid building unused backends to:
+### 18.5 CUDA Kernel Configuration (Decode-Critical)
 
-  * Reduce binary size
-  * Reduce backend selection overhead
-* Each backend increases dispatch complexity
+* Enable all relevant CUDA optimizations:
 
-### 18.7 cuBLAS vs Custom CUDA Kernels
-
-* Enable cuBLAS builds for:
-
-  * Dense FP16 / BF16 models
-* Prefer custom CUDA MMQ kernels for:
-
-  * Quantized models
-  * MoE routing
-* Avoid hybrid cuBLAS + MMQ unless required
-
-### 18.8 AMX and SIMD Enablement
-
-* Enable AMX explicitly if CPU supports it
-* Ensure AMX kernels are not disabled at compile time
-* Validate SIMD feature detection during build
-* Incorrect detection forces scalar fallbacks
-
-### 18.9 Threading Runtime Configuration
-
-* Enable pthreads explicitly
-* Avoid OpenMP unless intentionally tuned
-* OpenMP defaults often oversubscribe CPU cores
-* Pthreads give finer control over decode threads
-
-### 18.10 Memory Allocation Strategy
-
-* Enable custom allocators where supported
-* Prefer aligned allocations
-* Reduce malloc/free in hot paths
-* Improves cache locality and reduces CPU stalls
-
-### 18.11 LTO and PGO
-
-* Enable Link Time Optimization (LTO) if build time permits
-* Profile-Guided Optimization (PGO) yields gains for stable workloads
-* PGO improves branch prediction in decode loops
-* Especially useful for server builds
-
-### 18.12 Disable Unused Features
-
+  * Tensor Core usage
+  * MMA pipelines
+  * Fused kernels
 * Disable:
+
+  * Legacy kernels
+  * Compatibility fallbacks
+* MMQ kernels must be:
+
+  * Compiled
+  * Enabled
+  * Preferred when quantization is used
+
+Any missing kernel must fail build-time validation, not fall back at runtime.
+
+---
+
+### 18.6 Backend Compilation Policy (Strict)
+
+* Compile **only** the backends required for the target execution model:
+
+  * CPU backend (control-plane only)
+  * CUDA dense backend **or**
+  * CUDA MMQ / MoE backend
+* Hybrid backend configurations are **forbidden**
+* Every additional backend increases:
+
+  * Selection logic
+  * Fallback risk
+  * Decode instability
+
+Backend minimalism is a correctness requirement.
+
+---
+
+### 18.7 cuBLAS vs MMQ (Mutual Exclusivity)
+
+* cuBLAS builds:
+
+  * Allowed only for dense FP16/BF16 models
+  * Prefill-optimized, decode-hostile
+* MMQ builds:
+
+  * Mandatory for quantized models
+  * Mandatory for decode-heavy workloads
+* **cuBLAS + MMQ in the same binary is forbidden** for decode-critical execution
+
+Backend choice must be singular and final.
+
+---
+
+### 18.8 AMX and SIMD Enablement (Non-Critical)
+
+* AMX and SIMD detection must be correct at build time
+* Mis-detection causing scalar fallbacks is unacceptable
+* These optimizations apply only to:
+
+  * CPU preprocessing
+  * Server logic
+  * Non-decode workloads
+* Decode correctness and throughput must not depend on AMX availability
+
+---
+
+### 18.9 Threading Runtime Configuration (Decode Isolation)
+
+* Prefer pthread-based threading
+* OpenMP is **disallowed** on decode-critical paths
+* OpenMP may be used only if:
+
+  * Strictly confined to non-decode tasks
+  * Explicitly capped and isolated
+* Decode execution must assume:
+
+  * Minimal CPU thread usage
+  * No thread oversubscription
+
+---
+
+### 18.10 Memory Allocation Strategy (Decode Invariant)
+
+* Use aligned, preallocated buffers
+* All decode-critical allocations must occur:
+
+  * At initialization
+  * Before first token
+* No `malloc`, `free`, or allocator interaction is permitted during decode
+* Custom allocators are allowed only if:
+
+  * Allocation phase is strictly pre-decode
+
+---
+
+### 18.11 LTO and PGO (Control-Plane Only)
+
+* LTO is recommended if build time permits
+* PGO may improve:
+
+  * Server control flow
+  * Sampling (if still partially CPU-side during transition)
+* LTO/PGO must not:
+
+  * Introduce backend ambiguity
+  * Alter kernel selection
+* Decode-critical GPU execution must remain unaffected
+
+---
+
+### 18.12 Feature Elimination (Mandatory)
+
+* Disable at build time:
 
   * Tests
   * Examples
   * Debug utilities
-* Reduces compile time and binary size
-* Prevents accidental linkage of slow paths
+  * Profiling hooks
+* Prevents:
 
-### 18.13 Determinism vs Performance
+  * Accidental linkage
+  * Hidden slow paths
+* Production binary must contain **only execution-relevant code**
 
-* Disable strict determinism where acceptable
-* Allow relaxed math and non-deterministic reductions
-* Deterministic modes often block kernel fusion
+---
 
-### 18.14 Static vs Shared Linking
+### 18.13 Determinism Policy (Decode-Critical)
 
-* Static linking improves startup time
-* Shared linking reduces memory footprint
-* Choose based on deployment model
-* Startup latency impacts server warm-up time
+* Determinism requirements are enforced at the **algorithmic level**
+* Build flags may allow:
 
-### 18.15 Validation After Build
+  * Relaxed math
+  * Non-associative reductions
+* As long as:
 
-* Verify:
+  * Output semantics are preserved
+  * Deterministic modes behave deterministically when enabled
+* Determinism must not block kernel fusion or GPU residency
 
-  * Correct backend selection
-  * Expected kernel usage
-  * No silent CPU fallbacks
-* Always benchmark tokens/sec post-build
-* A “successful build” does not guarantee optimal performance
-## 19. Minimal Code Change Targets
+---
+
+### 18.14 Linking Strategy
+
+* Static vs shared linking is a deployment choice
+* Decode throughput is unaffected if:
+
+  * All code paths are resolved at load time
+* Startup latency is secondary to sustained decode throughput
+* Choose linking based on operational constraints
+
+---
+
+### 18.15 Post-Build Validation (Non-Negotiable)
+
+A build is **invalid** unless all are verified:
+
+* Single backend selected and locked
+* No CPU backend invocation during decode
+* No backend fallback paths reachable
+* Sampling executes on GPU
+* KV cache fully GPU-resident
+* Tokens/sec benchmark meets expectation
+
+> **A build that runs is not a correct build.
+> A correct build is one that cannot violate decode invariants.**
+
+This section establishes build-time configuration as a **hard enforcement layer** that prevents CPU re-entry into the decode-critical path by construction.
+
+## 19. Minimal Code Change Targets (Aligned with GPU-Exclusive Decode)
 
 ### 19.1 Backend Forcing (Hard Selection)
 
-* Force CUDA backend selection early
-* Prevent runtime fallback to CPU backends
-* Ensure:
+* Force **CUDA-only backend selection** before decode begins
+* Disallow runtime backend switching during decode
+* Enforce that:
 
-  * CUDA backend is selected at graph build time
-  * CPU backend is only used for unavoidable ops
+  * Decode graph is built with a single GPU backend
+  * CPU backend is **never selectable** for decode-critical ops
+* CPU backend may exist **only** for non-decode control-plane code
 * Target files:
 
   * `ggml-backend-reg.cpp`
   * `ggml-backend.cpp`
 
-### 19.2 Disable Silent CPU Fallbacks
+---
 
-* Identify ops that silently fall back to CPU
-* Add hard errors or warnings for:
+### 19.2 Eliminate Silent CPU Fallbacks (Mandatory)
 
-  * Unsupported CUDA kernels
-  * Missing MMQ / dense kernels
-* Prevent mixed execution unless explicitly allowed
+* Identify all ops that can silently fall back to CPU
+* Replace silent fallback with:
 
-### 19.3 Reduce Backend Dispatch Overhead
+  * Hard error, or
+  * Explicit decode abort
+* Any unsupported GPU op during decode must **fail fast**
+* Mixed CPU↔GPU execution on decode path is forbidden
 
-* Cache backend decisions per graph
-* Avoid repeated backend capability checks
-* Minimize virtual dispatch in hot paths
+---
+
+### 19.3 Backend Decision Caching
+
+* Resolve backend selection **once per decode graph**
+* Cache backend decisions at graph build time
+* Remove repeated:
+
+  * Capability checks
+  * Virtual dispatch
+* Backend resolution must not occur inside the decode loop
 * Target:
 
   * `ggml-backend-impl.h`
   * `ggml-backend.cpp`
 
-### 19.4 Graph Construction Simplification
+---
 
-* Avoid rebuilding graphs per token where possible
-* Reuse static graph templates
-* Limit dynamic shape changes
+### 19.4 Graph Construction Freezing
+
+* Build decode graph once, before decode starts
+* Prohibit graph rebuild during decode
+* Freeze:
+
+  * Tensor shapes
+  * Backend assignments
+  * Memory layout
+* Dynamic graph mutation during decode is forbidden
 * Target:
 
   * `llama-graph.cpp`
   * `llama-context.cpp`
 
-### 19.5 Kernel Fusion Opportunities
+---
 
-* Identify sequential ops suitable for fusion:
+### 19.5 Kernel Fusion Enforcement
+
+* Prefer fused CUDA kernels for sequential ops:
 
   * RMSNorm + MatMul
   * Bias + Activation
-* Prefer fused CUDA kernels where available
-* Avoid splitting ops across CPU/GPU boundaries
+* Avoid emitting fine-grained ops that:
 
-### 19.6 Reduce CPU-Side Bookkeeping
+  * Increase kernel count
+  * Increase synchronization
+* Fusion decisions must be static and backend-specific
+* CPU/GPU op boundaries are forbidden on decode path
 
-* Minimize:
+---
+
+### 19.6 CPU Bookkeeping Elimination
+
+* Remove per-token CPU-side:
 
   * Tensor metadata updates
-  * Shape checks per token
-* Cache tensor layouts after first use
+  * Shape validation
+  * Layout checks
+* Cache all tensor metadata after graph construction
+* Decode loop must not touch tensor descriptors
 * Target:
 
   * `ggml.c`
   * `ggml.cpp`
 
-### 19.7 Synchronization Minimization
+---
 
-* Reduce explicit `cudaDeviceSynchronize` calls
-* Prefer stream-based synchronization
-* Batch kernel launches where possible
+### 19.7 Synchronization Reduction (Decode-Critical)
+
+* Remove all explicit `cudaDeviceSynchronize` calls on decode path
+* Use stream-ordered execution only
+* No CPU-visible synchronization per token
+* Synchronization must be implicit and GPU-internal
 * Target:
 
   * `ggml-cuda.cu`
   * CUDA backend wrappers
 
-### 19.8 Sampling Path Offload
+---
 
-* Move more sampling logic to GPU where feasible
-* Reduce CPU-side top-k/top-p computation
+### 19.8 Sampling Path GPU Migration
+
+* Treat sampling as decode-critical
+* Incrementally move sampling to GPU:
+
+  * Argmax first
+  * Penalties
+  * Top-k / top-p
+* CPU must not:
+
+  * Read logits
+  * Gate next-token progression
 * Target:
 
   * `sampling.cpp`
   * `top-k.cu`
   * `topk-moe.cu`
 
-### 19.9 KV-Cache Handling Optimization
+---
 
-* Ensure KV-cache stays resident on GPU
-* Avoid CPU↔GPU copies per token
-* Align KV-cache memory for CUDA access
+### 19.9 KV Cache GPU Residency Enforcement
+
+* Enforce fully GPU-resident KV cache for decode
+* Prohibit:
+
+  * CPU-resident KV
+  * CPU KV metadata updates per token
+* KV cache layout must be frozen pre-decode
 * Target:
 
   * `llama-kv-cache.cpp`
   * `llama-memory-hybrid.cpp`
 
-### 19.10 Logging and Debug Guards
+---
 
-* Compile out verbose logging in hot paths
-* Guard debug checks behind compile-time flags
+### 19.10 Logging and Debug Path Removal
+
+* Compile out logging from decode path
+* Guard all debug checks behind compile-time flags
+* No runtime logging conditionals allowed in hot paths
 * Target:
 
   * `log.cpp`
   * `debug.cpp`
 
-### 19.11 Thread Wake-Up Reduction
+---
 
-* Reduce thread wake/sleep cycles during decode
-* Avoid condition-variable churn per token
-* Prefer busy-wait only where justified
+### 19.11 Thread Wake-Up Suppression
+
+* Prevent per-token thread wake/sleep cycles
+* Eliminate condition-variable churn during decode
+* Decode loop must assume:
+
+  * Fixed thread state
+  * No scheduler interaction
 * Target:
 
   * `ggml-threading.cpp`
 
-### 19.12 Server Hot Path Trimming
+---
 
-* Minimize JSON serialization during streaming
-* Reduce HTTP framing overhead
-* Avoid per-token mutex locks
+### 19.12 Server Hot-Path Isolation
+
+* Server logic must not execute on decode threads
+* Remove per-token:
+
+  * JSON serialization
+  * Mutex locks
+* Streaming must be asynchronous and non-blocking
 * Target:
 
   * `server.cpp`
   * `server-task.cpp`
   * `server-queue.cpp`
 
-### 19.13 Configuration Parsing Once
+---
 
-* Parse CLI / server config once at startup
-* Avoid repeated argument lookups
-* Cache resolved flags
+### 19.13 One-Time Configuration Resolution
+
+* Parse CLI / server flags once at startup
+* Cache resolved configuration
+* No argument or preset lookup during decode
 * Target:
 
   * `arg.cpp`
   * `preset.cpp`
 
+---
+
 ### 19.14 Compile-Time Feature Freezing
 
-* Freeze feature flags at build time
-* Avoid runtime checks for unused features
-* Reduces branch misprediction
+* Disable unused features at build time
+* Remove runtime feature checks for disabled paths
+* Reduces:
+
+  * Branch misprediction
+  * Control-path noise
 * Target:
 
   * `common.cmake`
   * `ggml-config.cmake.in`
 
-### 19.15 Validation Scope
+---
 
-* After minimal changes, validate:
+### 19.15 Validation Scope (Non-Negotiable)
 
-  * CPU utilization drop
-  * GPU utilization increase
-  * Tokens/sec improvement
-* Ensure correctness before deeper refactors
-## 20. Expected Outcome Projection
+After minimal changes, validate:
 
-### 20.1 CPU Utilization
+* CPU is not on decode dependency chain
+* GPU utilization increases during decode
+* Tokens/sec increases without variance
+* No CPU backend invocation during decode
+* Correctness and determinism preserved
 
-* Decode-phase CPU utilization reduced from near-100% to **moderate / bounded levels**
-* CPU usage dominated by:
+> **Minimal code changes are acceptable only if they enforce decode invariants.
+> Any change that preserves CPU pacing is insufficient.**
 
-  * Sampling coordination
-  * Minimal scheduling and I/O
-* No CPU saturation caused by:
+## 20. Expected Outcome Projection (Aligned with GPU-Exclusive Decode)
 
-  * Graph rebuilds
+### 20.1 CPU Utilization (Revised)
+
+* Decode-phase CPU utilization reduced from near-100% to **strictly non-pacing levels**
+* CPU usage during decode is limited to:
+
+  * Asynchronous notification handling
+  * Control-plane bookkeeping
+  * Output streaming (non-blocking)
+* CPU is **never** responsible for:
+
+  * Sampling
+  * Graph execution
   * Backend dispatch
-  * Tensor bookkeeping
+  * Tensor or KV bookkeeping
+* CPU load may fluctuate, but **cannot affect tokens/sec**
 
-### 20.2 GPU Utilization
+---
 
-* GPU utilization remains **high and stable** during:
+### 20.2 GPU Utilization (Revised)
+
+* GPU utilization remains **high, stable, and authoritative** during:
 
   * Prefill
-  * Token-by-token decode
-* Reduced GPU idle gaps between tokens
-* Higher kernel occupancy due to:
+  * Entire decode phase
+* GPU execution is:
 
-  * Fewer CPU↔GPU sync points
-  * Better batching of GPU work
-  * Elimination of silent CPU fallbacks
+  * Continuous
+  * Self-paced
+  * Free of host-induced gaps
+* No GPU idle time caused by:
+
+  * CPU synchronization
+  * Sampling barriers
+  * Backend selection logic
+  * Server-side interference
+
+---
 
 ### 20.3 Tokens per Second (t/s)
 
-* Decode throughput increases measurably:
+* Decode throughput increases structurally, not heuristically
+* Expected gains:
 
-  * Typical gain: **1.3× – 2.0×** for single-sequence interactive decode
-  * Larger gains possible on:
+  * **1.5× – 2.5×** for single-sequence interactive decode
+  * Higher gains at:
 
+    * Long context lengths
+    * Quantized MMQ builds
     * High-end GPUs
-    * MMQ-optimized builds
-* Throughput variance per token reduced (more consistent latency)
+* Token latency variance is minimized due to elimination of CPU gating
+
+---
 
 ### 20.4 Latency Characteristics
 
-* Lower per-token latency jitter
-* Reduced long-tail stalls caused by:
+* Per-token latency becomes:
 
-  * CPU contention
+  * Predictable
+  * GPU-dominated
+* No long-tail stalls caused by:
+
+  * CPU scheduling
+  * Thread contention
   * Synchronization barriers
-* More predictable response streaming behavior
+* Streaming output latency decoupled from decode execution
+
+---
 
 ### 20.5 Memory Behavior
 
-* KV-cache remains GPU-resident
-* Reduced PCIe traffic during decode
-* Lower CPU cache pressure
-* More stable GPU memory allocation (fewer reallocations)
+* All decode-critical memory remains GPU-resident
+* Zero per-token host↔device transfers
+* PCIe traffic during decode reduced to:
 
-### 20.6 Determinism & Correctness
+  * Asynchronous notifications only
+* CPU cache pressure significantly reduced
+* GPU memory layout remains stable across long-running decode sessions
+
+---
+
+### 20.6 Determinism & Correctness (Invariant)
 
 * Exact autoregressive semantics preserved
-* No speculative decoding introduced
-* Sampling behavior unchanged
-* Bitwise-identical outputs for identical seeds and configs
+* No speculative execution
+* No token reordering
+* Sampling semantics unchanged
+* Deterministic configurations produce **bitwise-identical outputs**
+* GPU execution enforces ordering intrinsically
+
+---
 
 ### 20.7 Operational Stability
 
-* No regression in:
+* Stable behavior under:
 
-  * Long-running sessions
+  * Long-running decode sessions
+  * Maximum context lengths
+  * Sustained load
+* No regressions in:
+
   * Context growth
+  * KV cache behavior
   * Server uptime
-* Improved stability under sustained decode load
+* Fewer failure modes due to removal of hybrid execution paths
 
-### 20.8 Practical Success Criteria
+---
 
-All of the following achieved simultaneously:
+### 20.8 Practical Success Criteria (Final)
 
-* CPU not the decode bottleneck
-* GPU actively executing during decode
-* Higher sustained tokens/sec
-* No correctness or determinism regressions
-## 21. Validation Method
+All of the following must be true simultaneously:
 
-### 21.1 Baseline Capture
+* CPU is **not** on the decode dependency chain
+* GPU is the sole pacing resource for token generation
+* Decode-phase GPU utilization is consistently high
+* Sustained tokens/sec is higher and more stable
+* No correctness, determinism, or stability regressions
 
-* Run inference with current configuration
-* Record separately for **prefill** and **decode**:
+> **Success is defined not by higher CPU efficiency,
+> but by the complete removal of CPU from decode-critical execution.**
+
+## 21. Validation Method (Aligned with GPU-Exclusive Decode)
+
+### 21.1 Baseline Capture (Decode-Focused)
+
+* Run inference with the **current reference build**
+* Measure **prefill** and **decode separately**
+* Record during steady-state decode:
 
   * CPU utilization (per-core and total)
-  * GPU utilization (% and SM occupancy)
-  * Tokens per second (steady-state decode)
-* Tools:
+  * GPU utilization (% and SM activity)
+  * Tokens per second (after warm-up)
+* Tooling (non-intrusive):
 
   * `htop` / `perf stat`
   * `nvidia-smi dmon`
-  * `llama-server` internal timing logs
+  * llama.cpp internal timing counters
 
-### 21.2 Controlled Experiment Setup
+Baseline establishes **CPU-paced decode behavior**.
 
-* Single sequence only
+---
+
+### 21.2 Controlled Experiment Setup (Invariant)
+
+All validation runs must use:
+
+* Single active sequence (`n_seq_max = 1`)
 * Fixed prompt
 * Fixed random seed
-* Fixed sampling parameters
+* Fixed sampling configuration
 * Fixed context size
-* Disable all speculative or parallel decoding features
+* No speculative decoding
+* No parallel or batched decode
+* Identical runtime flags across runs
 
-### 21.3 Stepwise Change Validation
+Any deviation invalidates comparison.
 
-For each applied change (config or build):
+---
 
-* Re-run identical prompt
+### 21.3 Stepwise Change Validation (Hard Gate)
+
+For **each individual change** (build or code):
+
+* Re-run the exact same workload
 * Compare against baseline:
 
-  * CPU usage delta
-  * GPU usage delta
-  * t/s delta
-* Reject change if:
+e.g.:
 
-  * Output differs
-  * Determinism breaks
-  * CPU usage increases
+* CPU utilization change
+* GPU utilization change
+* Decode t/s change
 
-### 21.4 Decode-Focused Measurement
+Immediately **reject** the change if **any** of the following occur:
 
-* Ignore prefill metrics after initial confirmation
-* Measure only steady-state decode (≥ 50 tokens)
-* Ensure GPU utilization does not dip between tokens
+* Output differs (semantic mismatch)
+* Determinism breaks
+* CPU re-enters decode dependency chain
+* CPU usage increases on decode path
+
+---
+
+### 21.4 Decode-Only Measurement Discipline
+
+* Ignore prefill metrics after first confirmation
+* Measure only:
+
+  * Steady-state decode
+  * ≥ 50 consecutive tokens
+* Ensure:
+
+  * GPU utilization does not dip between tokens
+  * No per-token idle gaps caused by host waits
+
+Decode behavior, not prefill, defines success.
+
+---
 
 ### 21.5 Synchronization Stall Detection
 
-* Enable debug timing:
+* Enable CUDA debug instrumentation when available:
 
   * `GGML_CUDA_DEBUG=1`
-* Check for:
+* Inspect for:
 
-  * Excessive `cudaDeviceSynchronize`
-  * CPU-side waits between kernels
-* Confirm reduction after optimization
+  * Explicit `cudaDeviceSynchronize` calls
+  * Host-side waits between kernel launches
+  * Graph-level synchronization per token
+* Validation requires:
 
-### 21.6 CPU Fallback Detection
+  * Elimination or strict reduction of decode-path synchronization
 
-* Verify no unexpected CPU ops:
+Any remaining per-token host barrier is a failure.
 
-  * Check backend logs for CPU execution paths
-  * Ensure all eligible ops are CUDA-backed
-* Fail validation if any core decode ops execute on CPU unintentionally
+---
+
+### 21.6 CPU Fallback Detection (Mandatory)
+
+* Verify backend logs and traces confirm:
+
+  * No CPU backend execution during decode
+* Validation fails if **any** decode-critical op executes on CPU, including:
+
+  * Matmul
+  * Attention
+  * Sampling
+  * KV updates
+
+Silent fallback is treated as a correctness violation.
+
+---
 
 ### 21.7 Memory Residency Verification
 
-* Confirm:
+* Confirm all decode-critical data is GPU-resident:
 
-  * Model weights GPU-resident
-  * KV cache GPU-resident
+  * Model weights
+  * KV cache
+  * Activations
+  * Sampling state
 * Monitor PCIe traffic:
 
-  * No per-token host↔device transfers
+  * No per-token device↔host transfers
+* Any decode-phase host access to GPU data invalidates the result
 
-### 21.8 Long-Run Stability Test
+---
 
-* Continuous generation ≥ 10k tokens
+### 21.8 Long-Run Stability Validation
+
+* Run continuous generation for ≥ 10,000 tokens
 * Observe:
 
-  * Memory leaks
-  * Performance degradation
-  * GPU utilization drift
+  * GPU utilization stability
+  * CPU utilization stability
+  * Memory growth or leaks
+* Reject if:
 
-### 21.9 Acceptance Criteria
+  * Performance degrades over time
+  * GPU utilization drifts downward
+  * CPU begins pacing decode
 
-Validation passes only if all conditions hold:
+Stability is as important as peak throughput.
 
-* Decode CPU usage < saturation
-* GPU utilization sustained during decode
-* Higher steady-state t/s
-* Deterministic, correct output
-* No instability over long runs
+---
+
+### 21.9 Final Acceptance Criteria (Non-Negotiable)
+
+Validation passes **only if all conditions hold simultaneously**:
+
+* CPU is not on the decode dependency chain
+* GPU is the sole pacing resource during decode
+* Decode-phase GPU utilization is sustained and stable
+* Steady-state tokens/sec is higher than baseline
+* Output is correct and deterministic
+* No regressions under long-running decode
+
+> **A change is valid only if it makes CPU irrelevant to decode throughput.**
+
+---
+
+### 21.10 Implementation Reference: Runtime Invariants
+
+The objectives defined in this document are enforced via the following runtime mechanisms:
+
+1.  **Node Tagging**: All tensors in the decode graph (`LLM_GRAPH_TYPE_DECODER`) are tagged with `GGML_TENSOR_FLAG_DECODE_CRITICAL`.
+2.  **Strict Backend Ownership**: The `ggml_backend_sched` enforces that any node tagged as `DECODE_CRITICAL` must be assigned to a non-CPU (GPU) backend. Violation results in a fatal `GGML_ASSERT`.
+3.  **Deterministic Scheduling**: Backend decisions are "frozen" after the first successful decode graph allocation to prevent runtime variance.
+4.  **In-Graph Sampling**: Sampling operations (Argmax, Penalties) are integrated into the primary decode graph, ensuring they remain on the GPU and reside on the high-performance dependency chain.
