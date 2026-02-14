@@ -427,6 +427,17 @@ const char * ggml_status_to_string(enum ggml_status status) {
     return "GGML status: unknown";
 }
 
+// [STRICT] Global Decode State
+static bool g_decode_mode = false;
+
+bool ggml_get_decode_mode(void) {
+    return g_decode_mode;
+}
+
+void ggml_set_decode_mode(bool active) {
+    g_decode_mode = active;
+}
+
 float ggml_fp16_to_fp32(ggml_fp16_t x) {
 #define ggml_fp16_to_fp32 do_not_use__ggml_fp16_to_fp32__in_ggml
     return GGML_FP16_TO_FP32(x);
@@ -1044,9 +1055,11 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
 
     "GLU",
     "PENALTIES",
+    "SAMPLE_CANDIDATES",
+    "FUSED_MUL_MAT_BIAS_ACT",
 };
 
-static_assert(GGML_OP_COUNT == 96, "GGML_OP_COUNT != 96");
+static_assert(GGML_OP_COUNT == 98, "GGML_OP_COUNT != 98");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -1154,9 +1167,11 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
 
     "glu(x)",
     "penalties(x,y)",
+    "sample_candidates(x)",
+    "fused_mul_mat_bias_act(x,y,z)",
 };
 
-static_assert(GGML_OP_COUNT == 96, "GGML_OP_COUNT != 96");
+static_assert(GGML_OP_COUNT == 98, "GGML_OP_COUNT != 98");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -1677,6 +1692,9 @@ static struct ggml_tensor * ggml_new_tensor_impl(struct ggml_context * ctx,
                                                  const int64_t *       ne,
                                                  struct ggml_tensor *  view_src,
                                                  size_t                view_offs) {
+    if (ggml_get_decode_mode()) {
+        GGML_ABORT("GGML METADATA MUTATION VIOLATION: tensor creation/viewing is forbidden during autonomous decode.");
+    }
     GGML_ASSERT(type >= 0 && type < GGML_TYPE_COUNT);
     GGML_ASSERT(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
 
@@ -1846,6 +1864,9 @@ const char * ggml_get_name(const struct ggml_tensor * tensor) {
 }
 
 struct ggml_tensor * ggml_set_name(struct ggml_tensor * tensor, const char * name) {
+    if (ggml_get_decode_mode()) {
+        GGML_ABORT("GGML METADATA MUTATION VIOLATION: setting tensor name is forbidden during autonomous decode.");
+    }
     size_t i;
     for (i = 0; i < sizeof(tensor->name) - 1 && name[i] != '\0'; i++) {
         tensor->name[i] = name[i];
@@ -6622,6 +6643,7 @@ struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t siz
         /*.hash_table   =*/{ hash_size, hash_used, hash_keys_ptr },
         /*.order        =*/
         GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
+        /*.has_swa      =*/false,
     };
 
     ggml_hash_set_reset(&cgraph->visited_hash_set);
@@ -6649,6 +6671,7 @@ struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph0, int i0, int i1)
         /*.use_counts       =*/cgraph0->use_counts,
         /*.visited_hash_set =*/cgraph0->visited_hash_set,
         /*.order            =*/cgraph0->order,
+        /*.has_swa          =*/false,
     };
 
     return cgraph;
@@ -7105,14 +7128,23 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
 ////////////////////////////////////////////////////////////////////////////////
 
 void ggml_set_input(struct ggml_tensor * tensor) {
+    if (ggml_get_decode_mode()) {
+        GGML_ABORT("GGML METADATA MUTATION VIOLATION: setting tensor input flag is forbidden during autonomous decode.");
+    }
     tensor->flags |= GGML_TENSOR_FLAG_INPUT;
 }
 
 void ggml_set_output(struct ggml_tensor * tensor) {
+    if (ggml_get_decode_mode()) {
+        GGML_ABORT("GGML METADATA MUTATION VIOLATION: setting tensor output flag is forbidden during autonomous decode.");
+    }
     tensor->flags |= GGML_TENSOR_FLAG_OUTPUT;
 }
 
 void ggml_set_param(struct ggml_tensor * tensor) {
+    if (ggml_get_decode_mode()) {
+        GGML_ABORT("GGML METADATA MUTATION VIOLATION: setting tensor param flag is forbidden during autonomous decode.");
+    }
     GGML_ASSERT(tensor->op == GGML_OP_NONE);
     tensor->flags |= GGML_TENSOR_FLAG_PARAM;
 }

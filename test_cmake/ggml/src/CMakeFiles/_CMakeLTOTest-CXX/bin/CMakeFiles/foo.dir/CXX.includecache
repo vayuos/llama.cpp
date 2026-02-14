@@ -1,0 +1,10 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/viren/llama/llama_x86/llama.cpp/test_cmake/ggml/src/CMakeFiles/_CMakeLTOTest-CXX/src/foo.cpp
+

@@ -4,6 +4,31 @@
 #include "llama-model.h"
 #include "llama-context.h"
 
+// ============================================================================
+// HYBRID MEMORY MANAGEMENT - GPU-ONLY KV DURING DECODE
+// ============================================================================
+//
+// This module manages hybrid memory allocation for both attention (KV cache)
+// and recurrent state memory streams. During prefill/encoding, the system
+// is flexible about KV allocation (CPU, GPU, or mixed).
+//
+// CRITICAL INVARIANT FOR DECODE:
+//
+// During the decode phase (token generation), ALL KV cache must be GPU-resident.
+// Hybrid KV modes (CPU+GPU split) are strictly forbidden once decode begins.
+//
+// Enforcement:
+//  - Before decode phase: call enforce_gpu_only_kv() on the KV cache
+//  - If KV_is on CPU: FAILS, preventing decode start
+//  - During decode: All KV access is GPU-only
+//
+// The memory_hybrid_context enforces this via: 
+//  - freeze_kv_layout() + enforce_gpu_only_kv() called together at decode start
+//  - Both lockouts prevent CPU KV paths and hybrid branching
+//  - CPU fallback under memory pressure is disabled during decode
+//
+// ============================================================================
+
 //
 // llama_memory_hybrid
 //

@@ -74,6 +74,16 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    // Disable CUDA graphs for server: dynamic sessions + sched_reserve cause segfaults
+    setenv("GGML_CUDA_DISABLE_GRAPHS", "1", 1);
+    setenv("LLAMA_SERVER", "1", 1);
+
+    // mlock + CUDA async alloc can segfault; ignore for server
+    if (params.use_mlock) {
+        LOG_WRN("%s: --mlock is ignored in server mode (can segfault with CUDA)\n", __func__);
+        params.use_mlock = false;
+    }
+
     // validate batch size for embeddings
     // embeddings require all tokens to be processed in a single ubatch
     // see https://github.com/ggml-org/llama.cpp/issues/12836
@@ -84,11 +94,14 @@ int main(int argc, char ** argv) {
     }
 
     if (params.n_parallel < 0) {
-        LOG_INF("%s: n_parallel is set to auto, using n_parallel = 4 and kv_unified = true\n", __func__);
+        LOG_INF("%s: n_parallel is set to auto, using n_parallel = 4 and kv_unified = false\n", __func__);
 
         params.n_parallel = 4;
-        params.kv_unified = true;
+        params.kv_unified = false;
     }
+    // Force GPU-only KV and non-unified KV for server (avoids CPU↔GPU sync bugs with OLMo/SWA/Yarn)
+    params.kv_unified    = false;
+    params.no_kv_offload = false;
 
     // for consistency between server router mode and single-model mode, we set the same model name as alias
     if (params.model_alias.empty() && !params.model.name.empty()) {

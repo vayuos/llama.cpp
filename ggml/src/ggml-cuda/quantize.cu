@@ -47,6 +47,68 @@ static __global__ void quantize_q8_1(
     y[ib].ds = make_half2(d, sum);
 }
 
+static __global__ void quantize_rms_q8_1(
+        const float * __restrict__ x, void * __restrict__ vy,
+        const int64_t ne00, const int64_t s01, const int64_t s02, const int64_t s03,
+        const float eps, const float * __restrict__ rms_w,
+        const int64_t ne0, const uint32_t ne1, const uint3 ne2) {
+    const int tid = threadIdx.x;
+    const int block_size = blockDim.x;
+
+    const int64_t i3 = fastdiv(blockIdx.z, ne2);
+    const int64_t i2 = blockIdx.z - i3*ne2.z;
+    const int64_t i1 = blockIdx.y;
+
+    const int64_t base_offset = i3*s03 + i2*s02 + i1*s01;
+    const float * xi_vec = x + base_offset;
+
+    // Phase 1: Compute RMS sum of squares
+    float local_sum_sq = 0.0f;
+    for (int64_t i = tid; i < ne0; i += block_size) {
+        const float val = i < ne00 ? xi_vec[i] : 0.0f;
+        local_sum_sq += val * val;
+    }
+
+    __shared__ float s_sum_sq;
+    float total_sum_sq = block_reduce<block_reduce_method::SUM, CUDA_QUANTIZE_BLOCK_SIZE>(local_sum_sq, &s_sum_sq);
+
+    if (tid == 0) {
+        s_sum_sq = rsqrtf(total_sum_sq / ne0 + eps);
+    }
+    __syncthreads();
+
+    const float scale = s_sum_sq;
+
+    // Phase 2: Normalize and Quantize
+    block_q8_1 * y = (block_q8_1 *) vy;
+    const int64_t ib_offset = (blockIdx.z * ne1 + i1) * (ne0 / QK8_1);
+
+    for (int64_t ib = tid; ib < ne0 / QK8_1; ib += block_size) {
+        float amax = 0.0f;
+        float sum = 0.0f;
+        float vals[QK8_1];
+
+        for (int i = 0; i < QK8_1; ++i) {
+            const int64_t i_val = ib * QK8_1 + i;
+            float val = i_val < ne00 ? xi_vec[i_val] * scale : 0.0f;
+            if (rms_w) {
+                val *= rms_w[i_val];
+            }
+            vals[i] = val;
+            amax = fmaxf(amax, fabsf(val));
+            sum += val;
+        }
+
+        const float d = amax / 127.0f;
+        const float d_inv = amax == 0.0f ? 0.0f : 127.0f / amax;
+
+        for (int i = 0; i < QK8_1; ++i) {
+            y[ib_offset + ib].qs[i] = roundf(vals[i] * d_inv);
+        }
+        y[ib_offset + ib].ds = make_half2(d, sum);
+    }
+}
+
 __device__ __forceinline__ uint8_t compute_e8m0_scale(float amax) {
     if (!(amax > 0.0f)) {
         return 0;
@@ -274,15 +336,34 @@ void quantize_row_q8_1_cuda(
         const float * x, const int32_t * ids, void * vy, const ggml_type type_src0,
         const int64_t ne00, const int64_t s01, const int64_t s02, const int64_t s03,
         const int64_t ne0, const int64_t ne1, const int64_t ne2, const int64_t ne3, cudaStream_t stream) {
+    quantize_row_q8_1_rms_cuda(x, ids, vy, type_src0, ne00, s01, s02, s03, ne0, ne1, ne2, ne3, 0.0f, nullptr, stream);
+}
+
+void quantize_row_q8_1_rms_cuda(
+        const float * x, const int32_t * ids, void * vy, const ggml_type type_src0,
+        const int64_t ne00, const int64_t s01, const int64_t s02, const int64_t s03,
+        const int64_t ne0, const int64_t ne1, const int64_t ne2, const int64_t ne3,
+        const float eps, const float * rms_w, cudaStream_t stream) {
+
     GGML_ASSERT(!ids);
     GGML_ASSERT(ne0 % QK8_1 == 0);
 
+    const int device = ggml_cuda_get_device();
+    const int warp_size = ggml_cuda_info().devices[device].warp_size;
+    GGML_ASSERT(warp_size == WARP_SIZE);
+
     const uint3 ne2_fastdiv = init_fastdiv_values(ne2);
 
-    const int64_t block_num_x = (ne0 + CUDA_QUANTIZE_BLOCK_SIZE - 1) / CUDA_QUANTIZE_BLOCK_SIZE;
-    const dim3 num_blocks(block_num_x, ne1, ne2*ne3);
-    const dim3 block_size(CUDA_QUANTIZE_BLOCK_SIZE, 1, 1);
-    quantize_q8_1<<<num_blocks, block_size, 0, stream>>>(x, vy, ne00, s01, s02, s03, ne0, ne1, ne2_fastdiv);
+    if (eps > 0.0f || rms_w != nullptr) {
+        const dim3 num_blocks(1, ne1, ne2*ne3);
+        const dim3 block_size(CUDA_QUANTIZE_BLOCK_SIZE, 1, 1);
+        quantize_rms_q8_1<<<num_blocks, block_size, 0, stream>>>(x, vy, ne00, s01, s02, s03, eps, rms_w, ne0, ne1, ne2_fastdiv);
+    } else {
+        const int64_t block_num_x = (ne0 + CUDA_QUANTIZE_BLOCK_SIZE - 1) / CUDA_QUANTIZE_BLOCK_SIZE;
+        const dim3 num_blocks(block_num_x, ne1, ne2*ne3);
+        const dim3 block_size(CUDA_QUANTIZE_BLOCK_SIZE, 1, 1);
+        quantize_q8_1<<<num_blocks, block_size, 0, stream>>>(x, vy, ne00, s01, s02, s03, ne0, ne1, ne2_fastdiv);
+    }
     GGML_UNUSED(type_src0);
 }
 

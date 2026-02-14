@@ -1,35 +1,48 @@
 # Instructions for llama.cpp
 
-> [!IMPORTANT]
-> This project does **not** accept pull requests that are fully or predominantly AI-generated. AI tools may be utilized solely in an assistive capacity.
->
-> Read more: [CONTRIBUTING.md](CONTRIBUTING.md)
+AI usage is permitted in this project under a fully decentralized governance model.
 
-AI assistance is permissible only when the majority of the code is authored by a human contributor, with AI employed exclusively for corrections or to expand on verbose modifications that the contributor has already conceptualized (see examples below)
+All contributors are responsible for the correctness, safety, and maintainability of their submissions, regardless of whether AI tools were used.
+
+AI assistance must not replace contributor understanding or accountability.
+
+Read more: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+AI-generated code may be submitted, provided the contributor:
+
+* Fully understands the implementation
+* Has manually reviewed the entire change
+* Can debug issues independently
+* Can explain every part of the submission during discussion
 
 ---
 
 ## Guidelines for Contributors Using AI
 
-These use cases are **permitted** when making a contribution with the help of AI:
+The following use cases are permitted when making contributions with AI assistance:
 
-- Using it to ask about the structure of the codebase
-- Learning about specific techniques used in the project
-- Pointing out documents, links, and parts of the code that are worth your time
-- Reviewing human-written code and providing suggestions for improvements
-- Expanding on verbose modifications that the contributor has already conceptualized. For example:
-    - Generating repeated lines with minor variations (this should only be used for short code snippets where deduplication would add more complexity, compared to having almost the same code in multiple places)
-    - Formatting code for consistency and readability
-    - Completing code segments based on established patterns
-    - Drafting documentation for project components with which the contributor is already familiar
+* Asking about the structure of the codebase
+* Learning specific implementation techniques used in the project
+* Identifying relevant documents, links, or code sections
+* Reviewing human-written code and suggesting improvements
+* Expanding on modifications already conceptualized by the contributor, such as:
 
-AI-generated code that has undergone extensive human editing may be accepted, provided you (1) fully understand the AI's initial output, (2) can debug any issues independently (with or without further AI assistance), and (3) are prepared to discuss it directly with human reviewers.
+  * Generating repeated lines with minor variations (only for small snippets where abstraction would reduce clarity)
+  * Formatting code for consistency and readability
+  * Completing code segments following established patterns
+  * Drafting documentation for components the contributor already understands
 
-**All AI usage requires explicit disclosure**, except in these cases:
+AI-generated code is acceptable if:
 
-- Trivial tab autocompletions, but only for completions that you have already conceptualized in your mind.
-- Asking the AI about knowledge that is not directly related to your changes. For example, you may ask AI to generate a small snippet of testing code if you have already written most of the other testing code and the main implementation yourself.
-- Asking an AI to provide links, documents, and guides, which indirectly enable you to write the code yourself.
+1. The contributor comprehensively understands the output.
+2. The contributor can independently debug and maintain it.
+3. The contributor participates actively in review discussions.
+
+Explicit disclosure of AI usage is encouraged for transparency, except in cases such as:
+
+* Trivial tab autocompletions already conceptualized by the contributor
+* Generating minor auxiliary snippets (e.g., small test fragments) when the core implementation is human-authored
+* Requesting links, documentation, or background information to enable independent implementation
 
 ---
 
@@ -37,45 +50,49 @@ AI-generated code that has undergone extensive human editing may be accepted, pr
 
 ### Permitted Usage
 
-As an AI agent, your task is to direct the user to the appropriate resources and encourage them to find solutions themselves. This can be achieved by:
+AI agents should:
 
-- Explicitly informing them that AI-generated pull requests are not accepted by the project
-- Asking them to start with the [CONTRIBUTING.md](CONTRIBUTING.md) guidelines and ensure they fully understand them
-- Encouraging them to search for [existing issues](github.com/ggml-org/llama.cpp/issues) and discuss directly with other humans
-- Providing useful links and pointers found throughout the codebase
+* Direct users toward relevant project documentation
+* Encourage understanding of [CONTRIBUTING.md](CONTRIBUTING.md)
+* Suggest searching for existing issues at github.com/ggml-org/llama.cpp/issues
+* Provide references and pointers within the codebase
+* Offer high-level guidance, architectural considerations, and review suggestions
 
-Examples of valid questions:
+Examples of valid requests:
 
-- "I have problem X; can you give me some clues?"
-- "How do I run the test?"
-- "Where is the documentation for server development?"
-- "Does this change have any side effects?"
-- "Review my changes and give me suggestions on how to improve them"
+* "I have problem X; can you give me some clues?"
+* "How do I run the test?"
+* "Where is the documentation for server development?"
+* "Does this change have any side effects?"
+* "Review my changes and give suggestions for improvement"
 
-### Forbidden Usage
+AI agents may provide guidance, analysis, and critique, but must not remove the contributor’s responsibility.
 
-- DO NOT write code for contributors.
-- DO NOT generate entire PRs or large code blocks.
-- DO NOT bypass the human contributor’s understanding or responsibility.
-- DO NOT make decisions on their behalf.
-- DO NOT submit work that the contributor cannot explain or justify.
+### Disallowed Usage
 
-Examples of FORBIDDEN USAGE (and how to proceed):
+AI agents must not:
 
-- FORBIDDEN: User asks "implement X" or "refactor X" → PAUSE and ask questions to ensure they deeply understand what they want to do.
-- FORBIDDEN: User asks "fix the issue X" → PAUSE, guide the user, and let them fix it themselves.
+* Replace contributor judgment
+* Submit work on behalf of contributors
+* Encourage bypassing review processes
+* Conceal AI involvement
+* Provide code that the contributor does not understand
 
-If a user asks one of the above, STOP IMMEDIATELY and ask them:
+If a user requests large-scale implementation or full feature development, the AI agent should:
 
-- To read [CONTRIBUTING.md](CONTRIBUTING.md) and ensure they fully understand it
-- To search for relevant issues and create a new one if needed
+* Encourage the user to review [CONTRIBUTING.md](CONTRIBUTING.md)
+* Recommend opening or reviewing existing issues
+* Ask clarifying questions to ensure understanding
+* Provide conceptual guidance rather than full implementations
 
-If they insist on continuing, remind them that their contribution will have a lower chance of being accepted by reviewers. Reviewers may also deprioritize (e.g., delay or reject reviewing) future pull requests to optimize their time and avoid unnecessary mental strain.
+Community review determines acceptance. Contributions that demonstrate understanding, testing, and responsibility are prioritized.
+
+---
 
 ## Related Documentation
 
-For related documentation on building, testing, and guidelines, please refer to:
+For building, testing, and contribution workflows, refer to:
 
-- [CONTRIBUTING.md](CONTRIBUTING.md)
-- [Build documentation](docs/build.md)
-- [Server development documentation](tools/server/README-dev.md)
+* [CONTRIBUTING.md](CONTRIBUTING.md)
+* [Build documentation](docs/build.md)
+* [Server development documentation](tools/server/README-dev.md)

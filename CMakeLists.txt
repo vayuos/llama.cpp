@@ -140,6 +140,12 @@ option(LLAMA_BUILD_SERVER   "llama: build server example" ON)
 option(LLAMA_TOOLS_INSTALL  "llama: install tools"        OFF)
 option(LLAMA_TESTS_INSTALL  "llama: install tests"        OFF)
 
+# optimization
+option(LLAMA_CUDA_MMQ "llama: use mmq kernels instead of cuBLAS" ON)
+if (LLAMA_CUDA_MMQ AND NOT GGML_CUDA_FORCE_CUBLAS)
+    set(GGML_CUDA_FORCE_MMQ ON CACHE BOOL "ggml: use mmq kernels instead of cuBLAS" FORCE)
+endif()
+
 # 3rd party libs
 option(LLAMA_HTTPLIB    "llama: httplib for downloading functionality" ON)
 option(LLAMA_OPENSSL    "llama: use openssl to support HTTPS" ON)

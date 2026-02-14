@@ -1231,6 +1231,11 @@ void ggml_compute_forward_mul_mat(
               struct ggml_tensor * dst) {
 
     const struct ggml_tensor * src0 = dst->src[0];
+
+    if ((dst->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL) && ggml_is_quantized(src0->type)) {
+        GGML_ABORT("FATAL: Quantized decode-critical matmul dispatched to CPU backend.\n");
+    }
+
     const struct ggml_tensor * src1 = dst->src[1];
 
     GGML_TENSOR_BINARY_OP_LOCALS

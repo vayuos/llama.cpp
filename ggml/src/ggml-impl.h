@@ -334,6 +334,8 @@ struct ggml_cgraph {
     struct ggml_hash_set visited_hash_set;
 
     enum ggml_cgraph_eval_order order;
+    
+    bool has_swa;
 };
 
 // returns a slice of cgraph with nodes [i0, i1)

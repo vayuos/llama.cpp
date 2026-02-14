@@ -8377,7 +8377,19 @@ ggml_cgraph * llama_model::build_graph(const llm_graph_params & params) const {
 
     llm->res->set_outputs();
 
-    return llm->res->get_gf();
+    // [STRICT] autonomous Decode State Advancement (D.17)
+    // If autonomous state tensors are provided, append advancement nodes to the graph.
+    if (params.t_decode_pos != nullptr) {
+        llm->build_autonomous_advancement();
+    }
+
+    ggml_cgraph * gf = llm->res->get_gf();
+
+    if (params.gtype == LLM_GRAPH_TYPE_DECODER) {
+        llm_graph_canonicalize_decode(gf);
+    }
+
+    return gf;
 }
 
 
