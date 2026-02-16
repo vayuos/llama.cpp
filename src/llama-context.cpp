@@ -455,7 +455,7 @@ void llama_context::sched_reserve() {
 
     // resolve automatic Flash Attention use
     if (cparams.auto_fa) {
-        auto * gf = graph_reserve(1, n_seqs, n_outputs, mctx.get(), true);
+        auto * gf = graph_reserve(1, n_seqs, n_outputs, mctx.get(), LLM_GRAPH_TYPE_DEFAULT, true);
         if (!gf) {
             throw std::runtime_error("failed to split graph for Flash Attention check");
         }
@@ -510,7 +510,7 @@ void llama_context::sched_reserve() {
 
     // reserve pp (prompt processing) graph first so that buffers are only allocated once
     {
-        auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), model.hparams.no_alloc,
+        auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), LLM_GRAPH_TYPE_DEFAULT, model.hparams.no_alloc,
                                   model.hparams.no_alloc ? backend_buf_exp_size.data() : nullptr);
         if (!gf) {
             if (cparams.pipeline_parallel) {
@@ -519,7 +519,7 @@ void llama_context::sched_reserve() {
                 cparams.pipeline_parallel = false;
                 sched.reset(ggml_backend_sched_new(backend_ptrs.data(), backend_buft.data(), backend_ptrs.size(),
                                                    max_nodes, false, cparams.op_offload));
-                gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get());
+                gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), LLM_GRAPH_TYPE_DEFAULT);
             }
             if (!gf) {
                 throw std::runtime_error("failed to allocate compute pp buffers");
@@ -532,7 +532,7 @@ void llama_context::sched_reserve() {
 
     // reserve with tg (token generation) graph to get the number of splits and nodes
     {
-        auto * gf = graph_reserve(n_seqs, n_seqs, n_seqs, mctx.get(), model.hparams.no_alloc);
+        auto * gf = graph_reserve(n_seqs, n_seqs, n_seqs, mctx.get(), LLM_GRAPH_TYPE_DEFAULT, model.hparams.no_alloc);
         if (!gf) {
             throw std::runtime_error("failed to allocate compute tg buffers");
         }
@@ -547,7 +547,7 @@ void llama_context::sched_reserve() {
         //
         // auto * gf = graph_reserve(n_tokens, 1, n_tokens, mctx.get());
         //
-        auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), model.hparams.no_alloc);
+        auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), LLM_GRAPH_TYPE_DEFAULT, model.hparams.no_alloc);
         if (!gf) {
             throw std::runtime_error("failed to allocate compute pp buffers");
         }
@@ -709,7 +709,7 @@ bool llama_context::memory_update(bool optimize) {
         const uint32_t n_seqs   = cparams.n_seq_max;
         const uint32_t n_tokens = std::min(cparams.n_ctx, cparams.n_ubatch);
 
-        auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get());
+        auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), LLM_GRAPH_TYPE_DEFAULT);
         if (!gf) {
             LLAMA_LOG_ERROR("%s: failed to reserve graph after the memory update\n", __func__);
         }
@@ -2194,6 +2194,7 @@ ggml_cgraph * llama_context::graph_reserve(uint32_t                       n_toke
                                            uint32_t                       n_seqs,
                                            uint32_t                       n_outputs,
                                            const llama_memory_context_i * mctx,
+                                           llm_graph_type                 gtype,
                                            bool                           split_only,
                                            size_t *                       sizes) {
     LLAMA_LOG_DEBUG("%s: reserving a graph for ubatch with n_tokens = %4u, n_seqs = %2u, n_outputs = %4u\n", __func__,
@@ -2248,10 +2249,47 @@ ggml_cgraph * llama_context::graph_reserve(uint32_t                       n_toke
         } else {
             ggml_backend_sched_split_graph(sched.get(), gf);
         }
-    } else if (!ggml_backend_sched_reserve(sched.get(), gf)) {
-        GGML_ASSERT(!sizes);
-        LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
-        return nullptr;
+    } else {
+        // [STRICT] Decode Isolation Enforcement
+        if (gtype == LLM_GRAPH_TYPE_DECODER) {
+            // 1. Force Single Backend (GPU)
+            // This prevents the scheduler from searching for backends or splitting the graph.
+            // All operations must be supported by backend 0 (GPU).
+            ggml_backend_sched_set_single_backend(sched.get(), 0);
+            
+            // 2. Enable Strict Decode Mode
+            ggml_backend_set_decode_mode(true);
+        } else {
+            // Ensure strict modes are disabled for non-decode graphs
+            ggml_backend_sched_set_single_backend(sched.get(), -1);
+            ggml_backend_set_decode_mode(false);
+        }
+
+        if (!ggml_backend_sched_reserve(sched.get(), gf)) {
+            GGML_ASSERT(!sizes);
+            LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
+            return nullptr;
+        }
+
+        // [STRICT] Post-Allocation Validation & Locking
+        if (gtype == LLM_GRAPH_TYPE_DECODER) {
+             // 3. Audit for CPU Fallbacks (Softmax, Norm, etc.)
+             if (!ggml_audit_no_cpu_fallbacks_in_decode(gf)) {
+                 GGML_ABORT("Decode Isolation Violation: CPU fallback detected in decode graph.");
+             }
+
+             // 4. Verify GPU Residency for All Tensors
+             // Walk the graph and ensure no intermediate tensor is on CPU
+             if (!llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1])) {
+                 GGML_ABORT("Decode Isolation Violation: CPU-resident tensor detected in decode graph.");
+             }
+
+             // 5. lock the scheduler to prevent any future replanning
+             // The graph structure and backend assignments are now immutable.
+             ggml_backend_sched_lock_backends(sched.get(), true);
+             
+             LLAMA_LOG_INFO("%s: Decode graph isolated and frozen on GPU.\n", __func__);
+        }
     }
 
     return gf;

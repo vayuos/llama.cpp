@@ -147,7 +147,7 @@ static __global__ void mul_mat_vec_f(
             sum_sq[j] = 0.0f;
         }
     }
-    if (std::is_same_v<T, float>) {
+    if constexpr (std::is_same_v<T, float>) {
         const float2 * x2 = (const float2 *) x;
         const float2 * gate_x2 = nullptr;
         const float2 * rms_w2 = nullptr;
@@ -204,7 +204,7 @@ static __global__ void mul_mat_vec_f(
             }
         }
 
-        if (std::is_same_v<type_acc, float>) {
+        if constexpr (std::is_same_v<type_acc, float>) {
             for (int col2 = tid; col2 < ncols2; col2 += block_size) {
                 const float2 tmpx = __half22float2(x2[col2]);
                 float2 tmpx_gate = make_float2(0.0f, 0.0f);
