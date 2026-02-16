@@ -227,6 +227,7 @@ struct llama_context {
                                 uint32_t                       n_seqs,
                                 uint32_t                       n_outputs,
                                 const llama_memory_context_i * mctx,
+                                llm_graph_type                 gtype = LLM_GRAPH_TYPE_DEFAULT,
                                 bool                           split_only = false,
                                 size_t *                       sizes      = nullptr);
 
