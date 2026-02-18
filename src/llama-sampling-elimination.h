@@ -232,8 +232,7 @@ int llama_sampling_elimination_detect_grammar_modification(void);
 // GPU sampling state management
 int llama_sampling_elimination_set_gpu_sampling_prepared(void);
 int llama_sampling_elimination_set_gpu_sampling_autonomous(void);
-int llama_sampling_elimination_signal_gpu_token_ready(llama_token token);
-int llama_sampling_elimination_signal_gpu_sampling_complete(void);
+int llama_sampling_elimination_signal_gpu_token_ready(int32_t token);
 
 // GPU parameter control
 int llama_sampling_elimination_snapshot_initial_parameters(void);
@@ -257,7 +256,7 @@ int llama_sampling_elimination_verify_no_cpu_logit_modifications(void);
 // Diagnostics and logging
 void llama_sampling_elimination_log_cpu_sampling_eliminated(void);
 void llama_sampling_elimination_log_gpu_sampling_started(void);
-void llama_sampling_elimination_log_token_sampled_by_gpu(llama_token token);
+void llama_sampling_elimination_log_token_sampled_by_gpu(int32_t token);
 void llama_sampling_elimination_print_sampling_state(void);
 void llama_sampling_elimination_print_parameter_state(void);
 void llama_sampling_elimination_print_violation_summary(void);

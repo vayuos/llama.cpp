@@ -261,4 +261,3 @@ void llama_print_decode_critical_cpu_prohibition_statement(void);
  */
 int llama_decode_cpu_hard_failure_selftest(void);
 
-#endif // LLAMA_DECODE_CPU_HARD_FAILURE_H

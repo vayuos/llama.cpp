@@ -10,6 +10,7 @@
 
 #include "llama-context-position-gpu.h"
 #include <map>
+#include <string>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
@@ -22,28 +23,34 @@
  * Global validation state for GPU context position tracking
  */
 static struct llama_gpu_context_position_validation_state g_context_position_validation_state = {
-    .config = {
-        .gpu_context_pos_tracking_enabled = false,
-        .cpu_updates_forbidden = false,
-        .mode = LLAMA_CONTEXT_POSITION_NONE,
-        .context_length = 0,
-        .validate_position_bounds = true,
+    /* config */ {
+        /* gpu_context_pos_tracking_enabled */ false,
+        /* cpu_updates_forbidden */ false,
+        /* mode */ LLAMA_CONTEXT_POSITION_NONE,
+        /* context_length */ 0,
+        /* validate_position_bounds */ true,
     },
-    .state_record = {
-        .current_mode = LLAMA_CONTEXT_POSITION_NONE,
-        .gpu_pos_state = LLAMA_GPU_CONTEXT_POS_UNINITIALIZED,
-        .context_position = 0,
-        .context_length = 0,
-        .position_updates_count = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_CONTEXT_POSITION_VIOLATION_NONE,
-        .position_locked = false,
+    /* state_record */ {
+        /* current_mode */ LLAMA_CONTEXT_POSITION_NONE,
+        /* gpu_pos_state */ LLAMA_GPU_CONTEXT_POS_UNINITIALIZED,
+        /* context_position */ 0,
+        /* context_length */ 0,
+        /* position_updates_count */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_CONTEXT_POSITION_VIOLATION_NONE,
+        /* position_locked */ false,
     },
-    .last_update = {0},
-    .total_position_updates = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_context_position = false,
+    /* last_update */ {
+        /* position_before */ 0,
+        /* position_after */ 0,
+        /* tokens_added */ 0,
+        /* timestamp_ns */ 0,
+        /* update_on_gpu */ false,
+    },
+    /* total_position_updates */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_context_position */ false,
 };
 
 /**

@@ -19,29 +19,42 @@
 // ============================================================================
 
 static struct llama_gpu_kv_slice_validation_state g_kv_slice_validation = {
-    .config = {
-        .gpu_kv_slice_enabled = false,
-        .cpu_slice_operations_forbidden = false,
-        .mode = LLAMA_KV_SLICE_NONE,
-        .max_slice_size = 0,
-        .num_layers = 0,
-        .validate_slice_bounds = true,
-        .enforce_gpu_only_slicing = false,
+    /* config */ {
+        /* gpu_kv_slice_enabled */ false,
+        /* cpu_slice_operations_forbidden */ false,
+        /* mode */ LLAMA_KV_SLICE_NONE,
+        /* max_slice_size */ 0,
+        /* num_layers */ 0,
+        /* validate_slice_bounds */ true,
+        /* enforce_gpu_only_slicing */ false,
     },
-    .state_record = {
-        .current_mode = LLAMA_KV_SLICE_NONE,
-        .slice_state = LLAMA_GPU_KV_SLICE_UNINITIALIZED,
-        .max_slice_size = 0,
-        .total_slice_operations = 0,
-        .total_tokens_sliced = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_KV_SLICE_VIOLATION_NONE,
+    /* state_record */ {
+        /* current_mode */ LLAMA_KV_SLICE_NONE,
+        /* slice_state */ LLAMA_GPU_KV_SLICE_UNINITIALIZED,
+        /* max_slice_size */ 0,
+        /* total_slice_operations */ 0,
+        /* total_tokens_sliced */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_KV_SLICE_VIOLATION_NONE,
     },
-    .last_execution = {0},
-    .total_slice_executions = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_kv_slice = false,
+    /* last_execution */ {
+        /* operation */ {
+            /* source_start */ 0,
+            /* source_end */ 0,
+            /* num_tokens */ 0,
+            /* num_layers */ 0,
+            /* operation_type */ 0,
+            /* reserved_1 */ 0,
+            /* reserved_2 */ 0,
+            /* reserved_3 */ 0,
+        },
+        /* execution_time_ns */ 0,
+        /* execution_on_gpu */ false,
+    },
+    /* total_slice_executions */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_kv_slice */ false,
 };
 
 // Per-operation CPU attempt tracking

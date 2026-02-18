@@ -4,36 +4,6 @@
  * Asynchronous Streaming Decoupling for LLAMA Decode
  *
  * Complete separation of GPU decode and I/O streaming execution domains.
- * Ensures streaming can never reduce decode throughput, block decode thread,
- * or create dependencies between GPU execution and network I/O.
- *
- * Key Properties:
- * - Two strictly isolated execution domains: DECODE and STREAMING
- * - Lock-free queue for token transfer (single producer, single consumer)
- * - Zero blocking operations in decode path
- * - No shared locks or synchronization between domains
- * - Non-blocking disconnect handling
- * - Decode thread priority dominance
- * - Throughput validation: CLI vs streaming must match
- * - Hard separation enforcement via debug assertions
- *
- * 8 Core Rules Enforced:
- * 1. Separate Decode and Streaming Execution Domains
- * 2. Introduce Lock-Free Token Queue
- * 3. Remove Per-Token HTTP Flush Dependency
- * 4. Eliminate Decode→Server Cross-Locks
- * 5. Make Disconnect Handling Non-Blocking
- * 6. Prevent Server Threads from Affecting Decode Timing
- * 7. Validate Throughput Independence
- * 8. Enforce Hard Separation in Code
- *
- * Expected Outcome:
- * - Streaming cannot reduce decode throughput
- * - Slow clients cannot throttle GPU
- * - Network jitter cannot create GPU idle gaps
- * - Server overhead orthogonal to decode performance
- * - Decode pure compute, streaming pure I/O
- * - Zero interference between domains
  */
 
 #include <stdbool.h>
@@ -42,10 +12,11 @@
 #include <atomic>
 #include <memory>
 #include <vector>
-#include <queue>
-#include <thread>
 #include <string>
 #include <chrono>
+#include <thread>
+#include <mutex>
+#include <map>
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,194 +26,254 @@ extern "C" {
  * Execution domain enumeration - enforced per-thread
  */
 typedef enum {
-    UNKNOWN = 0,
-    DECODE = 1,
-    STREAMING = 2
+    LLAMA_STREAMING_DOMAIN_UNKNOWN = 0,
+    LLAMA_STREAMING_DOMAIN_DECODE = 1,
+    LLAMA_STREAMING_DOMAIN_STREAMING = 2
 } streaming_execution_domain;
+
+// For compatibility with source using EnumName::Value
+#ifdef __cplusplus
+#define UNKNOWN LLAMA_STREAMING_DOMAIN_UNKNOWN
+#define DECODE LLAMA_STREAMING_DOMAIN_DECODE
+#define STREAMING LLAMA_STREAMING_DOMAIN_STREAMING
+#endif
 
 /**
  * Token record for lock-free queue
  */
 typedef struct {
-    uint32_t token_id;
+    int32_t  token_id;
     uint32_t sequence_id;
-    uint64_t timestamp_ns;
-    float logprob;
-    uint16_t batch_slot;
-    bool is_eos;
-} streaming_token_record;
+    uint64_t timestamp_us;
+    float    logit;
+} streaming_token;
 
 /**
- * Disconnect handler result
+ * Metrics structures
  */
-typedef enum {
-    DISCONNECT_HANDLED_OK = 0,
-    DISCONNECT_ERROR = 1,
-    CLIENT_STILL_CONNECTED = 2
-} disconnect_status;
+typedef struct {
+    size_t current_depth;
+    size_t capacity;
+    uint64_t total_overflow_events;
+    float utilization_percent;
+} streaming_queue_metrics;
+
+typedef struct {
+    int32_t worker_index;
+    bool is_running;
+    uint64_t tokens_processed;
+    uint64_t chunks_flushed;
+    uint64_t batches_created;
+    float tokens_per_sec;
+    int32_t active_sequences;
+    int32_t pending_sequences;
+} streaming_worker_metrics;
+
+typedef struct {
+    bool initialized;
+    int32_t worker_count;
+    size_t queue_depth;
+    size_t queue_capacity;
+    uint64_t total_tokens_produced;
+    uint64_t total_tokens_consumed;
+    uint64_t backpressure_events;
+    float system_throughput_tps;
+    std::vector<streaming_worker_metrics> per_worker;
+} async_streaming_engine_metrics;
+
+/**
+ * Context structures
+ */
+typedef struct {
+    uint32_t sequence_id;
+    uint32_t slot_id;
+    uint64_t start_time_us;
+    uint64_t tokens_generated;
+    void * user_context;
+} streaming_decode_context;
+
+typedef struct {
+    uint32_t sequence_id;
+    const char * stream_url;
+    void * http_handle;
+} streaming_http_context;
+
+#ifdef __cplusplus
+} // extern "C"
 
 /**
  * Lock-free ring buffer for token queue
- * Single producer (decode), single consumer (streaming)
  */
-class lock_free_token_queue {
+class streaming_token_queue {
 private:
-    std::vector<streaming_token_record> buffer;
-    std::atomic<size_t> write_pos;
-    std::atomic<size_t> read_pos;
-    size_t capacity;
+    std::vector<streaming_token> buffer;
+    std::atomic<uint64_t> head;
+    std::atomic<uint64_t> tail;
+    std::atomic<uint64_t> overflows;
+    size_t mask;
 
 public:
-    lock_free_token_queue(size_t capacity);
+    streaming_token_queue(size_t capacity);
+    ~streaming_token_queue();
 
-    // Producer (decode thread)
-    bool try_push(const streaming_token_record & token);
+    bool try_push(const streaming_token & token);
+    bool try_pop(streaming_token & token);
+    
+    size_t depth() const;
+    size_t capacity() const;
     bool is_full() const;
-
-    // Consumer (streaming thread)
-    bool try_pop(streaming_token_record & token);
     bool is_empty() const;
-
-    size_t get_depth() const;
-    size_t get_capacity() const { return capacity; }
     void clear();
+    
+    streaming_queue_metrics get_metrics() const;
 };
 
 /**
- * Disconnect handler - non-blocking client disconnect management
+ * Batch accumulator
  */
-class disconnect_handler {
+class streaming_batch_accumulator {
 private:
-    std::atomic<bool> client_connected;
-    std::atomic<bool> disconnect_pending;
+    std::vector<streaming_token> token_batch;
+    std::string json_buffer;
+    size_t target_batch_size;
+    size_t max_buffer_bytes;
 
 public:
-    disconnect_handler();
+    streaming_batch_accumulator(size_t batch_size, size_t buffer_size);
+    ~streaming_batch_accumulator();
 
-    bool is_connected() const { return client_connected.load(); }
-    void mark_disconnect_pending() { disconnect_pending.store(true); }
-    bool is_disconnect_pending() const { return disconnect_pending.load(); }
-
-    disconnect_status handle_disconnect();
-    void reset_connection() { client_connected.store(true); disconnect_pending.store(false); }
+    bool add_token(const streaming_token & token, const std::string & json_chunk);
+    bool should_flush() const;
+    std::string get_batch_data() const;
+    size_t batch_token_count() const;
+    size_t buffered_bytes() const;
+    std::string flush();
+    void reset();
 };
 
 /**
- * Async streaming engine - orchestrates decode/streaming separation
+ * Cancellation token
+ */
+class streaming_cancellation_token {
+private:
+    std::atomic<bool> cancelled;
+    std::atomic<uint64_t> cancel_timestamp_us;
+    std::string reason;
+
+public:
+    streaming_cancellation_token();
+    void cancel();
+    bool is_cancelled() const;
+    void reset();
+    std::string get_reason() const;
+};
+
+/**
+ * Streaming worker thread
+ */
+class streaming_worker {
+private:
+    int32_t worker_index;
+    size_t target_batch_size;
+    int32_t flush_timeout_ms;
+    
+    streaming_token_queue * token_queue;
+    const void * model_vocab;
+    
+    std::atomic<bool> running;
+    std::atomic<bool> shutdown_requested;
+    std::thread worker_thread;
+
+    void worker_main_loop();
+    bool process_token(const streaming_token & token);
+    bool flush_batch_to_http(uint32_t sequence_id);
+
+public:
+    streaming_worker(int32_t idx, size_t batch_size = 1, int32_t timeout_ms = 100);
+    ~streaming_worker();
+
+    void register_token_queue(streaming_token_queue * queue);
+    void register_vocab(const void * vocab);
+    
+    bool start();
+    bool stop(int32_t timeout_ms = 1000);
+    
+    uint32_t register_http_context(const streaming_http_context & context);
+    void unregister_http_context(uint32_t context_id);
+    void link_decode_to_http(const streaming_decode_context & decode_context, uint32_t http_context_id);
+    void signal_sequence_complete(uint32_t sequence_id);
+    
+    bool is_running() const;
+    bool is_alive() const;
+    streaming_worker_metrics get_metrics() const;
+    
+    bool flush_pending(uint32_t sequence_id);
+    uint32_t flush_all();
+    int32_t get_worker_index() const;
+};
+
+/**
+ * Main streaming system (Renamed to async_streaming_engine for llama-context.h compatibility)
  */
 class async_streaming_engine {
 private:
-    std::unique_ptr<lock_free_token_queue> token_queue;
-    std::unique_ptr<disconnect_handler> disconnect_mgr;
-
-    std::atomic<bool> streaming_active;
-    std::atomic<bool> enforcing_separation;
-
-    // Statistics
-    std::atomic<uint64_t> total_tokens_decoded;
-    std::atomic<uint64_t> total_tokens_streamed;
-    std::atomic<uint64_t> domain_violations;
-    std::atomic<uint64_t> queue_drops;
+    std::atomic<bool> initialized;
+    std::atomic<bool> shutdown_in_progress;
+    
+    streaming_token_queue token_queue;
+    const void * model_vocab;
+    
+    std::vector<std::unique_ptr<streaming_worker>> workers;
+    std::map<uint32_t, streaming_decode_context> decode_contexts;
+    std::map<uint32_t, streaming_http_context> http_contexts;
 
 public:
     async_streaming_engine();
+    ~async_streaming_engine();
 
-    // Initialization
-    bool initialize(size_t queue_capacity);
+    static async_streaming_engine & instance();
 
-    // Domain management
-    void set_decode_domain() { set_current_domain(streaming_execution_domain::DECODE); }
-    void set_streaming_domain() { set_current_domain(streaming_execution_domain::STREAMING); }
+    bool initialize(int32_t worker_count, size_t queue_capacity, size_t batch_size);
+    void shutdown(int32_t timeout_ms = 1000);
 
-    // Token flow
-    bool enqueue_token(const streaming_token_record & token);
-    bool dequeue_token(streaming_token_record & token);
+    streaming_token_queue * get_token_queue();
+    void register_vocab(const void * vocab);
 
-    // Queue management
-    size_t get_queue_depth() const { return token_queue->get_depth(); }
-    bool is_queue_full() const { return token_queue->is_full(); }
-    bool is_queue_empty() const { return token_queue->is_empty(); }
+    bool decode_emit_token(const streaming_token & token, uint32_t sequence_id);
+    size_t get_queue_depth() const;
 
-    // Disconnect handling
-    bool is_client_connected() const { return disconnect_mgr->is_connected(); }
-    void mark_disconnect() { disconnect_mgr->mark_disconnect_pending(); }
-    disconnect_status handle_disconnect() { return disconnect_mgr->handle_disconnect(); }
+    void signal_decode_start(uint32_t sequence_id, uint32_t slot_id, void * user_context);
+    void signal_decode_complete(uint32_t sequence_id);
 
-    // Enforcement
-    bool is_separating_domains() const { return enforcing_separation.load(); }
-    void set_enforce_separation(bool enforce) { enforcing_separation.store(enforce); }
+    uint32_t register_http_context(const streaming_http_context & context);
+    void unregister_http_context(uint32_t context_id);
+    void link_decode_to_http(uint32_t sequence_id, uint32_t context_id);
 
-    // Statistics
-    uint64_t get_tokens_decoded() const { return total_tokens_decoded.load(); }
-    uint64_t get_tokens_streamed() const { return total_tokens_streamed.load(); }
-    uint64_t get_domain_violations() const { return domain_violations.load(); }
-    uint64_t get_queue_drops() const { return queue_drops.load(); }
-
-    void record_token_decoded() { total_tokens_decoded.fetch_add(1); }
-    void record_token_streamed() { total_tokens_streamed.fetch_add(1); }
-    void record_domain_violation() { domain_violations.fetch_add(1); }
-    void record_queue_drop() { queue_drops.fetch_add(1); }
-
-    // Validation
-    bool validate_throughput_independence() const;
+    bool is_initialized() const;
+    async_streaming_engine_metrics get_metrics() const;
+    uint32_t flush_all_pending();
 };
 
-/**
- * Thread-local domain tracking
- */
+// Typedef for source file compatibility
+using streaming_system = async_streaming_engine;
+
+extern "C" {
+#endif
+
+// Domain management
 streaming_execution_domain get_current_domain();
 void set_current_domain(streaming_execution_domain domain);
-
-/**
- * Domain verification and enforcement
- */
 bool verify_domain(streaming_execution_domain allowed_domain, const char * operation_name);
-
-/**
- * Hard separation enforcement (no-return on violation in debug)
- */
 [[noreturn]]
 void enforce_decode_purity(const char * operation_name);
 
-/**
- * Streaming operations with domain checks
- */
-bool llama_streaming_http_write(const char * data, size_t len);
-bool llama_streaming_json_encode(const char * input, std::string & output);
-bool llama_streaming_flush();
-bool llama_streaming_check_client_connected();
-
-/**
- * Global instance management
- */
-extern async_streaming_engine * g_async_streaming;
-
-bool llama_init_async_streaming(size_t queue_capacity);
-bool llama_enable_async_streaming(bool enable);
-
-// Domain enforcement macros
-#define DECODE_DOMAIN_CHECK() \
-    do { \
-        if (!verify_domain(streaming_execution_domain::DECODE, __FUNCTION__)) { \
-            return false; \
-        } \
-    } while(0)
-
-#define STREAMING_DOMAIN_CHECK() \
-    do { \
-        if (!verify_domain(streaming_execution_domain::STREAMING, __FUNCTION__)) { \
-            return false; \
-        } \
-    } while(0)
-
-// Verbose logging control
+// System interaction
 void set_streaming_verbose_logging(bool enable);
-
-// Diagnostic functions
-void llama_print_async_streaming_stats();
-void llama_dump_async_streaming_state();
-bool llama_validate_streaming_separation();
+bool validate_streaming_domain_separation();
+bool validate_streaming_throughput_independence(float cli_tps, float server_tps);
+void dump_streaming_state();
+std::string get_streaming_status();
 
 #ifdef __cplusplus
-}  // extern "C"
+}
 #endif

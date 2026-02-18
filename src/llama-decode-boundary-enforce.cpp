@@ -16,14 +16,18 @@
 #include <unordered_set>
 #include <cstring>
 
+#ifndef LLAMA_ABORT
+#define LLAMA_ABORT(msg) do { fprintf(stderr, "LLAMA_ABORT: %s\n", msg); abort(); } while(0)
+#endif
+
 // Global enforcement state (thread-local would be better for multi-context scenarios)
 static llama_decode_boundary_state g_decode_boundary_state = {
-    .is_decode_active = false,
-    .graph_frozen = false,
-    .primary_gpu_backend = 0,
-    .frozen_graph_hash = 0,
-    .frozen_backend_assignments = nullptr,
-    .n_frozen_nodes = 0
+    false,    // is_decode_active
+    false,    // graph_frozen
+    0,        // primary_gpu_backend
+    0,        // frozen_graph_hash
+    nullptr,  // frozen_backend_assignments
+    0         // n_frozen_nodes
 };
 
 /**
@@ -247,15 +251,15 @@ bool llama_decode_boundary_validate_tensor_residency(
         return false;
     }
 
-    if (!tensor->buffer->buft) {
+    if (!tensor->buffer) {
         LLAMA_LOG_ERROR(
-            "DECODE BOUNDARY: Tensor '%s' buffer has no buffer type!\n",
+            "DECODE BOUNDARY: Tensor '%s' has no buffer!\n",
             tensor->name ? tensor->name : "unnamed");
         return false;
     }
 
     // Check buffer is not host memory
-    if (ggml_backend_buft_is_host(tensor->buffer->buft)) {
+    if (ggml_backend_buffer_is_host(tensor->buffer)) {
         LLAMA_LOG_ERROR(
             "DECODE BOUNDARY: Tensor '%s' is GPU-scheduled but host-resident!\n"
             "  Implicit CPU materialization detected.\n",
@@ -324,7 +328,7 @@ static bool is_decode_critical_op(const char * op_name) {
  * No "fallback to CPU" allowed during decode.
  */
 bool llama_decode_boundary_reject_fallback_ops(
-    ggml_op_type op_type,
+    enum ggml_op op_type,
     int requested_backend,
     const llama_decode_boundary_state * state) {
 
@@ -382,8 +386,8 @@ bool llama_decode_boundary_audit_all_gpu_resident(
         q.pop();
 
         // Validate this tensor is GPU-resident
-        if (t->buffer && t->buffer->buft) {
-            if (ggml_backend_buft_is_host(t->buffer->buft)) {
+        if (t->buffer) {
+            if (ggml_backend_buffer_is_host(t->buffer)) {
                 LLAMA_LOG_ERROR(
                     "DECODE BOUNDARY: CPU-resident tensor found in decode graph!\n"
                     "  Tensor: '%s'\n"

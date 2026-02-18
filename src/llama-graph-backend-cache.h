@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <stdint.h>
 #include <stdbool.h>
+#include "../ggml/include/ggml-backend.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -138,7 +138,7 @@ enum llama_backend_query_violation {
 struct llama_backend_cache_entry {
     uint64_t node_id;                            // Graph node ID
     uint64_t graph_id;                           // Parent graph ID
-    enum ggml_backend_type cached_backend;       // Cached backend for this node
+    enum ggml_backend_dev_type cached_backend;       // Cached backend for this node
     enum llama_backend_attachment_state attachment_state; // Attachment state
     uint64_t resolution_time_ns;                 // When resolved
     bool backend_immutable;                      // True = immutable after freeze
@@ -195,13 +195,13 @@ int llama_backend_cache_init(void);
 int llama_backend_cache_resolve_at_graph_build(
     uint64_t graph_id,
     uint64_t node_id,
-    enum ggml_backend_type * out_backend
+    enum ggml_backend_dev_type * out_backend
 );
 int llama_backend_cache_resolve_all_nodes_upfront(uint64_t graph_id);
 int llama_backend_cache_forbid_deferred_resolution(void);
 int llama_backend_cache_attach_backend_to_node(
     uint64_t node_id,
-    enum ggml_backend_type backend
+    enum ggml_backend_dev_type backend
 );
 int llama_backend_cache_freeze_backend_assignment(void);
 
@@ -214,11 +214,11 @@ int llama_backend_cache_assert_no_dispatch_during_decode(void);
 int llama_backend_cache_verify_cache_before_freeze(void);
 int llama_backend_cache_detect_backend_drift(
     uint64_t node_id,
-    enum ggml_backend_type actual_backend
+    enum ggml_backend_dev_type actual_backend
 );
 
 // Query and lookup functions (cached - no dynamic dispatch)
-enum ggml_backend_type llama_backend_cache_lookup_cached(uint64_t node_id);
+enum ggml_backend_dev_type llama_backend_cache_lookup_cached(uint64_t node_id);
 bool llama_backend_cache_has_cached_decision(uint64_t node_id);
 
 // Diagnostic functions
@@ -234,8 +234,8 @@ int llama_backend_cache_detect_late_query(
 );
 int llama_backend_cache_detect_backend_change(
     uint64_t node_id,
-    enum ggml_backend_type old_backend,
-    enum ggml_backend_type new_backend
+    enum ggml_backend_dev_type old_backend,
+    enum ggml_backend_dev_type new_backend
 );
 
 // Diagnostics and logging

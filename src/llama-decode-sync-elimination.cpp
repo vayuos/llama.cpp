@@ -17,30 +17,42 @@
 // ============================================================================
 
 static struct llama_gpu_sync_elimination_validation_state g_sync_elimination_validation = {
-    .config = {
-        .eliminate_global_sync = false,
-        .enforce_single_stream = false,
-        .forbid_host_access = true,
-        .forbid_debug_sync = true,
-        .use_stream_events_only = true,
-        .debug_sync_elimination = false,
+    /* config */ {
+        /* eliminate_global_sync */ false,
+        /* enforce_single_stream */ false,
+        /* forbid_host_access */ true,
+        /* forbid_debug_sync */ true,
+        /* use_stream_events_only */ true,
+        /* debug_sync_elimination */ false,
     },
-    .state_record = {
-        .state = LLAMA_GPU_SYNC_ELIMINATION_UNINITIALIZED,
-        .stream_mode = LLAMA_CUDA_STREAM_NONE,
-        .current_phase = LLAMA_SYNC_PHASE_NONE,
-        .decode_global_syncs = 0,
-        .decode_implicit_syncs = 0,
-        .decode_host_access_syncs = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_DECODE_SYNC_VIOLATION_NONE,
+    /* state_record */ {
+        /* state */ LLAMA_GPU_SYNC_ELIMINATION_UNINITIALIZED,
+        /* stream_mode */ LLAMA_CUDA_STREAM_NONE,
+        /* current_phase */ LLAMA_SYNC_PHASE_NONE,
+        /* decode_global_syncs */ 0,
+        /* decode_implicit_syncs */ 0,
+        /* decode_host_access_syncs */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_DECODE_SYNC_VIOLATION_NONE,
     },
-    .stream_state = {0},
-    .last_sync_record = {0},
-    .total_sync_events = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .decode_phase_active = false,
+    /* stream_state */ {
+        /* dedicated_decode_stream_created */ false,
+        /* decode_stream_id */ 0,
+        /* num_kernels_in_stream */ 0,
+        /* num_stream_events */ 0,
+        /* all_kernels_in_single_stream */ false,
+    },
+    /* last_sync_record */ {
+        /* sync_phase */ LLAMA_SYNC_PHASE_NONE,
+        /* violation */ LLAMA_DECODE_SYNC_VIOLATION_NONE,
+        /* timestamp_ns */ 0,
+        /* was_global_sync */ false,
+        /* was_violation */ false,
+    },
+    /* total_sync_events */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* decode_phase_active */ false,
 };
 
 // Per-phase sync policy tracking

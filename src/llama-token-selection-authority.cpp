@@ -9,6 +9,7 @@
 
 #include "llama-token-selection-authority.h"
 #include <map>
+#include <string>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
@@ -21,36 +22,47 @@
  * Global validation state for GPU token selection authority
  */
 static struct llama_gpu_token_selection_validation_state g_token_selection_validation_state = {
-    .config = {
-        .token_selection_gpu_enabled = false,
-        .cpu_sampling_forbidden = false,
-        .mode = LLAMA_TOKEN_SELECTION_NONE,
-        .authority = LLAMA_SAMPLING_AUTHORITY_UNINITIALIZED,
-        .fused_sampling_pipeline = false,
-        .enforce_gpu_atomic_commit = false,
-        .use_deterministic_rng = false,
-        .validate_gpu_token_authority = false,
+    /* config */ {
+        /* token_selection_gpu_enabled */ false,
+        /* cpu_sampling_forbidden */ false,
+        /* mode */ LLAMA_TOKEN_SELECTION_NONE,
+        /* authority */ LLAMA_SAMPLING_AUTHORITY_UNINITIALIZED,
+        /* fused_sampling_pipeline */ false,
+        /* enforce_gpu_atomic_commit */ false,
+        /* use_deterministic_rng */ false,
+        /* validate_gpu_token_authority */ false,
     },
-    .state_record = {
-        .current_mode = LLAMA_TOKEN_SELECTION_NONE,
-        .selection_state = LLAMA_GPU_TOKEN_SELECTION_UNINITIALIZED,
-        .commit_state = LLAMA_GPU_TOKEN_COMMIT_UNINITIALIZED,
-        .current_authority = LLAMA_SAMPLING_AUTHORITY_UNINITIALIZED,
-        .gpu_token_selection_active = false,
-        .cpu_sampling_bypassed = false,
-        .sampling_authority_locked = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_TOKEN_SELECTION_VIOLATION_NONE,
-        .total_tokens_selected = 0,
-        .total_gpu_time_ns = 0,
-        .total_cpu_time_ns = 0,
+    /* state_record */ {
+        /* current_mode */ LLAMA_TOKEN_SELECTION_NONE,
+        /* selection_state */ LLAMA_GPU_TOKEN_SELECTION_UNINITIALIZED,
+        /* commit_state */ LLAMA_GPU_TOKEN_COMMIT_UNINITIALIZED,
+        /* current_authority */ LLAMA_SAMPLING_AUTHORITY_UNINITIALIZED,
+        /* gpu_token_selection_active */ false,
+        /* cpu_sampling_bypassed */ false,
+        /* sampling_authority_locked */ false,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_TOKEN_SELECTION_VIOLATION_NONE,
+        /* total_tokens_selected */ 0,
+        /* total_gpu_time_ns */ 0,
+        /* total_cpu_time_ns */ 0,
     },
-    .last_execution = {0},
-    .total_selections = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_token_selection = false,
-    .verify_bitwise_identical = false,
+    /* last_execution */ {
+        /* mode */ LLAMA_TOKEN_SELECTION_NONE,
+        /* selection_state */ LLAMA_GPU_TOKEN_SELECTION_UNINITIALIZED,
+        /* commit_state */ LLAMA_GPU_TOKEN_COMMIT_UNINITIALIZED,
+        /* timestamp_ns */ 0,
+        /* tokens_processed */ 0,
+        /* token_selected */ 0,
+        /* gpu_sampling_ns */ 0,
+        /* gpu_commit_ns */ 0,
+        /* cpu_violations */ 0,
+        /* last_violation */ LLAMA_TOKEN_SELECTION_VIOLATION_NONE,
+    },
+    /* total_selections */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_token_selection */ false,
+    /* verify_bitwise_identical */ false,
 };
 
 /**

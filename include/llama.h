@@ -1,6 +1,9 @@
 #ifndef LLAMA_H
 #define LLAMA_H
 
+#ifdef __cplusplus
+#include <vector>
+#endif
 #include "ggml.h"
 #include "ggml-cpu.h"
 #include "ggml-backend.h"
@@ -1393,7 +1396,6 @@ extern "C" {
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
                              int32_t   penalty_last_n,   // last n tokens to penalize (0 = disable penalty, -1 = context size)
                                float   penalty_repeat,   // 1.0 = disabled
-                               float   penalty_freq,     // 0.0 = disabled
                                float   penalty_freq,     // 0.0 = disabled
                                float   penalty_present); // 0.0 = disabled
     

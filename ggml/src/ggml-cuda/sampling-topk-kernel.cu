@@ -20,8 +20,12 @@
 #include <algorithm>
 
 #ifdef GGML_CUDA_USE_CUB
-#include <cub/cub.cuh>
+#undef GGML_CUDA_USE_CUB
 #endif
+
+// #ifdef GGML_CUDA_USE_CUB
+// #include <cub/cub.cuh>
+// #endif
 
 extern "C" {
 
@@ -56,7 +60,7 @@ __global__ void cuda_topk_warp_kernel(
     int lane = threadIdx.x % warpSize;
     int warp_id = threadIdx.x / warpSize;
     int block_warps = blockDim.x / warpSize;
-    int total_warps = gridDim.x * block_warps;
+    // int total_warps = gridDim.x * block_warps;
     int warp_idx = blockIdx.x * block_warps + warp_id;
 
     if (warp_idx >= 1) return;  // Single token for now (batch size 1)
@@ -79,7 +83,7 @@ __global__ void cuda_topk_warp_kernel(
     }
     
     // Scan vocabulary with grid-stride
-    int grid_size = blockDim.x * gridDim.x;
+    // int grid_size = blockDim.x * gridDim.x;
     for (int32_t i = lane; i < n_vocab; i += warpSize) {
         float val = logits[i];
         
@@ -279,6 +283,36 @@ int cuda_topk_kernel(const float * d_logits,
 
 #ifdef GGML_CUDA_USE_CUB
 
+static int cuda_topk_kernel_cub_impl(const float * d_logits,
+                                     float *       d_topk_vals,
+                                     int32_t *     d_topk_inds,
+                                     int32_t       n_vocab,
+                                     int32_t       k,
+                                     cudaStream_t  stream) {
+    try {
+        // CUB top-k selection
+        void * d_temp = nullptr;
+        size_t temp_bytes = 0;
+
+        cub::DeviceTopK::Pairs(d_temp, temp_bytes, 
+                              d_logits, d_topk_inds, d_topk_vals,
+                              n_vocab, k, stream);
+
+        // Allocate temporary memory
+        cudaMalloc(&d_temp, temp_bytes);
+
+        // Run top-k
+        cub::DeviceTopK::Pairs(d_temp, temp_bytes,
+                              d_logits, d_topk_inds, d_topk_vals,
+                              n_vocab, k, stream);
+
+        cudaFree(d_temp);
+        return cudaGetLastError() == cudaSuccess ? 0 : -1;
+    } catch (...) {
+        return -1;
+    }
+}
+
 int cuda_topk_kernel_cub(const float * d_logits,
                          float *       d_topk_vals,
                          int32_t *     d_topk_inds,
@@ -294,28 +328,7 @@ int cuda_topk_kernel_cub(const float * d_logits,
         stream = 0;
     }
 
-    try {
-        // CUB top-k selection
-        void * d_temp = nullptr;
-        size_t temp_bytes = 0;
-
-        ::cub::DeviceTopK::Pairs(d_temp, temp_bytes, 
-                              d_logits, d_topk_inds, d_topk_vals,
-                              n_vocab, k, stream);
-
-        // Allocate temporary memory
-        cudaMalloc(&d_temp, temp_bytes);
-
-        // Run top-k
-        ::cub::DeviceTopK::Pairs(d_temp, temp_bytes,
-                              d_logits, d_topk_inds, d_topk_vals,
-                              n_vocab, k, stream);
-
-        cudaFree(d_temp);
-        return cudaGetLastError() == cudaSuccess ? 0 : -1;
-    } catch (...) {
-        return -1;
-    }
+    return cuda_topk_kernel_cub_impl(d_logits, d_topk_vals, d_topk_inds, n_vocab, k, stream);
 }
 
 #endif

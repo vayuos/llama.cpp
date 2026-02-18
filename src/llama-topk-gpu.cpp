@@ -17,46 +17,46 @@
 // ============================================================================
 
 static struct llama_gpu_topk_validation_state g_topk_validation_state = {
-    .config = {
-        .topk_filtering_enabled = false,
-        .topk_value = 0,
-        .gpu_topk_enabled = false,
-        .candidates_on_gpu = false,
-        .mode = LLAMA_TOPK_FILTERING_NONE,
-        .fusion = LLAMA_TOPK_FUSION_NONE,
-        .fused_penalty_temp_topk = false,
-        .use_partial_selection = true,
+    /* config */ {
+        /* topk_filtering_enabled */ false,
+        /* topk_value */ 0,
+        /* gpu_topk_enabled */ false,
+        /* candidates_on_gpu */ false,
+        /* mode */ LLAMA_TOPK_FILTERING_NONE,
+        /* fusion */ LLAMA_TOPK_FUSION_NONE,
+        /* fused_penalty_temp_topk */ false,
+        /* use_partial_selection */ true,
     },
-    .state_record = {
-        .current_mode = LLAMA_TOPK_FILTERING_NONE,
-        .gpu_topk_state = LLAMA_GPU_TOPK_UNINITIALIZED,
-        .buffer_state = LLAMA_GPU_TOPK_BUFFER_UNINITIALIZED,
-        .gpu_topk_active = false,
-        .cpu_topk_bypassed = false,
-        .candidates_gpu_resident = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_TOPK_VIOLATION_NONE,
-        .total_tokens_filtered = 0,
-        .total_gpu_time_ns = 0,
-        .total_cpu_time_ns = 0,
+    /* state_record */ {
+        /* current_mode */ LLAMA_TOPK_FILTERING_NONE,
+        /* gpu_topk_state */ LLAMA_GPU_TOPK_UNINITIALIZED,
+        /* buffer_state */ LLAMA_GPU_TOPK_BUFFER_UNINITIALIZED,
+        /* gpu_topk_active */ false,
+        /* cpu_topk_bypassed */ false,
+        /* candidates_gpu_resident */ false,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_TOPK_VIOLATION_NONE,
+        /* total_tokens_filtered */ 0,
+        /* total_gpu_time_ns */ 0,
+        /* total_cpu_time_ns */ 0,
     },
-    .last_execution = {
-        .mode = LLAMA_TOPK_FILTERING_NONE,
-        .topk_state = LLAMA_GPU_TOPK_UNINITIALIZED,
-        .buffer_state = LLAMA_GPU_TOPK_BUFFER_UNINITIALIZED,
-        .timestamp_ns = 0,
-        .tokens_processed = 0,
-        .topk_value_used = 0,
-        .gpu_kernel_ns = 0,
-        .candidate_selection_ns = 0,
-        .cpu_violations = 0,
-        .last_violation = LLAMA_TOPK_VIOLATION_NONE,
+    /* last_execution */ {
+        /* mode */ LLAMA_TOPK_FILTERING_NONE,
+        /* topk_state */ LLAMA_GPU_TOPK_UNINITIALIZED,
+        /* buffer_state */ LLAMA_GPU_TOPK_BUFFER_UNINITIALIZED,
+        /* timestamp_ns */ 0,
+        /* tokens_processed */ 0,
+        /* topk_value_used */ 0,
+        /* gpu_kernel_ns */ 0,
+        /* candidate_selection_ns */ 0,
+        /* cpu_violations */ 0,
+        /* last_violation */ LLAMA_TOPK_VIOLATION_NONE,
     },
-    .total_topk_applications = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_topk_filtering = false,
-    .verify_bitwise_identical = false,
+    /* total_topk_applications */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_topk_filtering */ false,
+    /* verify_bitwise_identical */ false,
 };
 
 // Per-topk-operation tracking: track which top-k operations have been applied
@@ -223,6 +223,7 @@ int llama_topk_gpu_assert_topk_complete(void) {
 // ============================================================================
 
 int llama_topk_gpu_allocate_topk_buffers(uint32_t max_vocab_size) {
+    (void)max_vocab_size;
     g_topk_validation_state.state_record.buffer_state = LLAMA_GPU_TOPK_BUFFER_ALLOCATED;
     g_topk_validation_state.config.candidates_on_gpu = true;
     g_topk_validation_state.state_record.candidates_gpu_resident = true;
@@ -497,6 +498,7 @@ void llama_topk_gpu_log_topk_kernel_launched(void) {
 }
 
 void llama_topk_gpu_log_candidates_selected(uint32_t num_candidates) {
+    (void)num_candidates;
     // Debug logging: candidates selected by GPU
 }
 
@@ -520,6 +522,7 @@ void llama_topk_gpu_report_violation(
     enum llama_topk_violation violation_type,
     const char* details
 ) {
+    (void)details;
     g_topk_validation_state.state_record.last_violation = violation_type;
     g_topk_validation_state.total_violations++;
 }

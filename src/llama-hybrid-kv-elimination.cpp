@@ -19,29 +19,35 @@
 // ============================================================================
 
 static struct llama_gpu_kv_hybrid_elimination_validation_state g_hybrid_kv_elimination_validation = {
-    .config = {
-        .enforce_gpu_only_decode = false,
-        .forbid_hybrid_modes = false,
-        .fail_on_incomplete_gpu_alloc = true,
-        .validate_kv_residency = true,
-        .num_layers = 0,
-        .debug_kv_backend = false,
+    /* config */ {
+        /* enforce_gpu_only_decode */ false,
+        /* forbid_hybrid_modes */ false,
+        /* fail_on_incomplete_gpu_alloc */ true,
+        /* validate_kv_residency */ true,
+        /* num_layers */ 0,
+        /* debug_kv_backend */ false,
     },
-    .state_record = {
-        .state = LLAMA_GPU_KV_EXCLUSIVITY_UNINITIALIZED,
-        .decode_backend_mode = LLAMA_KV_BACKEND_NONE,
-        .num_layers = 0,
-        .layers_gpu_only = 0,
-        .layers_with_cpu_kv = 0,
-        .total_gpu_kv_bytes = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_HYBRID_KV_VIOLATION_NONE,
+    /* state_record */ {
+        /* state */ LLAMA_GPU_KV_EXCLUSIVITY_UNINITIALIZED,
+        /* decode_backend_mode */ LLAMA_KV_BACKEND_NONE,
+        /* num_layers */ 0,
+        /* layers_gpu_only */ 0,
+        /* layers_with_cpu_kv */ 0,
+        /* total_gpu_kv_bytes */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_HYBRID_KV_VIOLATION_NONE,
     },
-    .hybrid_path_record = {0},
-    .total_decode_starts = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .decode_phase_active = false,
+    /* hybrid_path_record */ {
+        /* hybrid_path_attempts */ 0,
+        /* per_layer_branch_attempts */ 0,
+        /* cpu_fallback_attempts */ 0,
+        /* host_visible_pointer_attempts */ 0,
+        /* reserved_1 */ 0,
+    },
+    /* total_decode_starts */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* decode_phase_active */ false,
 };
 
 // Per-layer KV residency tracking
@@ -839,6 +845,7 @@ int llama_hybrid_kv_elimination_gpu_selftest(void) {
     fprintf(stderr, "Test 7: Hybrid mode attempt detection... ");
     llama_hybrid_kv_elimination_gpu_set_enforcement_strict(false);
     int result = llama_hybrid_kv_elimination_gpu_detect_hybrid_mode_attempt();
+    (void)result;
     if (g_hybrid_path_attempts["hybrid_mode"] > 0) {
         fprintf(stderr, "PASSED\n");
     } else {

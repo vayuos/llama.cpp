@@ -20,33 +20,47 @@
 // ============================================================================
 
 static struct llama_gpu_fusion_validation_state g_fusion_validation = {
-    .config = {
-        .enforce_fusion_mandatory = true,
-        .forbid_unfused_execution = true,
-        .forbid_intermediate_buffer = true,
-        .forbid_host_sequencing = true,
-        .cuda_backend_only = true,
-        .debug_fusion_tracking = false,
+    {
+        true,  // enforce_fusion_mandatory
+        true,  // forbid_unfused_execution
+        true,  // forbid_intermediate_buffer
+        true,  // forbid_host_sequencing
+        true,  // cuda_backend_only
+        false  // debug_fusion_tracking
     },
-    .state_record = {
-        .state = LLAMA_GPU_FUSION_UNINITIALIZED,
-        .current_phase = LLAMA_FUSION_PHASE_NONE,
-        .total_operations_detected = 0,
-        .total_operations_fused = 0,
-        .total_operations_unfused = 0,
-        .fused_kernels_compiled = 0,
-        .intermediate_buffers_detected = 0,
-        .host_sequences_detected = 0,
-        .decode_fused_kernels_invoked = 0,
-        .decode_unfused_rnorm_detected = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_RNORM_MATMUL_VIOLATION_NONE,
+    {
+        LLAMA_GPU_FUSION_UNINITIALIZED,      // state
+        LLAMA_FUSION_PHASE_NONE,             // current_phase
+        0,                                   // total_operations_detected
+        0,                                   // total_operations_fused
+        0,                                   // total_operations_unfused
+        0,                                   // fused_kernels_compiled
+        0,                                   // intermediate_buffers_detected
+        0,                                   // host_sequences_detected
+        0,                                   // decode_fused_kernels_invoked
+        0,                                   // decode_unfused_rnorm_detected
+        0,                                   // total_violations
+        LLAMA_RNORM_MATMUL_VIOLATION_NONE    // last_violation
     },
-    .last_operation_record = {0},
-    .total_operations = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .decode_phase_active = false,
+    nullptr, // fusion_operations_map
+    nullptr, // fusion_kernels_map
+    nullptr, // operation_history_vector
+    {
+        0,                     // operation_id
+        LLAMA_FUSION_OP_NONE,  // fusion_type
+        0,                     // layer_idx
+        0,                     // input_tensor_id
+        0,                     // output_tensor_id
+        0,                     // normalized_dim
+        0,                     // projected_dim
+        0,                     // kernel_launch_timestamp_ns
+        false,                 // was_fused
+        false                  // is_decode_phase
+    },
+    0,      // total_operations
+    0,      // total_violations
+    true,   // enforcement_strict
+    false   // decode_phase_active
 };
 
 // Per-operation tracking: map<operation_id, fusion_operation_record>

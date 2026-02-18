@@ -17,16 +17,16 @@
 // ============================================================================
 
 static struct llama_cuda_support_validation_state g_cuda_support_state = {
-    .operations = NULL,
-    .num_operations = 0,
-    .max_operations = 0,
-    .admission_validation_complete = false,
-    .all_ops_cuda_supported = false,
-    .violation_count = 0,
-    .last_violation_type = LLAMA_CUDA_VIOL_UNKNOWN,
-    .last_violation_op = NULL,
-    .last_violation_reason = NULL,
-    .late_discovery_count = 0,
+    NULL,                     // operations
+    0,                        // num_operations
+    0,                        // max_operations
+    false,                    // admission_validation_complete
+    false,                    // all_ops_cuda_supported
+    0,                        // violation_count
+    LLAMA_CUDA_VIOL_UNKNOWN,  // last_violation_type
+    NULL,                     // last_violation_op
+    NULL,                     // last_violation_reason
+    0                         // late_discovery_count
 };
 
 static bool g_cuda_support_enforcement_strict = true;

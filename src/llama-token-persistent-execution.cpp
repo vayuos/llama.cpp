@@ -10,6 +10,7 @@
 
 #include "llama-token-persistent-execution.h"
 
+#include <cinttypes>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,44 +22,44 @@
 // ============================================================================
 
 static struct llama_token_persistent_execution_validation_state g_token_persistent_state = {
-    .decode_mode_record = {
-        .mode = LLAMA_DECODE_MODE_INACTIVE,
-        .graph_id = 0,
-        .decode_start_time_ns = 0,
-        .total_tokens_processed = 0,
-        .graph_lifetime_locked = false,
-        .graph_persistence_locked = false,
-        .cpu_reentrancy_forbidden = false,
-        .lifetime_binding = LLAMA_LIFETIME_UNBOUND,
-        .persistence = LLAMA_PERSISTENCE_UNINITIALIZED,
+    {
+        LLAMA_DECODE_MODE_INACTIVE,
+        0,
+        0,
+        0,
+        false,
+        false,
+        false,
+        LLAMA_LIFETIME_UNBOUND,
+        LLAMA_PERSISTENCE_UNINITIALIZED
     },
-    .execution_record = {
-        .current_graph_id = 0,
-        .decode_mode = LLAMA_DECODE_MODE_INACTIVE,
-        .total_cpu_reentrancy_violations = 0,
-        .total_graph_mutations = 0,
-        .last_reentrancy = LLAMA_REENTRANCY_NONE,
-        .last_mutation = LLAMA_MUTATION_NONE,
-        .graph_input_stable = false,
-        .graph_backend_immutable = false,
-        .execution_plan_immutable = false,
-        .token_progression_gpu_owned = false,
+    {
+        0,
+        LLAMA_DECODE_MODE_INACTIVE,
+        0,
+        0,
+        LLAMA_REENTRANCY_NONE,
+        LLAMA_MUTATION_NONE,
+        false,
+        false,
+        false,
+        false
     },
-    .gpu_state = {
-        .graph_id = 0,
-        .current_token_index = 0,
-        .kv_cache_offset = 0,
-        .context_index = 0,
-        .token_progress = LLAMA_TOKEN_PROGRESS_NONE,
-        .batch_size = 0,
-        .state_gpu_resident = false,
-        .state_last_update_time_ns = 0,
+    {
+        0,
+        0,
+        0,
+        0,
+        LLAMA_TOKEN_PROGRESS_NONE,
+        0,
+        false,
+        0
     },
-    .total_reentrancy_violations = 0,
-    .total_mutation_violations = 0,
-    .total_graph_lifetime_mismatches = 0,
-    .enforcement_strict = true,
-    .debug_check_persistence_per_token = false,
+    0,
+    0,
+    0,
+    true,
+    false
 };
 
 // Per-graph persistence state: maps graph_id -> persistence_state
@@ -147,7 +148,7 @@ int llama_token_persistent_enter_decode_mode(uint64_t graph_id) {
  */
 int llama_token_persistent_lock_graph_lifetime_to_decode(uint64_t graph_id) {
     if (graph_id != g_decode_session_graph_id) {
-        fprintf(stderr, "[TOKEN_PERSIST] ERROR EP2: graph_id mismatch: %llu vs %llu\n",
+        fprintf(stderr, "[TOKEN_PERSIST] ERROR EP2: graph_id mismatch: %" PRIu64 " vs %" PRIu64 "\n",
                 graph_id, g_decode_session_graph_id);
         g_token_persistent_state.total_graph_lifetime_mismatches++;
         if (g_token_persistent_state.enforcement_strict) abort();
@@ -667,7 +668,7 @@ int llama_token_persistent_verify_decode_not_outliving_graph(void) {
  * Log decode mode entered
  */
 void llama_token_persistent_log_decode_mode_entered(uint64_t graph_id) {
-    printf("[TOKEN_PERSIST] ✓ Decode mode entered with persistent graph %llu\n", graph_id);
+    printf("[TOKEN_PERSIST] ✓ Decode mode entered with persistent graph %" PRIu64 "\n", graph_id);
     printf("  - Single graph instance for entire decode session\n");
     printf("  - No per-token graph resubmission\n");
     printf("  - CPU relinquishes graph control\n");
@@ -699,11 +700,11 @@ void llama_token_persistent_log_persistence_locked(void) {
 void llama_token_persistent_print_decode_mode_status(void) {
     printf("\n=== Decode Mode Status ===\n");
     printf("Mode: %s\n", llama_decode_mode_state_name(g_token_persistent_state.decode_mode_record.mode));
-    printf("Graph ID: %llu\n", g_token_persistent_state.decode_mode_record.graph_id);
+    printf("Graph ID: %" PRIu64 "\n", g_token_persistent_state.decode_mode_record.graph_id);
     printf("Lifetime locked: %s\n", g_token_persistent_state.decode_mode_record.graph_lifetime_locked ? "YES" : "NO");
     printf("Persistence locked: %s\n", g_token_persistent_state.decode_mode_record.graph_persistence_locked ? "YES" : "NO");
     printf("CPU re-entry forbidden: %s\n", g_token_persistent_state.decode_mode_record.cpu_reentrancy_forbidden ? "YES" : "NO");
-    printf("Tokens processed: %llu\n", g_token_persistent_state.decode_mode_record.total_tokens_processed);
+    printf("Tokens processed: %" PRIu64 "\n", g_token_persistent_state.decode_mode_record.total_tokens_processed);
     printf("===========================\n\n");
 }
 
@@ -712,10 +713,10 @@ void llama_token_persistent_print_decode_mode_status(void) {
  */
 void llama_token_persistent_print_gpu_state_summary(void) {
     printf("\n=== GPU State Summary ===\n");
-    printf("Graph ID: %llu\n", g_token_persistent_state.gpu_state.graph_id);
-    printf("Token index: %llu\n", g_token_persistent_state.gpu_state.current_token_index);
-    printf("KV cache offset: %llu\n", g_token_persistent_state.gpu_state.kv_cache_offset);
-    printf("Context index: %llu\n", g_token_persistent_state.gpu_state.context_index);
+    printf("Graph ID: %" PRIu64 "\n", g_token_persistent_state.gpu_state.graph_id);
+    printf("Token index: %" PRIu64 "\n", g_token_persistent_state.gpu_state.current_token_index);
+    printf("KV cache offset: %" PRIu64 "\n", g_token_persistent_state.gpu_state.kv_cache_offset);
+    printf("Context index: %" PRIu64 "\n", g_token_persistent_state.gpu_state.context_index);
     printf("Token progress: %s\n", llama_token_progress_state_name(g_token_persistent_state.gpu_state.token_progress));
     printf("GPU-resident: %s\n", g_token_persistent_state.gpu_state.state_gpu_resident ? "YES" : "NO");
     printf("========================\n\n");

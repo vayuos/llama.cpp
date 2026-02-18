@@ -131,7 +131,8 @@ __global__ void gather_result(int * dst, const int * local_idx, const int * cand
     }
 }
 
-void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+/*
+static void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0_logits = dst->src[0];
     
     int32_t params[16]; // Safe buffer
@@ -211,3 +212,4 @@ void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * 
     int * dst_ptr = (int *)dst->data;
     gather_result<<<1, 1, 0, stream>>>(dst_ptr, d_out_idx, d_candidates);
 }
+*/

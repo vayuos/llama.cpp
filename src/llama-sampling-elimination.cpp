@@ -19,24 +19,24 @@
 // ============================================================================
 
 static struct llama_sampling_elimination_validation_state g_sampling_validation = {
-    .state_record = {
-        .current_owner = LLAMA_SAMPLING_OWNER_UNKNOWN,
-        .gpu_state = LLAMA_GPU_SAMPLING_UNINITIALIZED,
-        .cpu_sampling_eliminated = false,
-        .gpu_sampling_active = false,
-        .parameters_gpu_controlled = false,
-        .cpu_sampling_violations = 0,
-        .last_violation = LLAMA_SAMPLING_VIOLATION_NONE,
-        .gpu_samples_produced = 0,
-        .gpu_sampling_start_time_ns = 0,
+    /* state_record */ {
+        /* current_owner */ LLAMA_SAMPLING_OWNER_UNKNOWN,
+        /* gpu_state */ LLAMA_GPU_SAMPLING_UNINITIALIZED,
+        /* cpu_sampling_eliminated */ false,
+        /* gpu_sampling_active */ false,
+        /* parameters_gpu_controlled */ false,
+        /* cpu_sampling_violations */ 0,
+        /* last_violation */ LLAMA_SAMPLING_VIOLATION_NONE,
+        /* gpu_samples_produced */ 0,
+        /* gpu_sampling_start_time_ns */ 0,
     },
-    .initial_params = {0},
-    .current_params = {0},
-    .total_operation_attempts = 0,
-    .total_violations = 0,
-    .params_frozen = false,
-    .enforcement_strict = true,
-    .debug_detect_cpu_sampling = false,
+    /* initial_params */ {0.0f, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, LLAMA_SAMPLING_PARAM_UNKNOWN, 0},
+    /* current_params */ {0.0f, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, LLAMA_SAMPLING_PARAM_UNKNOWN, 0},
+    /* total_operation_attempts */ 0,
+    /* total_violations */ 0,
+    /* params_frozen */ false,
+    /* enforcement_strict */ true,
+    /* debug_detect_cpu_sampling */ false,
 };
 
 // Per-operation tracking: map operation ID to violation count
@@ -79,7 +79,7 @@ int llama_sampling_elimination_eliminate_cpu_sampler(void) {
         }
     }
 
-    g_sampling_validation.cpu_sampling_eliminated = true;
+    g_sampling_validation.state_record.cpu_sampling_eliminated = true;
     return 0;
 }
 
@@ -122,7 +122,7 @@ int llama_sampling_elimination_assert_gpu_sampling_owns_execution(void) {
     // Enforcement Point 5: Assert GPU owns all sampling execution
 
     if (g_sampling_validation.state_record.current_owner != LLAMA_SAMPLING_OWNER_GPU ||
-        !g_sampling_validation.gpu_sampling_active) {
+        !g_sampling_validation.state_record.gpu_sampling_active) {
 
         g_sampling_validation.state_record.cpu_sampling_violations++;
 
@@ -181,7 +181,7 @@ int llama_sampling_elimination_forbid_cpu_logit_modification(void) {
 int llama_sampling_elimination_assert_gpu_controls_logits(void) {
     // Enforcement Point 10: Assert GPU controls all logit operations
 
-    if (!g_sampling_validation.gpu_sampling_active) {
+    if (!g_sampling_validation.state_record.gpu_sampling_active) {
         if (g_sampling_validation.enforcement_strict) {
             return -1;
         }
@@ -325,7 +325,7 @@ int llama_sampling_elimination_set_gpu_sampling_autonomous(void) {
     return 0;
 }
 
-int llama_sampling_elimination_signal_gpu_token_ready(llama_token token) {
+int llama_sampling_elimination_signal_gpu_token_ready(int32_t token) {
     g_sampling_validation.state_record.gpu_state = LLAMA_GPU_SAMPLING_TOKEN_READY;
     g_sampling_validation.state_record.gpu_samples_produced++;
     return 0;
@@ -381,11 +381,11 @@ enum llama_gpu_sampling_state llama_sampling_elimination_get_gpu_sampling_state(
 // ============================================================================
 
 int llama_sampling_elimination_verify_cpu_sampling_eliminated(void) {
-    return g_sampling_validation.cpu_sampling_eliminated ? 0 : -1;
+    return g_sampling_validation.state_record.cpu_sampling_eliminated ? 0 : -1;
 }
 
 int llama_sampling_elimination_verify_gpu_sampling_active(void) {
-    return g_sampling_validation.gpu_sampling_active ? 0 : -1;
+    return g_sampling_validation.state_record.gpu_sampling_active ? 0 : -1;
 }
 
 int llama_sampling_elimination_verify_parameters_immutable(void) {
@@ -416,7 +416,7 @@ void llama_sampling_elimination_log_gpu_sampling_started(void) {
     fprintf(stderr, "[SAMPLING ELIMINATION] GPU autonomous sampling started\n");
 }
 
-void llama_sampling_elimination_log_token_sampled_by_gpu(llama_token token) {
+void llama_sampling_elimination_log_token_sampled_by_gpu(int32_t token) {
     fprintf(stderr, "[SAMPLING ELIMINATION] Token sampled by GPU: %d\n", token);
 }
 
@@ -424,8 +424,8 @@ void llama_sampling_elimination_print_sampling_state(void) {
     fprintf(stderr, "\n=== SAMPLING STATE ===\n");
     fprintf(stderr, "Owner: %s\n", llama_sampling_owner_name(g_sampling_validation.state_record.current_owner));
     fprintf(stderr, "GPU State: %s\n", llama_gpu_sampling_state_name(g_sampling_validation.state_record.gpu_state));
-    fprintf(stderr, "CPU Sampling Eliminated: %s\n", g_sampling_validation.cpu_sampling_eliminated ? "YES" : "NO");
-    fprintf(stderr, "GPU Sampling Active: %s\n", g_sampling_validation.gpu_sampling_active ? "YES" : "NO");
+    fprintf(stderr, "CPU Sampling Eliminated: %s\n", g_sampling_validation.state_record.cpu_sampling_eliminated ? "YES" : "NO");
+    fprintf(stderr, "GPU Sampling Active: %s\n", g_sampling_validation.state_record.gpu_sampling_active ? "YES" : "NO");
     fprintf(stderr, "Parameters GPU Controlled: %s\n", g_sampling_validation.state_record.parameters_gpu_controlled ? "YES" : "NO");
     fprintf(stderr, "Parameters Frozen: %s\n", g_sampling_validation.params_frozen ? "YES" : "NO");
     fprintf(stderr, "Total Violations: %d\n", g_sampling_validation.state_record.cpu_sampling_violations);

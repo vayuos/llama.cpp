@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include "../ggml/include/ggml-backend.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,7 +98,7 @@ enum llama_backend_lock_violation_location {
  */
 struct llama_backend_lock_record {
     enum llama_backend_lock_state state;
-    enum ggml_backend_type locked_backend;              // Which backend is locked
+    enum ggml_backend_dev_type locked_backend;              // Which backend is locked
     uint64_t lock_acquire_time_ns;                      // Nanosecond timestamp of lock acquisition
     uint64_t lock_release_time_ns;                      // Nanosecond timestamp of lock release
     uint64_t decode_token_count;                        // Number of tokens decoded while locked
@@ -132,12 +133,12 @@ struct llama_backend_lock_validation_state {
 int llama_backend_lock_init(void);
 
 // Lock lifecycle (3 enforcement points: 1-3)
-int llama_backend_lock_acquire(enum ggml_backend_type backend_to_lock);
+int llama_backend_lock_acquire(enum ggml_backend_dev_type backend_to_lock);
 int llama_backend_lock_release(void);
 int llama_backend_lock_verify_held(void);
 
 // Backend mutation prevention (3 enforcement points: 4-6)
-int llama_backend_lock_prevent_backend_change(enum ggml_backend_type new_backend);
+int llama_backend_lock_prevent_backend_change(enum ggml_backend_dev_type new_backend);
 int llama_backend_lock_prevent_reresolution(void);
 int llama_backend_lock_prevent_tensor_relocation(void);
 
@@ -149,7 +150,7 @@ int llama_backend_lock_terminate_on_invalidation(
 
 // Query and diagnostic functions
 bool llama_backend_lock_is_held(void);
-enum ggml_backend_type llama_backend_lock_get_locked_backend(void);
+enum ggml_backend_dev_type llama_backend_lock_get_locked_backend(void);
 struct llama_backend_lock_record llama_backend_lock_get_record(void);
 uint64_t llama_backend_lock_get_duration_ns(void);
 int llama_backend_lock_get_violation_count(void);
@@ -164,7 +165,7 @@ int llama_backend_lock_verify_all_operations_same_backend(
     int num_operations
 );
 int llama_backend_lock_assert_explicit_backend_decision(
-    enum ggml_backend_type backend
+    enum ggml_backend_dev_type backend
 );
 
 // Violation reporting
@@ -187,7 +188,7 @@ void llama_backend_lock_set_debug_verify_backend_identity(bool verify);
 
 // Validation
 int llama_backend_lock_verify_immutability_invariant(void);
-int llama_backend_lock_assert_backend_matches_locked(enum ggml_backend_type actual_backend);
+int llama_backend_lock_assert_backend_matches_locked(enum ggml_backend_dev_type actual_backend);
 
 // Self-test suite
 int llama_backend_lock_selftest(void);

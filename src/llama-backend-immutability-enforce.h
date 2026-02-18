@@ -498,4 +498,3 @@ void llama_print_backend_immutability_statement(void);
  */
 int llama_backend_immutability_selftest(void);
 
-#endif // LLAMA_BACKEND_IMMUTABILITY_ENFORCE_H

@@ -17,14 +17,14 @@
  * Global decode admission control instance
  */
 static struct llama_decode_admission_control g_decode_admission = {
-    .state = LLAMA_ADMISSION_STATE_UNINITIALIZED,
-    .failure_reason = LLAMA_ADMISSION_FAIL_UNKNOWN,
-    .eligibility = {},
-    .admission_locked = false,
-    .decode_has_started = false,
-    .detailed_failure_message = "",
-    .eligibility_check_count = 0,
-    .admission_time_us = 0
+    LLAMA_ADMISSION_STATE_UNINITIALIZED,
+    LLAMA_ADMISSION_FAIL_UNKNOWN,
+    { false, nullptr, false, 0, nullptr, false, nullptr, false, nullptr, false, nullptr, false },
+    false,
+    false,
+    "",
+    0,
+    0
 };
 
 /**

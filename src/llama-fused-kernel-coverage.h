@@ -29,20 +29,9 @@ typedef enum {
     KERNEL_COVERAGE_LOCKED = 4
 } kernel_coverage_phase;
 
-typedef enum {
-    QUANT_FORMAT_Q4_0 = 1,
-    QUANT_FORMAT_Q4_1 = 2,
-    QUANT_FORMAT_Q5_0 = 3,
-    QUANT_FORMAT_Q5_1 = 4,
-    QUANT_FORMAT_Q8_0 = 5,
-    QUANT_FORMAT_Q6_K = 6,
-    QUANT_FORMAT_Q2_K = 7,
-    QUANT_FORMAT_Q3_K = 8,
-    QUANT_FORMAT_Q4_K = 9,
-    QUANT_FORMAT_Q5_K = 10,
-    QUANT_FORMAT_IQ2_XXS = 11,
-    QUANT_FORMAT_IQ3_XXS = 12
-} active_quant_format;
+#include "llama-quantization-format-freeze.h"
+
+typedef quantization_format_type active_quant_format;
 
 typedef struct {
     active_quant_format format;

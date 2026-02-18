@@ -11,6 +11,7 @@
 #include "llama-kv-metadata-gpu.h"
 #include <map>
 #include <vector>
+#include <iterator>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
@@ -23,30 +24,36 @@
  * Global validation state for GPU KV metadata management
  */
 static struct llama_gpu_kv_metadata_validation_state g_kv_metadata_validation_state = {
-    .config = {
-        .gpu_kv_metadata_tracking_enabled = false,
-        .cpu_kv_updates_forbidden = false,
-        .mode = LLAMA_KV_METADATA_NONE,
-        .num_layers = 0,
-        .max_tokens_per_layer = 0,
-        .validate_kv_bounds = true,
-        .enforce_gpu_only_kv = false,
+    /* config */ {
+        /* gpu_kv_metadata_tracking_enabled */ false,
+        /* cpu_kv_updates_forbidden */ false,
+        /* mode */ LLAMA_KV_METADATA_NONE,
+        /* num_layers */ 0,
+        /* max_tokens_per_layer */ 0,
+        /* validate_kv_bounds */ true,
+        /* enforce_gpu_only_kv */ false,
     },
-    .state_record = {
-        .current_mode = LLAMA_KV_METADATA_NONE,
-        .gpu_kv_state = LLAMA_GPU_KV_METADATA_UNINITIALIZED,
-        .num_layers = 0,
-        .total_tokens_in_kv = 0,
-        .metadata_updates_count = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_KV_METADATA_VIOLATION_NONE,
-        .metadata_locked = false,
+    /* state_record */ {
+        /* current_mode */ LLAMA_KV_METADATA_NONE,
+        /* gpu_kv_state */ LLAMA_GPU_KV_METADATA_UNINITIALIZED,
+        /* num_layers */ 0,
+        /* total_tokens_in_kv */ 0,
+        /* metadata_updates_count */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_KV_METADATA_VIOLATION_NONE,
+        /* metadata_locked */ false,
     },
-    .last_update = {0},
-    .total_metadata_updates = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_kv_metadata = false,
+    /* last_update */ {
+        /* tokens_before */ 0,
+        /* tokens_after */ 0,
+        /* layers_updated */ 0,
+        /* timestamp_ns */ 0,
+        /* update_on_gpu */ false,
+    },
+    /* total_metadata_updates */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_kv_metadata */ false,
 };
 
 /**

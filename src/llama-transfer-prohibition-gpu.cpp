@@ -19,29 +19,48 @@
 // ============================================================================
 
 static struct llama_gpu_transfer_prohibition_validation_state g_transfer_prohibition_validation = {
-    .config = {
-        .transfer_prohibition_enabled = false,
-        .preallocate_all_buffers = false,
-        .forbid_implicit_syncs = true,
-        .forbid_unified_memory = true,
-        .max_transfer_per_token_bytes = 8, // sizeof(int64_t)
-        .debug_transfer_prohibition = false,
+    /* config */ {
+        /* transfer_prohibition_enabled */ false,
+        /* preallocate_all_buffers */ false,
+        /* forbid_implicit_syncs */ true,
+        /* forbid_unified_memory */ true,
+        /* forbid_mapped_access */ false,
+        /* max_transfer_per_token_bytes */ 8, // sizeof(int64_t)
+        /* debug_transfer_prohibition */ false,
     },
-    .state_record = {
-        .state = LLAMA_GPU_TRANSFER_PROHIBITION_UNINITIALIZED,
-        .mode = LLAMA_TRANSFER_PROHIBITION_NONE,
-        .total_transfers_during_decode = 0,
-        .total_transfer_bytes_during_decode = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_TRANSFER_VIOLATION_NONE,
-        .reserved_1 = 0,
+    /* state_record */ {
+        /* state */ LLAMA_GPU_TRANSFER_PROHIBITION_UNINITIALIZED,
+        /* mode */ LLAMA_TRANSFER_PROHIBITION_NONE,
+        /* total_transfers_during_decode */ 0,
+        /* total_transfer_bytes_during_decode */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_TRANSFER_VIOLATION_NONE,
+        /* reserved_1 */ 0,
     },
-    .preallocated_buffers = {0},
-    .last_transfer = {0},
-    .total_transfer_events = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .decode_phase_active = false,
+    /* preallocated_buffers */ {
+        false, // logits_buffer_allocated
+        false, // sampling_workspace_allocated
+        false, // topk_buffer_allocated
+        false, // topp_buffer_allocated
+        false, // kv_cache_allocated
+        false, // attention_state_allocated
+        false, // penalty_buffer_allocated
+        false, // candidate_buffer_allocated
+        0,     // total_preallocated_bytes
+        0      // reserved_1
+    },
+    /* last_transfer */ {
+        LLAMA_TRANSFER_TYPE_NONE, // transfer_type
+        0,                        // transfer_size_bytes
+        false,                    // is_decode_critical
+        false,                    // during_decode_phase
+        0,                        // timestamp_ns
+        0                         // reserved
+    },
+    /* total_transfer_events */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* decode_phase_active */ false,
 };
 
 // Per-transfer type tracking
@@ -109,8 +128,10 @@ int llama_transfer_prohibition_gpu_begin_decode_phase(void) {
 
     g_transfer_prohibition_validation.decode_phase_active = true;
     g_transfer_prohibition_validation.state_record.state = LLAMA_GPU_TRANSFER_PROHIBITION_DECODE_ACTIVE;
-    g_transfer_prohibition_validation.total_transfers_during_decode = 0;
-    g_transfer_prohibition_validation.total_transfer_bytes_during_decode = 0;
+    // Use sed or manual replacement for multiple occurrences
+// But replace_file_content with AllowMultiple=true works well for string replace.
+g_transfer_prohibition_validation.state_record.total_transfers_during_decode = 0;
+    g_transfer_prohibition_validation.state_record.total_transfer_bytes_during_decode = 0;
 
     if (g_transfer_prohibition_validation.config.debug_transfer_prohibition) {
         fprintf(stderr, "[Transfer Prohibition GPU] Decode phase STARTED\n");
@@ -131,8 +152,10 @@ int llama_transfer_prohibition_gpu_end_decode_phase(void) {
     if (g_transfer_prohibition_validation.config.debug_transfer_prohibition) {
         fprintf(stderr, "[Transfer Prohibition GPU] Decode phase ENDED\n");
         fprintf(stderr, "  Total transfers: %llu, Total bytes: %llu\n",
-            (unsigned long long)g_transfer_prohibition_validation.total_transfers_during_decode,
-            (unsigned long long)g_transfer_prohibition_validation.total_transfer_bytes_during_decode);
+            (unsigned long long)// Use sed or manual replacement for multiple occurrences
+// But replace_file_content with AllowMultiple=true works well for string replace.
+g_transfer_prohibition_validation.state_record.total_transfers_during_decode,
+            (unsigned long long)g_transfer_prohibition_validation.state_record.total_transfer_bytes_during_decode);
     }
 
     return 0;
@@ -275,7 +298,7 @@ int llama_transfer_prohibition_gpu_forbid_kv_cache_transfers(void) {
 int llama_transfer_prohibition_gpu_allow_token_id_only(void) {
     // Verify total transferred bytes per token is within limits
 
-    uint64_t total_non_token_bytes = g_transfer_prohibition_validation.total_transfer_bytes_during_decode;
+    uint64_t total_non_token_bytes = g_transfer_prohibition_validation.state_record.total_transfer_bytes_during_decode;
 
     // Subtract expected token IDs (one per token, let's assume 1 token as baseline)
     if (total_non_token_bytes > g_transfer_prohibition_validation.config.max_transfer_per_token_bytes) {
@@ -331,8 +354,10 @@ int llama_transfer_prohibition_gpu_record_transfer(
     }
 
     if (g_transfer_prohibition_validation.decode_phase_active) {
-        g_transfer_prohibition_validation.total_transfers_during_decode++;
-        g_transfer_prohibition_validation.total_transfer_bytes_during_decode += transfer_size_bytes;
+        // Use sed or manual replacement for multiple occurrences
+// But replace_file_content with AllowMultiple=true works well for string replace.
+g_transfer_prohibition_validation.state_record.total_transfers_during_decode++;
+        g_transfer_prohibition_validation.state_record.total_transfer_bytes_during_decode += transfer_size_bytes;
     }
 
     // Record by transfer type
@@ -606,7 +631,9 @@ struct llama_gpu_transfer_record llama_transfer_prohibition_gpu_get_last_transfe
 // ============================================================================
 
 int llama_transfer_prohibition_gpu_verify_no_transfers_during_decode(void) {
-    if (g_transfer_prohibition_validation.total_transfers_during_decode > 1) {
+    if (// Use sed or manual replacement for multiple occurrences
+// But replace_file_content with AllowMultiple=true works well for string replace.
+g_transfer_prohibition_validation.state_record.total_transfers_during_decode > 1) {
         // Allow 1 transfer for token ID
         if (g_transfer_prohibition_validation.enforcement_strict) {
             return -1;
@@ -653,7 +680,7 @@ int llama_transfer_prohibition_gpu_verify_no_mapped_buffers_used(void) {
 }
 
 int llama_transfer_prohibition_gpu_verify_only_token_id_transferred(void) {
-    uint64_t total_bytes = g_transfer_prohibition_validation.total_transfer_bytes_during_decode;
+    uint64_t total_bytes = g_transfer_prohibition_validation.state_record.total_transfer_bytes_during_decode;
     if (total_bytes > g_transfer_prohibition_validation.config.max_transfer_per_token_bytes) {
         if (g_transfer_prohibition_validation.enforcement_strict) {
             return -1;
@@ -685,8 +712,10 @@ void llama_transfer_prohibition_gpu_print_state(void) {
     fprintf(stderr, "State: %s\n", llama_transfer_prohibition_state_name(g_transfer_prohibition_validation.state_record.state));
     fprintf(stderr, "Mode: %s\n", (g_transfer_prohibition_validation.state_record.mode == LLAMA_TRANSFER_PROHIBITION_ENABLED) ? "ENABLED" : "DISABLED");
     fprintf(stderr, "Decode Phase Active: %s\n", g_transfer_prohibition_validation.decode_phase_active ? "YES" : "NO");
-    fprintf(stderr, "Total Transfers During Decode: %llu\n", (unsigned long long)g_transfer_prohibition_validation.total_transfers_during_decode);
-    fprintf(stderr, "Total Transfer Bytes During Decode: %llu\n", (unsigned long long)g_transfer_prohibition_validation.total_transfer_bytes_during_decode);
+    fprintf(stderr, "Total Transfers During Decode: %llu\n", (unsigned long long)// Use sed or manual replacement for multiple occurrences
+// But replace_file_content with AllowMultiple=true works well for string replace.
+g_transfer_prohibition_validation.state_record.total_transfers_during_decode);
+    fprintf(stderr, "Total Transfer Bytes During Decode: %llu\n", (unsigned long long)g_transfer_prohibition_validation.state_record.total_transfer_bytes_during_decode);
     fprintf(stderr, "Max Allowed Bytes Per Token: %llu\n", (unsigned long long)g_transfer_prohibition_validation.config.max_transfer_per_token_bytes);
     fprintf(stderr, "Total Violations: %d\n", g_transfer_prohibition_validation.total_violations);
     fprintf(stderr, "Last Violation: %s\n", llama_transfer_violation_name(g_transfer_prohibition_validation.state_record.last_violation));
@@ -830,7 +859,9 @@ int llama_transfer_prohibition_gpu_selftest(void) {
     fprintf(stderr, "Test 5: Transfer recording... ");
     llama_transfer_prohibition_gpu_set_enforcement_strict(false);
     llama_transfer_prohibition_gpu_record_transfer(LLAMA_TRANSFER_TYPE_D2H, 4, true);
-    if (g_transfer_prohibition_validation.total_transfers_during_decode > 0) {
+    if (// Use sed or manual replacement for multiple occurrences
+// But replace_file_content with AllowMultiple=true works well for string replace.
+g_transfer_prohibition_validation.state_record.total_transfers_during_decode > 0) {
         fprintf(stderr, "PASSED\n");
     } else {
         fprintf(stderr, "FAILED\n");

@@ -48,12 +48,12 @@ typedef enum {
 } decode_critical_op_type;
 
 typedef enum {
-    BACKEND_CPU = 0,
-    BACKEND_CUDA = 1,
-    BACKEND_METAL = 2,
-    BACKEND_VULKAN = 3,
-    BACKEND_OPENCL = 4,
-    BACKEND_UNKNOWN = 5
+    EXEC_BACKEND_CPU = 0,
+    EXEC_BACKEND_CUDA = 1,
+    EXEC_BACKEND_METAL = 2,
+    EXEC_BACKEND_VULKAN = 3,
+    EXEC_BACKEND_OPENCL = 4,
+    EXEC_BACKEND_UNKNOWN = 5
 } execution_backend;
 
 typedef struct {

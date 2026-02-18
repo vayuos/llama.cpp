@@ -737,12 +737,12 @@ void ggml_cuda_mul_mat_vec_f(ggml_backend_cuda_context & ctx, const ggml_tensor 
     const int64_t ne02 = src0->ne[2];
     const int64_t ne03 = src0->ne[3];
 
-    const int64_t ne10 = src1->ne[0];
+    // const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];
     const int64_t ne12 = src1->ne[2];
     const int64_t ne13 = src1->ne[3];
 
-    const int64_t ne0 = dst->ne[0];
+    // const int64_t ne0 = dst->ne[0];
     const int64_t ne1 = dst->ne[1];
     const int64_t ne2 = dst->ne[2];
     const int64_t ne3 = dst->ne[3];
@@ -754,10 +754,10 @@ void ggml_cuda_mul_mat_vec_f(ggml_backend_cuda_context & ctx, const ggml_tensor 
     GGML_ASSERT(!ids || ne12 <= MMVF_MAX_BATCH_SIZE);
     GGML_ASSERT(ne13 == ne3);
 
-    GGML_ASSERT(nb00 == ts_src0);
-    GGML_ASSERT(nb10 == ts_src1);
+    GGML_ASSERT(nb00 == (int64_t)ts_src0);
+    GGML_ASSERT(nb10 == (int64_t)ts_src1);
     GGML_ASSERT(!ids || ids->nb[0] == ggml_type_size(ids->type));
-    GGML_ASSERT(nb0 == ts_dst);
+    GGML_ASSERT(nb0 == (int64_t)ts_dst);
 
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
     const enum ggml_prec prec_val = fast_fp16_available(cc) ? (enum ggml_prec)dst->op_params[0] : GGML_PREC_F32;

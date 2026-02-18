@@ -9,6 +9,7 @@
 
 #include "llama-kv-layout-freeze.h"
 #include <map>
+#include <string>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
@@ -21,26 +22,26 @@
  * Global validation state for KV layout freeze
  */
 static struct llama_kv_layout_freeze_validation_state g_kv_layout_freeze_validation_state = {
-    .state_record = {
-        .mode = LLAMA_KV_LAYOUT_FREEZE_NONE,
-        .phase = LLAMA_KV_LAYOUT_PHASE_UNINITIALIZED,
-        .layout = {0},
-        .layout_locked = false,
-        .cpu_modifications_forbidden = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_NONE,
-        .freeze_timestamp_ns = 0,
+    {
+        LLAMA_KV_LAYOUT_FREEZE_NONE,          // mode
+        LLAMA_KV_LAYOUT_PHASE_UNINITIALIZED,  // phase
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // layout
+        false,                               // layout_locked
+        false,                               // cpu_modifications_forbidden
+        0,                                   // total_violations
+        LLAMA_KV_LAYOUT_FREEZE_VIOLATION_NONE, // last_violation
+        0                                    // freeze_timestamp_ns
     },
-    .total_freeze_checks = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_kv_layout_freeze = false,
+    0,      // total_freeze_checks
+    0,      // total_violations
+    true,   // enforcement_strict
+    false   // debug_kv_layout_freeze
 };
 
 /**
  * Per-operation CPU KV layout mutation attempts
  */
-static std::map<std::string, int> g_cpu_kv_layout_attempts;
+static std::map<std::string, int> g_cpu_kv_layout_attempts_map;
 
 /**
  * KV layout mutation history during decode
@@ -59,7 +60,7 @@ int llama_kv_layout_freeze_init(void) {
     g_kv_layout_freeze_validation_state.state_record.phase = LLAMA_KV_LAYOUT_PHASE_UNINITIALIZED;
     g_kv_layout_freeze_validation_state.state_record.layout_locked = false;
 
-    g_cpu_kv_layout_attempts.clear();
+    g_cpu_kv_layout_attempts_map.clear();
     g_kv_layout_mutation_log.clear();
 
     if (g_kv_layout_freeze_validation_state.debug_kv_layout_freeze) {
@@ -201,7 +202,7 @@ int llama_kv_layout_freeze_queue_decode_kernel(void) {
  */
 int llama_kv_layout_freeze_keep_layout_immutable(void) {
     // Check: no KV layout mutations during decode
-    if (g_cpu_kv_layout_attempts.size() > 0) {
+    if (g_cpu_kv_layout_attempts_map.size() > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_RESIZE;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -222,7 +223,7 @@ int llama_kv_layout_freeze_keep_layout_immutable(void) {
  * ENFORCEMENT POINT 3: Forbid CPU resize
  */
 int llama_kv_layout_freeze_forbid_cpu_resize(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_resize_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_resize_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_RESIZE;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -239,7 +240,7 @@ int llama_kv_layout_freeze_forbid_cpu_resize(void) {
  * ENFORCEMENT POINT 4: Forbid CPU repartition
  */
 int llama_kv_layout_freeze_forbid_cpu_repartition(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_repartition_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_repartition_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_REPARTITION;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -256,7 +257,7 @@ int llama_kv_layout_freeze_forbid_cpu_repartition(void) {
  * ENFORCEMENT POINT 5: Forbid CPU realloc
  */
 int llama_kv_layout_freeze_forbid_cpu_realloc(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_realloc_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_realloc_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_REALLOC;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -273,7 +274,7 @@ int llama_kv_layout_freeze_forbid_cpu_realloc(void) {
  * ENFORCEMENT POINT 6: Forbid layout checks
  */
 int llama_kv_layout_freeze_forbid_layout_checks(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_bounds_check_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_bounds_check_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_LAYOUT_CHECK;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -290,7 +291,7 @@ int llama_kv_layout_freeze_forbid_layout_checks(void) {
  * ENFORCEMENT POINT 7: Forbid hybrid KV paths
  */
 int llama_kv_layout_freeze_forbid_hybrid_kv_path(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_hybrid_path_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_hybrid_path_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_HYBRID_PATH;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -307,7 +308,7 @@ int llama_kv_layout_freeze_forbid_hybrid_kv_path(void) {
  * ENFORCEMENT POINT 8: Forbid windowing changes
  */
 int llama_kv_layout_freeze_forbid_windowing_change(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_windowing_change_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_windowing_change_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_WINDOWING_CHANGE;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -324,7 +325,7 @@ int llama_kv_layout_freeze_forbid_windowing_change(void) {
  * ENFORCEMENT POINT 9: Verify no pointer changes
  */
 int llama_kv_layout_freeze_verify_no_pointer_change(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_pointer_change_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_pointer_change_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_POINTER_CHANGE;
         g_kv_layout_freeze_validation_state.total_violations++;
 
@@ -342,10 +343,10 @@ int llama_kv_layout_freeze_verify_no_pointer_change(void) {
  */
 int llama_kv_layout_freeze_verify_layout_immutable(void) {
     // Verify: no mutations occurred during decode
-    if (g_cpu_kv_layout_attempts.size() > 0) {
+    if (g_cpu_kv_layout_attempts_map.size() > 0) {
         if (g_kv_layout_freeze_validation_state.enforcement_strict) {
             fprintf(stderr, "[KV_LAYOUT_FREEZE] VIOLATION: %zu CPU KV layout mutations detected\n",
-                    g_cpu_kv_layout_attempts.size());
+                    g_cpu_kv_layout_attempts_map.size());
             return -1;
         }
     }
@@ -362,7 +363,7 @@ int llama_kv_layout_freeze_verify_layout_immutable(void) {
 // ============================================================================
 
 int llama_kv_layout_freeze_detect_cpu_resize(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_resize_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_resize_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_RESIZE;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -371,7 +372,7 @@ int llama_kv_layout_freeze_detect_cpu_resize(void) {
 }
 
 int llama_kv_layout_freeze_detect_cpu_repartition(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_repartition_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_repartition_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_REPARTITION;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -380,7 +381,7 @@ int llama_kv_layout_freeze_detect_cpu_repartition(void) {
 }
 
 int llama_kv_layout_freeze_detect_cpu_realloc(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_realloc_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_realloc_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_CPU_REALLOC;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -389,7 +390,7 @@ int llama_kv_layout_freeze_detect_cpu_realloc(void) {
 }
 
 int llama_kv_layout_freeze_detect_layout_check(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_bounds_check_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_bounds_check_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_LAYOUT_CHECK;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -398,7 +399,7 @@ int llama_kv_layout_freeze_detect_layout_check(void) {
 }
 
 int llama_kv_layout_freeze_detect_hybrid_path(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_hybrid_path_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_hybrid_path_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_HYBRID_PATH;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -407,7 +408,7 @@ int llama_kv_layout_freeze_detect_hybrid_path(void) {
 }
 
 int llama_kv_layout_freeze_detect_windowing_change(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_windowing_change_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_windowing_change_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_WINDOWING_CHANGE;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -416,7 +417,7 @@ int llama_kv_layout_freeze_detect_windowing_change(void) {
 }
 
 int llama_kv_layout_freeze_detect_pointer_change(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_pointer_change_cpu") > 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_pointer_change_cpu") > 0) {
         g_kv_layout_freeze_validation_state.state_record.last_violation = LLAMA_KV_LAYOUT_FREEZE_VIOLATION_POINTER_CHANGE;
         g_kv_layout_freeze_validation_state.total_violations++;
         return 1;
@@ -492,7 +493,7 @@ int llama_kv_layout_freeze_verify_layout_locked(void) {
 }
 
 int llama_kv_layout_freeze_verify_no_cpu_entry_point(void) {
-    if (g_cpu_kv_layout_attempts.size() == 0) {
+    if (g_cpu_kv_layout_attempts_map.size() == 0) {
         return 0;
     }
     return -1;
@@ -508,7 +509,7 @@ int llama_kv_layout_freeze_verify_layout_consistency(void) {
 }
 
 int llama_kv_layout_freeze_verify_no_hybrid_path(void) {
-    if (g_cpu_kv_layout_attempts.count("kv_hybrid_path_cpu") == 0) {
+    if (g_cpu_kv_layout_attempts_map.count("kv_hybrid_path_cpu") == 0) {
         return 0;
     }
     return -1;
@@ -567,9 +568,9 @@ void llama_kv_layout_freeze_print_violation_summary(void) {
     fprintf(stderr, "Total Violations: %d\n", g_kv_layout_freeze_validation_state.total_violations);
     fprintf(stderr, "Enforcement Mode: %s\n", g_kv_layout_freeze_validation_state.enforcement_strict ? "STRICT" : "PERMISSIVE");
 
-    if (g_cpu_kv_layout_attempts.size() > 0) {
+    if (g_cpu_kv_layout_attempts_map.size() > 0) {
         fprintf(stderr, "\nDetected CPU KV Layout Operations:\n");
-        for (auto& entry : g_cpu_kv_layout_attempts) {
+        for (auto& entry : g_cpu_kv_layout_attempts_map) {
             fprintf(stderr, "  %s: %d attempts\n", entry.first.c_str(), entry.second);
         }
     }

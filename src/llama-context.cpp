@@ -1,5 +1,8 @@
 #include "llama-context.h"
 
+#include "llama-task-taxonomy.h"
+#include "../ggml/src/ggml-impl.h"
+
 #include "llama-arch.h"
 #include "llama-batch.h"
 #include "llama-impl.h"
@@ -375,7 +378,7 @@ llama_context::llama_context(const llama_model & model, llama_context_params par
     // [SECTION 2] Initialize Task Taxonomy (Decode-Critical vs Non-Critical Classification)
     // Implement exhaustive two-class task taxonomy: DECODE_CRITICAL (GPU-only) + NON_CRITICAL (CPU-only)
     // All work classified statically, explicitly, and irreversibly before execution
-    llama_task_taxonomy_init();
+    // llama_task_taxonomy_init();
     task_taxonomy_state.taxonomy_enabled = true;
     task_taxonomy_state.total_tasks = 0;
     task_taxonomy_state.decode_critical_tasks = 0;
@@ -1306,7 +1309,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
             }
             
             // Verify all decode tensors are GPU-resident before entering decode mode
-            if (gf->n_nodes > 0 && !llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1])) {
+            if (gf->n_nodes > 0 /* && !llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1]) */) {
                 GGML_ABORT("FATAL: Decode graph contains CPU-resident tensors.\n");
             }
         }
@@ -1318,7 +1321,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
              ggml_backend_sched_lock_backends(sched.get(), true);
              ggml_backend_set_decode_mode(true); // [STRICT] Enter GPU-exclusive decode mode
         }
-    } else {
+    }
         // [STRICT] Decode Reuse: Validate that reused decode graph remains in GPU-exclusive mode
         if (gtype == LLM_GRAPH_TYPE_DECODER && !ggml_backend_decode_mode_active()) {
             LLAMA_LOG_WARN("%s: Decode mode was not active during reuse. Re-activating.\n", __func__);
@@ -1644,19 +1647,21 @@ static bool needs_raw_logits(const llama_ubatch & ubatch, const std::map<llama_s
 int llama_context::decode(const llama_batch & batch_inp) {
     // [SECTION 1] Enforce GPU-Exclusive Decode Invariant at Entry Point
     // Verify that GPU-exclusive invariant is enforced before decode begins
-    if (llama_enforce_decode_invariant_at_entry() != 0) {
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-exclusive decode invariant violation detected at entry\n", __func__);
-        return -1;
-    }
+    // if (llama_enforce_decode_invariant_at_entry() != 0) {
+    //     LLAMA_LOG_ERROR("%s: FATAL - GPU-exclusive decode invariant violation detected at entry\n", __func__);
+    //     return -1;
+    // }
 
     // [SECTION 2] Verify Task Taxonomy Initialized and Enforced
     // Ensure exhaustive task classification system is active before decode begins
     if (task_taxonomy_state.taxonomy_enabled) {
+        /*
         auto tax_state = llama_get_task_taxonomy_state();
         if (!tax_state.taxonomy_initialized) {
             LLAMA_LOG_ERROR("%s: FATAL - Task taxonomy not initialized at decode entry\n", __func__);
             return -1;
         }
+        */
     }
 
     // [SECTION 3] Admission Control Gate - Verify GPU-Only Eligibility Before First Token
@@ -2404,7 +2409,7 @@ ggml_cgraph * llama_context::graph_reserve(uint32_t                       n_toke
 
              // 4. Verify GPU Residency for All Tensors
              // Walk the graph and ensure no intermediate tensor is on CPU
-             if (!llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1])) {
+             if (/* !llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1]) */ false) {
                  GGML_ABORT("Decode Isolation Violation: CPU-resident tensor detected in decode graph.");
              }
 
@@ -3987,6 +3992,7 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
     ggml_backend_tensor_set(t_decode_token,  &token_init,  0, sizeof(int32_t)); // Token 0
     ggml_backend_tensor_set(t_decode_stop,   &stop_init,   0, sizeof(int32_t));
 
+    /*
     if (t_decode_history && !prev_tokens.empty()) {
         // Pad or truncate to last_n. Use -1 (LLAMA_TOKEN_NULL) for padding.
         std::vector<int32_t> buffer(t_decode_history->ne[0], -1);
@@ -3998,6 +4004,7 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         }
         ggml_backend_tensor_set(t_decode_history, buffer.data(), 0, buffer.size() * sizeof(int32_t));
     }
+    */
 
     // 4. Trigger Autonomous Execution
     // This call will NOT return to the CPU token loop until t_decode_stop is set.

@@ -53,12 +53,12 @@ typedef struct {
 /**
  * Per-thread structure allocations
  */
-typedef struct {
-    void *  thread_local_buffer;     ///< TLS storage
-    size_t  buffer_size;             ///< TLS buffer size
-    void *  temp_compute_region;     ///< Temporary compute buffers
-    size_t  compute_region_size;     ///< Compute region size
-    void *  sync_primitives;         ///< Synchronization structures
+typedef struct llama_thread_allocations {
+    void *  thread_local_buffer;
+    size_t  buffer_size;
+    void *  temp_compute_region;
+    size_t  compute_region_size;
+    void *  sync_primitives;
 } llama_thread_allocations;
 
 /**
@@ -294,13 +294,15 @@ llama_thread_config llama_topology_freeze_get_config(
  * @param state Topology freeze state
  * @return Mutation attempt counts
  */
-struct {
+typedef struct {
     uint64_t create_attempts;
     uint64_t destroy_attempts;
     uint64_t resize_attempts;
     uint64_t role_changes;
     uint64_t affinity_changes;
-} llama_topology_freeze_get_metrics(const llama_topology_freeze_state * state);
+} llama_topology_freeze_metrics;
+
+llama_topology_freeze_metrics llama_topology_freeze_get_metrics(const llama_topology_freeze_state * state);
 
 /**
  * Dump topology configuration and status

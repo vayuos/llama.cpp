@@ -21,31 +21,31 @@
 // ============================================================================
 
 static struct llama_decode_loop_elimination_validation_state g_decode_loop_elimination_state = {
-    .ownership_record = {
-        .current_owner = LLAMA_LOOP_OWNER_NONE,
-        .cpu_loop_eliminated = false,
-        .gpu_loop_active = false,
-        .cpu_control_violations = 0,
-        .last_violation = LLAMA_CPU_CTRL_NONE,
-        .gpu_loop_start_time_ns = 0,
-        .total_tokens_produced_by_gpu = 0,
+    {
+        LLAMA_LOOP_OWNER_NONE,
+        false,
+        false,
+        0,
+        LLAMA_CPU_CTRL_NONE,
+        0,
+        0
     },
-    .progression_record = {
-        .current_state = LLAMA_PROGRESSION_IDLE,
-        .current_token_index = 0,
-        .tokens_produced = 0,
-        .last_signal = LLAMA_SIGNAL_NONE,
-        .last_signal_time_ns = 0,
-        .gpu_autonomous = false,
-        .cpu_polling_detected = false,
-        .cpu_wait_violations = 0,
+    {
+        LLAMA_PROGRESSION_IDLE,
+        0,
+        0,
+        LLAMA_SIGNAL_NONE,
+        0,
+        false,
+        false,
+        0
     },
-    .total_control_violations = 0,
-    .total_polling_detections = 0,
-    .total_wait_detections = 0,
-    .enforcement_strict = true,
-    .debug_detect_cpu_loop_attempts = false,
-    .debug_detect_cpu_polling = false,
+    0,
+    0,
+    0,
+    true,
+    false,
+    false
 };
 
 // CPU loop iteration tracking: maps iteration_count -> detected

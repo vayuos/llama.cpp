@@ -12,6 +12,10 @@
 #include <algorithm>
 #include <ctime>
 
+#ifndef LLAMA_ABORT
+#define LLAMA_ABORT(msg) do { fprintf(stderr, "LLAMA_ABORT: %s\n", msg); abort(); } while(0)
+#endif
+
 /**
  * Initialize topology freeze state
  */
@@ -496,9 +500,21 @@ llama_thread_config llama_topology_freeze_get_config(
 }
 
 /**
- * Get metrics - inline implementation
+ * Get metrics
  */
-// Metrics returned directly from function call
+llama_topology_freeze_metrics llama_topology_freeze_get_metrics(const llama_topology_freeze_state * state) {
+    if (!state) {
+        return {0, 0, 0, 0, 0};
+    }
+
+    return {
+        state->thread_creation_attempts,
+        state->thread_destruction_attempts,
+        state->thread_resize_attempts,
+        state->role_change_attempts,
+        state->affinity_change_attempts
+    };
+}
 
 /**
  * Dump configuration

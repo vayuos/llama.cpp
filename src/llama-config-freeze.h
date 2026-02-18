@@ -22,6 +22,109 @@ extern "C" {
 #endif
 
 typedef enum {
+    UNINITIALIZED = 0,
+    CLI_PARSING = 1,
+    ENV_RESOLUTION = 2,
+    STARTUP_COMPLETE = 3,
+    CONTEXT_INITIALIZING = 4,
+    CONTEXT_INITIALIZED = 5,
+    DECODE_STARTING = 6,
+    DECODE_ACTIVE = 7,
+    FROZEN_LOCK_ENGAGED = 8
+} llama_config_freeze_stage;
+
+typedef enum {
+    SAMPLING_GREEDY = 0,
+    SAMPLING_TOP_K = 1,
+    SAMPLING_TOP_P = 2
+} llama_frozen_sampling_mode;
+
+typedef enum {
+    LLAMA_FROZEN_FEATURE_NONE = 0
+} llama_frozen_feature_flags;
+
+typedef struct {
+    uint64_t runtime_flag_reads_during_decode;
+    uint64_t config_lock_violations;
+    uint64_t reconfiguration_attempts;
+    bool all_flags_resolved;
+    bool zero_runtime_reads_confirmed;
+    uint64_t config_lock_attempts;
+} llama_frozen_config_metrics;
+
+typedef int (*llama_backend_compute_fn)(void * ctx, const void * params);
+typedef int (*llama_sampler_sample_fn)(float * logits, int32_t n_logits, int32_t * sampled_tokens, uint32_t n_samples, const void * params);
+typedef int (*llama_attention_dispatch_fn)(struct ggml_cgraph * graph, struct ggml_tensor * q, struct ggml_tensor * k, struct ggml_tensor * v, const void * params);
+
+typedef enum {
+    BACKEND_CPU = 0,
+    BACKEND_CUDA = 1
+} llama_frozen_backend_mode;
+
+typedef enum {
+    THREADING_SINGLE = 0,
+    THREADING_MULTI = 1
+} llama_frozen_threading_mode;
+
+typedef enum {
+    MEMORY_STATIC = 0,
+    MEMORY_DYNAMIC = 1
+} llama_frozen_memory_strategy;
+
+typedef struct {
+    llama_config_freeze_stage current_stage;
+    bool configuration_locked;
+    bool decode_active;
+    bool backend_validated;
+    bool logging_enabled;
+    bool deterministic_mode;
+    bool flash_attention_enabled;
+    bool graph_reuse_enabled;
+
+    llama_frozen_backend_mode backend_mode;
+
+    struct {
+        const char * backend_name;
+        llama_frozen_backend_mode selected_backend;
+        llama_backend_compute_fn compute_fn;
+    } backend_dispatch;
+
+    struct {
+        const char * mode_name;
+        llama_frozen_sampling_mode sampling_mode;
+        llama_sampler_sample_fn sample_fn;
+    } sampler_dispatch;
+
+    struct {
+        const char * attention_type;
+        bool flash_attention_enabled;
+        llama_attention_dispatch_fn attention_fn;
+    } attention_dispatch;
+
+    struct {
+        int top_k;
+        float top_p;
+        float temperature;
+    } sampling_params;
+
+    llama_frozen_threading_mode threading_mode;
+    int n_threads;
+    int n_threads_batch;
+    bool thread_affinity_pinned;
+
+    llama_frozen_memory_strategy memory_strategy;
+    struct {
+        uint64_t kv_cache_size;
+    } memory_config;
+
+    uint64_t lock_timestamp_us;
+    uint64_t freeze_timestamp_us;
+
+    llama_frozen_sampling_mode sampling_mode;
+    llama_frozen_config_metrics metrics;
+} llama_frozen_config;
+
+typedef enum {
     CONFIG_FREEZE_UNINITIALIZED = 0,
     CONFIG_FREEZE_STARTUP = 1,
     CONFIG_FREEZE_INITIALIZATION = 2,
@@ -159,7 +262,7 @@ bool llama_enable_config_freeze(bool enable);
 void llama_set_strict_config_enforcement(bool strict);
 
 void llama_enter_initialization_phase();
-void llama_enter_decode_phase();
+// void llama_enter_decode_phase();
 void llama_lock_configuration();
 
 bool llama_resolve_all_startup_flags();

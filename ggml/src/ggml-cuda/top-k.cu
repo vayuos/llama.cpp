@@ -132,6 +132,7 @@ void ggml_cuda_top_k_values_indices(ggml_backend_cuda_context & ctx,
 #else
     // Fallback: Argsort then gather
     // 1. Argsort indices
+    GGML_UNUSED(dst_values);
     ggml_cuda_pool_alloc<int> temp_dst_alloc(pool, n_probs);
     int * tmp_indices = temp_dst_alloc.get();
     

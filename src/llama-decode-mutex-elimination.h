@@ -51,6 +51,7 @@
 #include <vector>
 #include <chrono>
 #include <map>
+#include <thread>
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,7 +104,12 @@ typedef struct {
     uint64_t single_owner_accesses;
     uint64_t failed_lock_free_ops;
     double avg_lock_free_latency_ns;
+    double avg_jitter_us;
 } lock_free_statistics;
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
 
 /**
  * Mutex audit and elimination engine
@@ -200,6 +206,10 @@ public:
     // Verification
     bool validate_single_ownership() const;
 };
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Global engine instance

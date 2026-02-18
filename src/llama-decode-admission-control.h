@@ -318,4 +318,3 @@ void llama_print_decode_admission_statement(void);
  */
 int llama_decode_admission_selftest(void);
 
-#endif // LLAMA_DECODE_ADMISSION_CONTROL_H

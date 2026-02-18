@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <cinttypes>
 #include <map>
 
 // ============================================================================
@@ -18,28 +19,28 @@
 // ============================================================================
 
 static struct llama_graph_freeze_validation_state g_graph_freeze_state = {
-    .graph_record = {
-        .current_phase = LLAMA_GRAPH_PHASE_UNINITIALIZED,
-        .freeze_state = LLAMA_GRAPH_FREEZE_UNFROZEN,
-        .graph_id = 0,
-        .graph_pointer = 0,
-        .graph_frozen = false,
-        .graph_valid = false,
-        .nodes_count = 0,
-        .freeze_timestamp_ns = 0,
-        .mutation_attempt_count = 0,
-        .last_mutation_attempt = LLAMA_GRAPH_MUT_NONE,
-        .validation_failure = LLAMA_GRAPH_VALID_UNKNOWN,
+    /* graph_record */ {
+        /* current_phase */ LLAMA_GRAPH_PHASE_UNINITIALIZED,
+        /* freeze_state */ LLAMA_GRAPH_FREEZE_UNFROZEN,
+        /* graph_id */ 0,
+        /* graph_pointer */ 0,
+        /* graph_frozen */ false,
+        /* graph_valid */ false,
+        /* nodes_count */ 0,
+        /* freeze_timestamp_ns */ 0,
+        /* mutation_attempt_count */ 0,
+        /* last_mutation_attempt */ LLAMA_GRAPH_MUT_NONE,
+        /* validation_failure */ LLAMA_GRAPH_VALID_UNKNOWN
     },
-    .total_mutation_attempts = 0,
-    .total_validation_failures = 0,
-    .enforcement_strict = true,
-    .debug_assert_frozen_per_step = false,
+    /* total_mutation_attempts */ 0,
+    /* total_validation_failures */ 0,
+    /* enforcement_strict */ true,
+    /* debug_assert_frozen_per_step */ false
 };
 
 static bool g_graph_freeze_enforcement_strict = true;
 static int g_total_graph_mutations_blocked = 0;
-static int g_total_graph_validation_failures = 0;
+
 
 // Per-phase transition tracking
 static std::map<enum llama_graph_lifecycle_phase, int> g_phase_transition_count;

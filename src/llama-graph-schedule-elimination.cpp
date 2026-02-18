@@ -21,23 +21,23 @@
 // ============================================================================
 
 static struct llama_graph_schedule_elimination_validation_state g_schedule_elimination_state = {
-    .elimination_record = {
-        .current_graph_id = 0,
-        .current_mode = LLAMA_EXEC_MODE_INVALID,
-        .plan_state = LLAMA_PLAN_UNCOMPUTED,
-        .total_plans_computed = 0,
-        .total_scheduling_attempts = 0,
-        .total_scheduling_violations = 0,
-        .last_violation = LLAMA_SCHED_VIOL_NONE,
-        .last_callback_blocked = LLAMA_SCHED_CB_NONE,
-        .static_execution_active = false,
-        .dynamic_traversal_forbidden = false,
+    {
+        0,                        // current_graph_id
+        LLAMA_EXEC_MODE_INVALID,  // current_mode
+        LLAMA_PLAN_UNCOMPUTED,    // plan_state
+        0,                        // total_plans_computed
+        0,                        // total_scheduling_attempts
+        0,                        // total_scheduling_violations
+        LLAMA_SCHED_VIOL_NONE,    // last_violation
+        LLAMA_SCHED_CB_NONE,      // last_callback_blocked
+        false,                    // static_execution_active
+        false                     // dynamic_traversal_forbidden
     },
-    .total_mode_violations = 0,
-    .total_plan_mismatches = 0,
-    .total_callback_violations = 0,
-    .enforcement_strict = true,
-    .debug_assert_static_per_step = false,
+    0,      // total_mode_violations
+    0,      // total_plan_mismatches
+    0,      // total_callback_violations
+    true,   // enforcement_strict
+    false   // debug_assert_static_per_step
 };
 
 // Per-graph execution plans: maps graph_id -> execution_plan
@@ -450,6 +450,8 @@ struct llama_execution_plan_record llama_schedule_elimination_get_plan(uint64_t 
         .plan_state = LLAMA_PLAN_UNCOMPUTED,
         .exec_mode = LLAMA_EXEC_MODE_INVALID,
         .plan_immutable = false,
+        .plan_creation_time_ns = 0,
+        .num_execution_steps = 0,
     };
     return empty;
 }
@@ -751,6 +753,8 @@ static int test_plan_immutability(void) {
         .plan_state = LLAMA_PLAN_COMPUTED,
         .exec_mode = LLAMA_EXEC_MODE_STATIC,
         .plan_immutable = false,
+        .plan_creation_time_ns = 0,
+        .num_execution_steps = 0,
     };
 
     int ret = llama_schedule_elimination_store_execution_plan(1, &plan);
@@ -784,6 +788,8 @@ static int test_static_execution_mode(void) {
         .plan_state = LLAMA_PLAN_COMPUTED,
         .exec_mode = LLAMA_EXEC_MODE_STATIC,
         .plan_immutable = true,
+        .plan_creation_time_ns = 0,
+        .num_execution_steps = 0,
     };
 
     llama_schedule_elimination_store_execution_plan(1, &plan);
@@ -876,6 +882,8 @@ static int test_plan_verification(void) {
         .plan_state = LLAMA_PLAN_COMPUTED,
         .exec_mode = LLAMA_EXEC_MODE_STATIC,
         .plan_immutable = true,
+        .plan_creation_time_ns = 0,
+        .num_execution_steps = 0,
     };
 
     llama_schedule_elimination_store_execution_plan(1, &plan);
@@ -905,6 +913,8 @@ static int test_mode_assertion(void) {
         .plan_state = LLAMA_PLAN_COMPUTED,
         .exec_mode = LLAMA_EXEC_MODE_STATIC,
         .plan_immutable = true,
+        .plan_creation_time_ns = 0,
+        .num_execution_steps = 0,
     };
 
     llama_schedule_elimination_store_execution_plan(1, &plan);

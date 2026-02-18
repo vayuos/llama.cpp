@@ -472,4 +472,88 @@ static inline void llama_print_task_taxonomy_statement(void) {
     fprintf(stdout, "\n");
 }
 
-#endif // LLAMA_TASK_TAXONOMY_H
+
+
+// ============================================================================
+// STATE MANAGEMENT STRUCTS
+// ============================================================================
+
+/**
+ * Global task taxonomy state structure
+ */
+struct llama_task_taxonomy_state {
+    bool taxonomy_initialized;
+    int total_tasks_classified;
+    int decode_critical_count;
+    int non_critical_count;
+    bool enforce_irreversibility;
+};
+
+// ============================================================================
+// API FUNCTION DECLARATIONS
+// ============================================================================
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Initialization
+void llama_task_taxonomy_init(void);
+struct llama_task_taxonomy_state llama_get_task_taxonomy_state(void);
+
+// Task Classification Tracking
+int llama_task_record_classification(
+    const char* task_name,
+    enum llama_task_class task_class
+);
+
+// Classification Verification
+int llama_task_verify_classification(
+    const char* task_name,
+    enum llama_task_class assigned_class
+);
+
+// Irreversibility Enforcement
+int llama_task_strict_lock_classification(struct llama_task_metadata* meta);
+
+// Backend Binding Validation
+int llama_task_validate_backend_assignment(
+    const char* task_name,
+    enum llama_task_class task_class,
+    const char* backend_name
+);
+
+// Exhaustive Verification
+int llama_task_verify_exhaustive_classification(
+    const char* task_names[],
+    int num_tasks
+);
+
+// Queue Routing
+const char* llama_task_get_assigned_queue(enum llama_task_class task_class);
+int llama_task_validate_queue_routing(
+    const char* task_name,
+    enum llama_task_class task_class,
+    const char* assigned_queue
+);
+
+// Assertions (Non-static versions used by other modules)
+int llama_task_assert_decode_critical_gpu_only(
+    enum llama_task_class task_class,
+    const char* actual_backend
+);
+
+int llama_task_assert_non_critical_non_blocking(
+    enum llama_task_class task_class,
+    bool is_blocking_decode
+);
+
+// Statistics and Reporting
+void llama_task_print_statistics(void);
+
+// Self-Test
+int llama_task_taxonomy_selftest(void);
+
+#ifdef __cplusplus
+}
+#endif

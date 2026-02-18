@@ -17,18 +17,12 @@
  * Global task taxonomy instance
  * Shared across all contexts during a session
  */
-static struct {
-    bool taxonomy_initialized;
-    int total_tasks_classified;
-    int decode_critical_count;
-    int non_critical_count;
-    bool enforce_irreversibility;
-} g_task_taxonomy_state = {
-    .taxonomy_initialized = false,
-    .total_tasks_classified = 0,
-    .decode_critical_count = 0,
-    .non_critical_count = 0,
-    .enforce_irreversibility = true
+static struct llama_task_taxonomy_state g_task_taxonomy_state = {
+    false, // taxonomy_initialized
+    0,     // total_tasks_classified
+    0,     // decode_critical_count
+    0,     // non_critical_count
+    true   // enforce_irreversibility
 };
 
 /**
@@ -41,18 +35,13 @@ void llama_task_taxonomy_init(void) {
     g_task_taxonomy_state.non_critical_count = 0;
     g_task_taxonomy_state.enforce_irreversibility = true;
 
-    fprintf(stdout, "[TASK TAXONOMY] Initialized (two-class: DECODE_CRITICAL + NON_CRITICAL)\\n");
+    fprintf(stdout, "[TASK TAXONOMY] Initialized (two-class: DECODE_CRITICAL + NON_CRITICAL)\n");
 }
 
 /**
  * Get the global task taxonomy state
  */
-struct {
-    bool taxonomy_initialized;
-    int total_tasks_classified;
-    int decode_critical_count;
-    int non_critical_count;
-} llama_get_task_taxonomy_state(void) {
+struct llama_task_taxonomy_state llama_get_task_taxonomy_state(void) {
     return g_task_taxonomy_state;
 }
 
@@ -334,12 +323,7 @@ int llama_task_assert_non_critical_non_blocking(
  * Print task taxonomy statistics
  */
 void llama_task_print_statistics(void) {
-    struct {
-        bool taxonomy_initialized;
-        int total_tasks_classified;
-        int decode_critical_count;
-        int non_critical_count;
-    } state = llama_get_task_taxonomy_state();
+    struct llama_task_taxonomy_state state = llama_get_task_taxonomy_state();
 
     fprintf(stdout, "\\n");
     fprintf(stdout, "================================================================================\\n");

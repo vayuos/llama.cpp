@@ -17,19 +17,19 @@
 // ============================================================================
 
 static struct llama_backend_immutability_state g_backend_immutability = {
-    .phase = LLAMA_BACKEND_PHASE_UNINITIALIZED,
-    .decode_backend = LLAMA_BACKEND_UNKNOWN,
-    .resolution_count = 0,
-    .resolutions = NULL,
-    .max_resolutions = 1024,
-    .backend_invalid = false,
-    .invalidation_reason = NULL,
-    .invalidation_time_us = 0,
-    .immutability_locked = false,
-    .freeze_time_us = 0,
-    .violation_count = 0,
-    .last_violation_location = LLAMA_BACKEND_VIOLATION_UNKNOWN,
-    .last_violation_message = NULL,
+    LLAMA_BACKEND_PHASE_UNINITIALIZED,
+    LLAMA_BACKEND_UNKNOWN,
+    0,
+    NULL,
+    1024,
+    false,
+    NULL,
+    0,
+    false,
+    0,
+    0,
+    LLAMA_BACKEND_VIOLATION_UNKNOWN,
+    NULL
 };
 
 static bool g_enforce_strict = true;
