@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "ggml-opt.h"
+#include "../ggml/include/ggml-opt.h"
 #include "llama-cpp.h"
 
 #include <set>
