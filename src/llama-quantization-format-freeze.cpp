@@ -61,7 +61,12 @@ bool quantization_format_freeze_engine::resolve_quantization_format_at_load(
     return true;
 }
 
-bool quantization_format_freeze_engine::validate_format_backend_compatibility(quantization_format_type format) {
+
+bool quantization_format_freeze_engine::validate_format_backend_compatibility(quantization_format_type format) const {
+    return const_cast<quantization_format_freeze_engine*>(this)->validate_format_backend_compatibility_impl(format);
+}
+
+bool quantization_format_freeze_engine::validate_format_backend_compatibility_impl(quantization_format_type format) {
     // Verify format is compatible with selected backend
     switch (format) {
         case QUANT_FORMAT_Q4_0:
@@ -116,7 +121,7 @@ bool quantization_format_freeze_engine::attempt_dequantization() {
     return true;
 }
 
-bool quantization_format_freeze_engine::attempt_format_drift(const char * layer_name) {
+bool quantization_format_freeze_engine::attempt_format_drift(const char * /* layer_name */) {
     if (format_locked.load() || immutable_quant_config.format_drift_prevented) {
         return false; // Format drift blocked
     }
@@ -382,7 +387,7 @@ void llama_print_quantization_format_snapshot() {
     std::cout << "\n=== QUANTIZATION FORMAT SNAPSHOT ===" << std::endl;
     const quantization_format_config & cfg = g_quantization_format_freeze_engine->get_config();
 
-    std::string format_name = [](quantization_format_type fmt) {
+    auto format_name = [](quantization_format_type fmt) -> const char* {
         switch (fmt) {
             case QUANT_FORMAT_Q4_0: return "Q4_0";
             case QUANT_FORMAT_Q4_1: return "Q4_1";

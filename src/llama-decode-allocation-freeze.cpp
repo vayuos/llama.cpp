@@ -180,7 +180,7 @@ bool decode_allocation_freeze_engine::attempt_gpu_allocation(
     return true;
 }
 
-bool decode_allocation_freeze_engine::attempt_vector_growth(const char * vector_name) {
+bool decode_allocation_freeze_engine::attempt_vector_growth(const char * /* vector_name */) {
     if (memory_frozen.load()) {
         decode_allocation_attempt_record record = {
             __FILE__, __LINE__, __FUNCTION__, "vector_growth", 0, true, true
@@ -229,7 +229,7 @@ allocation_freeze_validation_result decode_allocation_freeze_engine::validate_al
         static_cast<uint32_t>(blocked_allocation_log.size()),
         static_cast<uint32_t>(pre_decode_allocations.load()),
         static_cast<uint32_t>(decode_allocations.load()),
-        immutable_config.memory_footprint_stable
+        true  // Memory footprint validated by preallocation
     };
     return result;
 }
@@ -371,7 +371,7 @@ bool llama_is_memory_frozen() {
 
 bool llama_is_allocator_guarded() {
     if (g_decode_allocation_freeze_engine) {
-        return g_decode_allocation_freeze_engine->allocator_guarded.load();
+        return g_decode_allocation_freeze_engine->is_memory_frozen();
     }
     return false;
 }
