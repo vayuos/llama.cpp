@@ -173,6 +173,10 @@ void llama_print_buffer_allocation_plan();
 void llama_print_allocation_audit_log();
 void llama_print_allocation_freeze_validation();
 
+// Self-test module initialization (internal use)
+bool llama_init_decode_allocation_freeze_module(void);
+void llama_cleanup_decode_allocation_freeze_module(void);
+
 #define GUARD_CPU_ALLOCATION(alloc_type, size) \
     do { \
         if (g_decode_allocation_freeze_engine && !llama_attempt_cpu_allocation(__FILE__, __LINE__, __FUNCTION__, alloc_type, size)) { \
