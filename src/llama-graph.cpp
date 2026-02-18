@@ -2605,7 +2605,7 @@ void llm_graph_context::build_sampling() const {
             /*.probs       =*/nullptr,
             /*.sampled     =*/nullptr,
             /*.candidates  =*/nullptr,
-            /*.last_tokens =*/res->t_decode_history,
+            /*.last_tokens =*/nullptr,
         };
 
         assert(sampler->iface->backend_apply);
@@ -2789,38 +2789,8 @@ void llm_graph_context::build_autonomous_advancement() const {
         ggml_build_forward_expand(gf, update_stop);
 
         // 6. Update History (GPU-Resident)
-        struct ggml_tensor * history = res->t_decode_history;
-        if (history != nullptr) {
-            int history_size = history->ne[0];
-            if (history_size > 1) {
-                // Shift history left: history[0..N-2] = history[1..N-1]
-                struct ggml_tensor * src_view = ggml_view_1d(ctx0, history, history_size - 1, sizeof(int32_t));
-                struct ggml_tensor * dst_view = ggml_view_1d(ctx0, history, history_size - 1, 0);
-                
-                struct ggml_tensor * shift = ggml_cpy(ctx0, src_view, dst_view);
-                ggml_build_forward_expand(gf, shift);
-                
-                // CRITICAL: Force dependency to ensure shift completes before append writes to end
-                // We use control dependency via data dependency on dummy values
-                struct ggml_tensor * shift_0 = ggml_view_1d(ctx0, shift, 1, 0);
-                struct ggml_tensor * shift_f = ggml_cast(ctx0, shift_0, GGML_TYPE_F32);
-                struct ggml_tensor * zero_f  = ggml_scale(ctx0, shift_f, 0.0f);
-                
-                struct ggml_tensor * token_f = ggml_cast(ctx0, update_token, GGML_TYPE_F32);
-                struct ggml_tensor * dep_f   = ggml_add(ctx0, token_f, zero_f);
-                struct ggml_tensor * token_dep = ggml_cast(ctx0, dep_f, GGML_TYPE_I32);
-                
-                // Append new token at end
-                struct ggml_tensor * dst_end = ggml_view_1d(ctx0, history, 1, (history_size - 1) * sizeof(int32_t));
-                struct ggml_tensor * append = ggml_cpy(ctx0, token_dep, dst_end);
-                ggml_build_forward_expand(gf, append);
-            } else {
-                // Size 1: just overwrite
-                struct ggml_tensor * dst_end = ggml_view_1d(ctx0, history, 1, 0);
-                struct ggml_tensor * append = ggml_cpy(ctx0, update_token, dst_end);
-                ggml_build_forward_expand(gf, append);
-            }
-        }
+        // NOTE: t_decode_history is not yet implemented as a persistent tensor
+        // This will be implemented in a future section for penalty history tracking
     }
 }
 
