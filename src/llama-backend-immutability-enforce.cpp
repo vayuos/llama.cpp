@@ -414,7 +414,7 @@ int llama_enforce_backend_immutability_per_token(
         g_backend_immutability.violation_count++;
         g_total_violation_count++;
         llama_record_backend_immutability_violation(
-            LLAMA_BACKEND_VIOLATION_MISMATCH,
+            LLAMA_BACKEND_VIOLATION_PER_OP_SWITCH,
             operation_name,
             "Operation backend does not match expected backend"
         );
