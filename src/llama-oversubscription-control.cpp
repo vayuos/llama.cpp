@@ -539,7 +539,7 @@ bool llama_oversubscription_validate_per_token_scheduling(llama_oversubscription
  * Prevent dynamic thread creation mid-decode
  */
 bool llama_oversubscription_check_thread_creation_allowed(
-    const llama_oversubscription_control * control,
+    llama_oversubscription_control * control,
     uint32_t new_thread_id) {
 
     if (control == NULL) {
