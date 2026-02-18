@@ -42,7 +42,7 @@ bool host_access_prevention_engine::initialize() {
     return true;
 }
 
-bool host_access_prevention_engine::enable_strict_mode(bool enable) {
+bool host_access_prevention_engine::enable_strict_mode(bool /* enable */) {
     // Strict mode enforces additional validation
     return true;
 }
@@ -61,7 +61,7 @@ bool host_access_prevention_engine::mark_kv_cache_gpu_exclusive() {
         immutable_config.kv_cache_gpu_exclusive = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = { 0, 0, 0, false,
+        buffer_ownership_record record = {
             "kv_cache", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -75,7 +75,7 @@ bool host_access_prevention_engine::mark_activations_gpu_exclusive() {
         immutable_config.activations_gpu_exclusive = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = { 0, 0, 0, false,
+        buffer_ownership_record record = {
             "activations", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -89,7 +89,7 @@ bool host_access_prevention_engine::mark_logits_gpu_only() {
         immutable_config.logits_gpu_only = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = { 0, 0, 0, false,
+        buffer_ownership_record record = {
             "logits", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -103,7 +103,7 @@ bool host_access_prevention_engine::mark_sampling_gpu_only() {
         immutable_config.sampling_gpu_only = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = { 0, 0, 0, false,
+        buffer_ownership_record record = {
             "sampling", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -117,7 +117,7 @@ bool host_access_prevention_engine::mark_quantized_weights_gpu_locked() {
         immutable_config.quantized_weights_gpu_locked = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = { 0, 0, 0, false,
+        buffer_ownership_record record = {
             "quantized_weights", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -131,7 +131,7 @@ bool host_access_prevention_engine::mark_cuda_workspace_gpu_only() {
         immutable_config.cuda_workspace_gpu_only = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = { 0, 0, 0, false,
+        buffer_ownership_record record = {
             "cuda_workspace", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -181,7 +181,7 @@ bool host_access_prevention_engine::attempt_host_sync() {
     return true;
 }
 
-bool host_access_prevention_engine::attempt_pcie_transfer(const char * buffer_name, size_t size) {
+bool host_access_prevention_engine::attempt_pcie_transfer(const char * /* buffer_name */, size_t /* size */) {
     if (decode_in_progress.load()) {
         immutable_config.pcie_transfer_blocked = true;
         return false; // PCIe transfer blocked during decode
@@ -193,7 +193,7 @@ bool host_access_prevention_engine::register_buffer(
     const char * name, buffer_classification classification,
     bool gpu_resident, bool host_accessible, bool decode_critical) {
 
-    buffer_ownership_record record = { 0, 0, 0, false,
+    buffer_ownership_record record = {
         name, classification, gpu_resident, host_accessible, decode_critical, false
     };
     buffer_classifications.push_back(record);
@@ -257,11 +257,11 @@ void host_access_prevention_engine::record_host_access_violation(
     host_access_attempts.fetch_add(1);
 }
 
-void host_access_prevention_engine::record_sync_prevention(const char * reason) {
+void host_access_prevention_engine::record_sync_prevention(const char * /* reason */) {
     sync_prevents.fetch_add(1);
 }
 
-void host_access_prevention_engine::record_pcie_prevention(const char * buffer_name, size_t size) {
+void host_access_prevention_engine::record_pcie_prevention(const char * /* buffer_name */, size_t /* size */) {
     // Record prevention of PCIe transfer
 }
 

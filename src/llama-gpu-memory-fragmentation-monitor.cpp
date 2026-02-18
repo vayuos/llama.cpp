@@ -41,7 +41,7 @@ bool gpu_memory_fragmentation_monitor::initialize() {
     return true;
 }
 
-bool gpu_memory_fragmentation_monitor::enable_strict_mode(bool enable) {
+bool gpu_memory_fragmentation_monitor::enable_strict_mode(bool /* enable */) {
     // Strict mode enforces additional stability checks
     return true;
 }
@@ -238,7 +238,7 @@ bool gpu_memory_fragmentation_monitor::detect_memory_drift() {
     return validate_memory_stability();
 }
 
-void gpu_memory_fragmentation_monitor::record_allocation_event(const char * buffer_name) {
+void gpu_memory_fragmentation_monitor::record_allocation_event(const char * /* buffer_name */) {
     allocation_events.fetch_add(1);
 }
 

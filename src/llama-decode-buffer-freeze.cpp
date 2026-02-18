@@ -43,14 +43,14 @@ bool decode_buffer_freeze_engine::initialize() {
     return true;
 }
 
-bool decode_buffer_freeze_engine::enable_strict_mode(bool enable) {
+bool decode_buffer_freeze_engine::enable_strict_mode(bool /* enable */) {
     // Strict mode enforces additional validation during buffer freeze
     return true;
 }
 
 bool decode_buffer_freeze_engine::plan_buffer_allocation(
-    size_t n_ctx, size_t n_layer, size_t n_embd,
-    size_t max_batch, size_t max_seq_len) {
+    size_t /* n_ctx */, size_t n_layer, size_t n_embd,
+    size_t /* max_batch */, size_t max_seq_len) {
 
     if (current_phase.load() != BUFFER_FREEZE_PLANNING) {
         return false; // Wrong phase

@@ -127,7 +127,7 @@ bool decode_cpu_execution_detector::register_op_binding(
 }
 
 bool decode_cpu_execution_detector::set_op_expected_backend(
-    const char * op_name, execution_backend backend) {
+    const char * /* op_name */, execution_backend backend) {
 
     auto it = op_registry.find(op_name);
     if (it == op_registry.end()) {
@@ -265,7 +265,7 @@ bool decode_cpu_execution_detector::attempt_cpu_tensor_access(
 }
 
 void decode_cpu_execution_detector::record_op_execution(
-    const char * op_name, execution_backend backend) {
+    const char * /* op_name */, execution_backend backend) {
 
     monitored_ops.fetch_add(1);
 
@@ -288,7 +288,7 @@ void decode_cpu_execution_detector::record_violation(
 }
 
 void decode_cpu_execution_detector::record_backend_mismatch(
-    const char * op_name, execution_backend expected, execution_backend actual) {
+    const char * /* op_name */, execution_backend expected, execution_backend actual) {
 
     if (expected != actual) {
         violations_blocked.fetch_add(1);
