@@ -150,9 +150,12 @@ template<typename T>
 class decode_streaming_queue {
 private:
     std::vector<T> buffer;
-    std::atomic<size_t> read_pos;
-    std::atomic<size_t> write_pos;
+    std::atomic<uint64_t> head;
+    std::atomic<uint64_t> tail;
+    uint64_t mask;
     size_t capacity;
+
+    size_t depth() const;
 
 public:
     decode_streaming_queue(size_t capacity);
@@ -163,6 +166,7 @@ public:
     bool is_full() const;
     bool is_empty() const;
     size_t size() const;
+    size_t capacity_const() const;
     void clear();
 };
 
@@ -171,8 +175,11 @@ public:
  */
 class streaming_manager {
 private:
-    decode_streaming_queue<decode_token_event> token_queue;
+    decode_streaming_queue<decode_token_event> queue;
     std::atomic<bool> streaming_active;
+    std::atomic<uint64_t> tokens_produced;
+    std::atomic<uint64_t> tokens_consumed;
+    std::atomic<uint64_t> backpressure_events;
 
 public:
     streaming_manager(size_t queue_capacity);
@@ -181,6 +188,9 @@ public:
 
     bool decode_push_token(const decode_token_event & event);
     bool server_consume_token(decode_token_event & event);
+
+    streaming_metrics get_metrics() const;
+    static streaming_manager & instance();
 
     void clear();
 };
@@ -200,6 +210,9 @@ public:
 
     bool has_decode_server_contention() const;
     std::vector<std::string> get_contended_locks() const;
+    uint64_t get_contention_count();
+
+    static cross_domain_lock_detector & instance();
 };
 
 /**
@@ -210,7 +223,10 @@ private:
     int64_t decode_latency_threshold_us;
     int32_t max_queue_depth;
     std::atomic<int32_t> current_queue_depth;
+    std::atomic<int32_t> pending_queue_depth;
     std::atomic<int64_t> recent_decode_latency_us;
+    std::atomic<int64_t> last_decode_latency_us;
+    std::atomic<uint64_t> admissions_rejected;
 
 public:
     admission_control();
@@ -223,6 +239,9 @@ public:
 
     int32_t get_queue_depth() const;
     int64_t get_avg_decode_latency() const;
+
+    admission_metrics get_metrics() const;
+    static admission_control & instance();
 };
 
 /**
@@ -292,6 +311,8 @@ public:
     bool platform_set_affinity(std::thread::id tid, const decode_core_set & cores);
     bool platform_get_affinity(std::thread::id tid, decode_core_set & cores) const;
     bool platform_set_priority(std::thread::id tid, int32_t priority);
+
+    static decode_isolation_engine & instance();
 
 private:
     bool validate_non_overlapping_cores() const;
