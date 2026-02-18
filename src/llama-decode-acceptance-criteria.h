@@ -254,8 +254,8 @@ bool llama_record_cpu_execution();
 bool llama_record_cpu_dependency();
 bool llama_record_hybrid_mode();
 bool llama_record_fallback_event();
-bool llama_record_pcie_transfer(bool is_h2d, uint64_t size);
-bool llama_record_allocation();
+// Note: llama_record_pcie_transfer and llama_record_allocation are declared elsewhere
+// See: llama-pcie-traffic-watchdog.h and llama-gpu-allocation-alignment.h
 bool llama_record_backend_mutation();
 bool llama_record_determinism_failure();
 bool llama_record_throughput_improvement(double improvement);
@@ -313,7 +313,7 @@ void llama_export_acceptance_json(const char * filename);
 #define CHECK_PCIE_TRANSFER(is_h2d, size) \
     do { \
         if (g_decode_acceptance_validator) { \
-            llama_record_pcie_transfer(is_h2d, size); \
+            llama_acceptance_record_pcie_transfer(is_h2d, size); \
         } \
     } while(0)
 

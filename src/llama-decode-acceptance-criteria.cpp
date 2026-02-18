@@ -690,14 +690,14 @@ bool llama_record_fallback_event() {
     return !g_decode_acceptance_validator->record_silent_fallback_event();
 }
 
-bool llama_record_pcie_transfer(bool is_h2d, uint64_t size) {
+bool llama_acceptance_record_pcie_transfer(bool is_h2d, uint64_t size) {
     if (!g_decode_acceptance_validator) {
         return true;
     }
     return !g_decode_acceptance_validator->record_pcie_transfer(is_h2d, size);
 }
 
-bool llama_record_allocation() {
+bool llama_acceptance_record_allocation() {
     if (!g_decode_acceptance_validator) {
         return true;
     }
