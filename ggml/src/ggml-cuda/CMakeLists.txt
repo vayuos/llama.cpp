@@ -57,9 +57,6 @@ if (CUDAToolkit_FOUND)
 
     enable_language(CUDA)
 
-    # CRITICAL: Compile CUDA directly into object files (no deferred device linking)
-    set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
-
     # TODO: Remove once CCCL 3.2 has been released and bundled with CUDA Toolkit
     if (GGML_CUDA_CUB_3DOT2)
         include(FetchContent)
