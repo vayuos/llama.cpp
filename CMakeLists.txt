@@ -59,10 +59,15 @@ if (GGML_CUDA)
     message(STATUS "CUDA Toolkit found at: ${CUDAToolkit_INSTALL_PREFIX}")
     message(STATUS "CUDA nvcc compiler: ${CMAKE_CUDA_COMPILER}")
 
-    # Force CUDA to be compiled with maximum compatibility
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -fPIC")
-    set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3")
-    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+    # CRITICAL: Compile CUDA directly into each .o file (NO deferred device linking)
+    # This ensures kernels are available immediately when linking tools
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
+
+    # Compile for the target architecture directly
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -fPIC -O3 --use_fast_math")
+
+    # Ensure device code is resolved at compile time, not link time
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_89,code=sm_89")
 endif()
 
 # Add path to modules
