@@ -180,6 +180,10 @@ void llama_print_mmq_enforcement_validation();
 void llama_print_mmq_configuration_snapshot();
 void llama_dump_mmq_statistics();
 
+// Self-test module initialization (internal use)
+bool llama_init_mmq_enforcement_module(void);
+void llama_cleanup_mmq_enforcement_module(void);
+
 #define MMQ_DISPATCH_GUARD(backend, kernel, decode_ctx) \
     do { \
         if (g_mmq_enforcement_engine && g_mmq_enforcement_engine->is_mmq_enforcement_locked()) { \

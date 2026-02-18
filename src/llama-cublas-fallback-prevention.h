@@ -168,6 +168,10 @@ void llama_print_fallback_prevention_validation();
 void llama_print_backend_lock_status();
 void llama_dump_fallback_statistics();
 
+// Self-test module initialization (internal use)
+bool llama_init_fallback_prevention_module(void);
+void llama_cleanup_fallback_prevention_module(void);
+
 #define DECODE_BACKEND_LOCK() \
     do { \
         if (g_fallback_prevention_engine && !g_fallback_prevention_engine->is_backend_locked()) { \
