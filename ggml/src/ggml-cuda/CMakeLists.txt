@@ -26,14 +26,14 @@ if (CUDAToolkit_FOUND)
         if (GGML_NATIVE AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.6" AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
             set(CMAKE_CUDA_ARCHITECTURES "native")
         else()
+            set(CMAKE_CUDA_ARCHITECTURES "75-virtual;80-virtual;86-real")
+
             if (CUDAToolkit_VERSION VERSION_LESS "13")
-                list(APPEND CMAKE_CUDA_ARCHITECTURES 50-virtual 61-virtual 70-virtual)
+                set(CMAKE_CUDA_ARCHITECTURES "50-virtual;61-virtual;70-virtual;${CMAKE_CUDA_ARCHITECTURES}")
             endif ()
 
-            list(APPEND CMAKE_CUDA_ARCHITECTURES 75-virtual 80-virtual 86-real)
-
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
-                list(APPEND CMAKE_CUDA_ARCHITECTURES 89-real)
+                set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES};89-real")
             endif()
 
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.8")
@@ -47,10 +47,10 @@ if (CUDAToolkit_FOUND)
                 #     check Modules/Internal/CMakeCUDAArchitecturesValidate.cmake in the CMake git repository instead.
                 # However, the architectures 120a-real and 121a-real should work with basically any CMake version and
                 #     until the release of e.g. Rubin there is no benefit to shipping virtual architectures for Blackwell.
-                list(APPEND CMAKE_CUDA_ARCHITECTURES 120a-real)
+                set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES};120a-real")
             endif()
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.9")
-                list(APPEND CMAKE_CUDA_ARCHITECTURES 121a-real)
+                set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES};121a-real")
             endif()
         endif()
     endif()
