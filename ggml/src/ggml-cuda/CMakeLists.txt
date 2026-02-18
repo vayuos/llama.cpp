@@ -26,6 +26,9 @@ if (CUDAToolkit_FOUND)
         if (GGML_NATIVE AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.6" AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
             set(CMAKE_CUDA_ARCHITECTURES "native")
         else()
+            # Initialize the list
+            set(CMAKE_CUDA_ARCHITECTURES "")
+
             if (CUDAToolkit_VERSION VERSION_LESS "13")
                 list(APPEND CMAKE_CUDA_ARCHITECTURES 50-virtual 61-virtual 70-virtual)
             endif ()
