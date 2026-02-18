@@ -41,7 +41,7 @@ bool gpu_memory_fragmentation_monitor::initialize() {
     return true;
 }
 
-bool gpu_memory_fragmentation_monitor::enable_strict_mode(bool /* enable */) {
+bool gpu_memory_fragmentation_monitor::enable_strict_mode(bool enable) {
     // Strict mode enforces additional stability checks
     return true;
 }
@@ -86,7 +86,7 @@ bool gpu_memory_fragmentation_monitor::establish_baseline() {
     baseline_state.initial_used = baseline_state.initial_total - baseline_state.initial_free;
     baseline_state.initial_largest_block = baseline_state.initial_free;
     baseline_state.baseline_timestamp_ns =
-        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
     current_phase.store(FRAGMENTATION_MONITOR_MONITORING);
     memory_stable.store(true);
@@ -118,7 +118,7 @@ bool gpu_memory_fragmentation_monitor::record_memory_snapshot() {
     // cudaMemGetInfo(&free, &total);
 
     memory_snapshot snapshot;
-    snapshot.timestamp_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    snapshot.timestamp_ns = static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     snapshot.total_memory = baseline_state.initial_total;
     snapshot.free_memory = baseline_state.initial_free;
     snapshot.used_memory = baseline_state.initial_used;
@@ -196,7 +196,7 @@ bool gpu_memory_fragmentation_monitor::register_buffer_pointer(
 
     gpu_buffer_pointer_record record = {
         name, ptr, size, persistent, topology_locked.load(),
-        std::chrono::high_resolution_clock::now().time_since_epoch().count()
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count())
     };
     buffer_pointers.push_back(record);
     pointer_registry[name] = record;
@@ -219,7 +219,7 @@ bool gpu_memory_fragmentation_monitor::verify_pointer_unchanged(
 }
 
 bool gpu_memory_fragmentation_monitor::attempt_new_allocation(
-    const char * buffer_name, size_t /* size */) {
+    const char * buffer_name, size_t size) {
 
     if (topology_locked.load() && monitoring_active.load()) {
         allocation_events.fetch_add(1);
@@ -238,7 +238,7 @@ bool gpu_memory_fragmentation_monitor::detect_memory_drift() {
     return validate_memory_stability();
 }
 
-void gpu_memory_fragmentation_monitor::record_allocation_event(const char * /* buffer_name */) {
+void gpu_memory_fragmentation_monitor::record_allocation_event(const char * buffer_name) {
     allocation_events.fetch_add(1);
 }
 
@@ -343,7 +343,7 @@ bool llama_init_gpu_memory_fragmentation_monitor() {
     return g_gpu_memory_fragmentation_monitor != nullptr;
 }
 
-bool llama_enable_fragmentation_strict_mode(bool /* enable */) {
+bool llama_enable_fragmentation_strict_mode(bool enable) {
     if (g_gpu_memory_fragmentation_monitor) {
         return g_gpu_memory_fragmentation_monitor->enable_strict_mode(enable);
     }
@@ -427,7 +427,7 @@ bool llama_verify_pointer_unchanged(const char * buffer_name, void * current_ptr
     return true;
 }
 
-bool llama_attempt_new_allocation(const char * buffer_name, size_t /* size */) {
+bool llama_attempt_new_allocation(const char * buffer_name, size_t size) {
     if (g_gpu_memory_fragmentation_monitor) {
         return g_gpu_memory_fragmentation_monitor->attempt_new_allocation(buffer_name, size);
     }
@@ -462,7 +462,7 @@ bool llama_is_memory_stable() {
     return false;
 }
 
-void llama_record_allocation_event(const char * /* buffer_name */) {
+void llama_record_allocation_event(const char * buffer_name) {
     if (g_gpu_memory_fragmentation_monitor) {
         g_gpu_memory_fragmentation_monitor->record_allocation_event(buffer_name);
     }

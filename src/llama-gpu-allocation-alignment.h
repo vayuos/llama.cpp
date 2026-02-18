@@ -235,4 +235,6 @@ void llama_print_alignment_violations();
 
 #ifdef __cplusplus
 }
+bool llama_init_gpu_allocation_alignment_module(void);
+void llama_cleanup_gpu_allocation_alignment_module(void);
 #endif

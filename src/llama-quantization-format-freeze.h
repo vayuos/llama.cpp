@@ -171,6 +171,8 @@ bool llama_is_quantization_format_locked();
 void llama_record_layer_quantization_format(const char * layer_name, quantization_format_type format);
 
 bool llama_validate_quantization_format_freeze();
+bool llama_init_quantization_format_freeze_module();
+void llama_cleanup_quantization_format_freeze_module();
 bool llama_validate_format_locked();
 bool llama_validate_no_promotion();
 bool llama_validate_kv_stable();

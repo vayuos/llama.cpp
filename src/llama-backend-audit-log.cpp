@@ -605,7 +605,7 @@ void llama_print_backend_audit_node_details() {
 
     for (const auto & node : nodes) {
         if (node.is_decode_critical) {
-            printf("  [%llu] %s → %s (%s)\n",
+            printf("  [%lu] %s → %s (%s)\n",
                    node.op_index,
                    node.op_name,
                    g_backend_usage_audit_logger->format_backend_name((backend_ownership)node.backend).c_str(),

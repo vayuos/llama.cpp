@@ -42,7 +42,7 @@ bool host_access_prevention_engine::initialize() {
     return true;
 }
 
-bool host_access_prevention_engine::enable_strict_mode(bool /* enable */) {
+bool host_access_prevention_engine::enable_strict_mode(bool enable) {
     // Strict mode enforces additional validation
     return true;
 }
@@ -61,7 +61,7 @@ bool host_access_prevention_engine::mark_kv_cache_gpu_exclusive() {
         immutable_config.kv_cache_gpu_exclusive = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = {
+        buffer_ownership_record record = { 0, 0, 0, false,
             "kv_cache", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -75,7 +75,7 @@ bool host_access_prevention_engine::mark_activations_gpu_exclusive() {
         immutable_config.activations_gpu_exclusive = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = {
+        buffer_ownership_record record = { 0, 0, 0, false,
             "activations", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -89,7 +89,7 @@ bool host_access_prevention_engine::mark_logits_gpu_only() {
         immutable_config.logits_gpu_only = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = {
+        buffer_ownership_record record = { 0, 0, 0, false,
             "logits", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -103,7 +103,7 @@ bool host_access_prevention_engine::mark_sampling_gpu_only() {
         immutable_config.sampling_gpu_only = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = {
+        buffer_ownership_record record = { 0, 0, 0, false,
             "sampling", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -117,7 +117,7 @@ bool host_access_prevention_engine::mark_quantized_weights_gpu_locked() {
         immutable_config.quantized_weights_gpu_locked = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = {
+        buffer_ownership_record record = { 0, 0, 0, false,
             "quantized_weights", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -131,7 +131,7 @@ bool host_access_prevention_engine::mark_cuda_workspace_gpu_only() {
         immutable_config.cuda_workspace_gpu_only = true;
         gpu_exclusive_buffers.fetch_add(1);
 
-        buffer_ownership_record record = {
+        buffer_ownership_record record = { 0, 0, 0, false,
             "cuda_workspace", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
         };
         buffer_classifications.push_back(record);
@@ -181,7 +181,7 @@ bool host_access_prevention_engine::attempt_host_sync() {
     return true;
 }
 
-bool host_access_prevention_engine::attempt_pcie_transfer(const char * buffer_name, size_t /* size */) {
+bool host_access_prevention_engine::attempt_pcie_transfer(const char * buffer_name, size_t size) {
     if (decode_in_progress.load()) {
         immutable_config.pcie_transfer_blocked = true;
         return false; // PCIe transfer blocked during decode
@@ -193,7 +193,7 @@ bool host_access_prevention_engine::register_buffer(
     const char * name, buffer_classification classification,
     bool gpu_resident, bool host_accessible, bool decode_critical) {
 
-    buffer_ownership_record record = {
+    buffer_ownership_record record = { 0, 0, 0, false,
         name, classification, gpu_resident, host_accessible, decode_critical, false
     };
     buffer_classifications.push_back(record);
@@ -206,7 +206,7 @@ bool host_access_prevention_engine::register_buffer(
     return true;
 }
 
-bool host_access_prevention_engine::validate_buffer_classification(const char * /* buffer_name */) {
+bool host_access_prevention_engine::validate_buffer_classification(const char * buffer_name) {
     auto it = buffer_registry.find(buffer_name);
     if (it == buffer_registry.end()) {
         return false;
@@ -257,11 +257,11 @@ void host_access_prevention_engine::record_host_access_violation(
     host_access_attempts.fetch_add(1);
 }
 
-void host_access_prevention_engine::record_sync_prevention(const char * /* reason */) {
+void host_access_prevention_engine::record_sync_prevention(const char * reason) {
     sync_prevents.fetch_add(1);
 }
 
-void host_access_prevention_engine::record_pcie_prevention(const char * buffer_name, size_t /* size */) {
+void host_access_prevention_engine::record_pcie_prevention(const char * buffer_name, size_t size) {
     // Record prevention of PCIe transfer
 }
 
@@ -330,7 +330,7 @@ bool llama_init_host_access_prevention() {
     return g_host_access_prevention_engine != nullptr;
 }
 
-bool llama_enable_host_access_strict_mode(bool /* enable */) {
+bool llama_enable_host_access_strict_mode(bool enable) {
     if (g_host_access_prevention_engine) {
         return g_host_access_prevention_engine->enable_strict_mode(enable);
     }
@@ -414,7 +414,7 @@ bool llama_attempt_host_sync() {
     return true;
 }
 
-bool llama_attempt_pcie_transfer(const char * buffer_name, size_t /* size */) {
+bool llama_attempt_pcie_transfer(const char * buffer_name, size_t size) {
     if (g_host_access_prevention_engine) {
         return g_host_access_prevention_engine->attempt_pcie_transfer(buffer_name, size);
     }
@@ -431,7 +431,7 @@ bool llama_register_buffer(const char * name, int classification,
     return false;
 }
 
-bool llama_validate_buffer_classification(const char * /* buffer_name */) {
+bool llama_validate_buffer_classification(const char * buffer_name) {
     if (g_host_access_prevention_engine) {
         return g_host_access_prevention_engine->validate_buffer_classification(buffer_name);
     }
@@ -501,13 +501,13 @@ void llama_record_host_access_violation(const char * func, const char * buffer,
     }
 }
 
-void llama_record_sync_prevention(const char * /* reason */) {
+void llama_record_sync_prevention(const char * reason) {
     if (g_host_access_prevention_engine) {
         g_host_access_prevention_engine->record_sync_prevention(reason);
     }
 }
 
-void llama_record_pcie_prevention(const char * buffer_name, size_t /* size */) {
+void llama_record_pcie_prevention(const char * buffer_name, size_t size) {
     if (g_host_access_prevention_engine) {
         g_host_access_prevention_engine->record_pcie_prevention(buffer_name, size);
     }

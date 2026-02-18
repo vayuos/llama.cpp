@@ -234,4 +234,6 @@ void llama_print_fragmentation_analysis();
 
 #ifdef __cplusplus
 }
+bool llama_init_gpu_memory_fragmentation_monitor_module(void);
+void llama_cleanup_gpu_memory_fragmentation_monitor_module(void);
 #endif

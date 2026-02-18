@@ -171,4 +171,6 @@ void llama_print_coverage_validation_result();
 
 #ifdef __cplusplus
 }
+bool llama_init_fused_kernel_coverage_module(void);
+void llama_cleanup_fused_kernel_coverage_module(void);
 #endif
