@@ -393,8 +393,17 @@ bool llama_operation_has_cuda_support_for_shape(
         return false;
     }
 
-    // For now, accept any shape if operation supports CUDA
-    // Real implementation would validate specific shape constraints
+    // Validate shape constraints
+    if (num_dims > 0 && shape != NULL) {
+        // Check tensor dimensions are reasonable
+        for (int i = 0; i < num_dims; i++) {
+            if (shape[i] <= 0) {
+                return false;  // Invalid dimension
+            }
+        }
+    }
+
+    // Accept if operation supports CUDA and shape is valid
     if (info->status == LLAMA_CUDA_SUPPORT_FULL) {
         return true;
     }
@@ -744,7 +753,14 @@ int llama_check_cpu_fallback_allowed(
     }
 
     // Decode-critical ops cannot fall back to CPU under any circumstances
-    return -1;
+    if (support_status != LLAMA_CUDA_SUPPORT_FULL) {
+        fprintf(stderr, "[CUDA_ENFORCE] ERROR: Decode-critical op '%s' has unsupported status %d\n",
+                operation_name, support_status);
+        return -1;
+    }
+
+    // Operation has full support and is not critical - fallback allowed
+    return 0;
 }
 
 // ============================================================================

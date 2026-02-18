@@ -105,6 +105,12 @@ int llama_schedule_elimination_precompute_execution_order(
         return -1;
     }
 
+    if (graph_version == 0) {
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP1: Invalid graph_version (0)\n");
+        if (g_schedule_elimination_state.enforcement_strict) abort();
+        return -1;
+    }
+
     // Mark plan state as computing
     g_graph_plan_states[graph_id] = LLAMA_PLAN_COMPUTING;
 
@@ -132,7 +138,7 @@ int llama_schedule_elimination_store_execution_plan(
     }
 
     if (g_graph_plan_states[graph_id] != LLAMA_PLAN_COMPUTED) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP2: plan not computed for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP2: plan not computed for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -148,7 +154,7 @@ int llama_schedule_elimination_store_execution_plan(
  */
 int llama_schedule_elimination_linearize_graph_traversal(uint64_t graph_id) {
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP3: no execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP3: no execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -156,7 +162,7 @@ int llama_schedule_elimination_linearize_graph_traversal(uint64_t graph_id) {
     // Verify plan has deterministic order
     struct llama_execution_plan_record& plan = g_execution_plans[graph_id];
     if (plan.total_segments == 0) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP3: execution plan has no segments for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP3: execution plan has no segments for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -170,14 +176,14 @@ int llama_schedule_elimination_linearize_graph_traversal(uint64_t graph_id) {
  */
 int llama_schedule_elimination_bind_plan_to_graph(uint64_t graph_id) {
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP4: no execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP4: no execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
 
     struct llama_execution_plan_record& plan = g_execution_plans[graph_id];
     if (plan.graph_id != graph_id) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP4: plan graph_id mismatch: %llu vs %llu\n",
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP4: plan graph_id mismatch: %lu vs %lu\n",
                 plan.graph_id, graph_id);
         g_schedule_elimination_state.total_plan_mismatches++;
         if (g_schedule_elimination_state.enforcement_strict) abort();
@@ -193,7 +199,7 @@ int llama_schedule_elimination_bind_plan_to_graph(uint64_t graph_id) {
  */
 int llama_schedule_elimination_lock_execution_plan(uint64_t graph_id) {
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP5: no execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP5: no execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -265,14 +271,14 @@ int llama_schedule_elimination_fail_on_scheduling_api(void) {
  */
 int llama_schedule_elimination_enable_static_execution_mode(uint64_t graph_id) {
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP9: no execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP9: no execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
 
     struct llama_execution_plan_record& plan = g_execution_plans[graph_id];
     if (!plan.plan_immutable) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP9: execution plan not locked for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR EP9: execution plan not locked for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -489,14 +495,14 @@ enum llama_graph_execution_mode llama_schedule_elimination_get_execution_mode(vo
  */
 int llama_schedule_elimination_verify_plan_complete(uint64_t graph_id) {
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
 
     struct llama_execution_plan_record& plan = g_execution_plans[graph_id];
     if (plan.total_segments == 0) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: Execution plan empty for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: Execution plan empty for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -509,14 +515,14 @@ int llama_schedule_elimination_verify_plan_complete(uint64_t graph_id) {
  */
 int llama_schedule_elimination_verify_plan_immutable(uint64_t graph_id) {
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
 
     struct llama_execution_plan_record& plan = g_execution_plans[graph_id];
     if (!plan.plan_immutable) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: Execution plan not locked for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: Execution plan not locked for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -566,7 +572,7 @@ int llama_schedule_elimination_verify_static_mode_throughout(void) {
  * Log that execution plan was computed
  */
 void llama_schedule_elimination_log_plan_computed(uint64_t graph_id, int num_segments) {
-    printf("[SCHEDULE_ELIM] ✓ Execution plan computed for graph %llu\n", graph_id);
+    printf("[SCHEDULE_ELIM] ✓ Execution plan computed for graph %lu\n", graph_id);
     printf("  - Total segments: %d\n", num_segments);
     printf("  - Fixed execution order established\n");
     printf("  - No per-token scheduling overhead\n");
@@ -586,7 +592,7 @@ void llama_schedule_elimination_log_static_mode_enabled(void) {
  * Print execution plan
  */
 void llama_schedule_elimination_print_execution_plan(uint64_t graph_id) {
-    printf("\n=== Execution Plan for Graph %llu ===\n", graph_id);
+    printf("\n=== Execution Plan for Graph %lu ===\n", graph_id);
 
     if (!g_execution_plans.count(graph_id)) {
         printf("No execution plan for this graph\n");
@@ -691,7 +697,7 @@ int llama_schedule_elimination_execute_static_plan_step(uint64_t graph_id) {
     }
 
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }
@@ -705,7 +711,7 @@ int llama_schedule_elimination_execute_static_plan_step(uint64_t graph_id) {
 int llama_schedule_elimination_reset_plan_execution_state(uint64_t graph_id) {
     // Reset internal plan execution counters
     if (!g_execution_plans.count(graph_id)) {
-        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %llu\n", graph_id);
+        fprintf(stderr, "[SCHEDULE_ELIM] ERROR: No execution plan for graph %lu\n", graph_id);
         if (g_schedule_elimination_state.enforcement_strict) abort();
         return -1;
     }

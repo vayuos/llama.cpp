@@ -438,9 +438,15 @@ int llama_tensor_allocation_gpu_track_tensor(
     uint64_t size_bytes,
     enum llama_tensor_allocation_owner owner
 ) {
+    if (tensor_id == 0) {
+        fprintf(stderr, "[SECTION 35] ERROR: Invalid tensor_id (0)\n");
+        return -1;
+    }
+
     if (g_tensor_allocation_validation.state_record.current_phase == LLAMA_ALLOCATION_PHASE_DECODE) {
         if (g_tensor_allocation_validation.enforcement_strict) {
-            fprintf(stderr, "[SECTION 35] VIOLATION: Tensor track during decode phase\n");
+            fprintf(stderr, "[SECTION 35] VIOLATION: Tensor track during decode phase (tensor_id: %lu, size: %lu bytes)\n",
+                    tensor_id, size_bytes);
             g_tensor_allocation_validation.total_violations++;
             return -1;
         }

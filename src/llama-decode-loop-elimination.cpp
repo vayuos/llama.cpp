@@ -374,6 +374,8 @@ int llama_decode_loop_elimination_signal_token_ready(uint64_t token_index) {
         return -1;
     }
 
+    // Track token progression
+    g_decode_loop_elimination_state.progression_record.tokens_produced = token_index;
     g_decode_loop_elimination_state.progression_record.current_state = LLAMA_PROGRESSION_TOKEN_READY;
     g_decode_loop_elimination_state.progression_record.last_signal = LLAMA_SIGNAL_TOKEN_READY;
     g_decode_loop_elimination_state.progression_record.tokens_produced++;
@@ -575,7 +577,7 @@ void llama_decode_loop_elimination_print_loop_ownership_status(void) {
     printf("CPU loop eliminated: %s\n", g_decode_loop_elimination_state.ownership_record.cpu_loop_eliminated ? "YES" : "NO");
     printf("GPU loop active: %s\n", g_decode_loop_elimination_state.ownership_record.gpu_loop_active ? "YES" : "NO");
     printf("CPU control violations: %d\n", g_decode_loop_elimination_state.ownership_record.cpu_control_violations);
-    printf("Tokens produced by GPU: %llu\n", g_decode_loop_elimination_state.ownership_record.total_tokens_produced_by_gpu);
+    printf("Tokens produced by GPU: %lu\n", g_decode_loop_elimination_state.ownership_record.total_tokens_produced_by_gpu);
     printf("=============================\n\n");
 }
 
@@ -586,7 +588,7 @@ void llama_decode_loop_elimination_print_progression_status(void) {
     printf("\n=== Progression Status ===\n");
     printf("Current state: %s\n", llama_decode_progression_state_name(g_decode_loop_elimination_state.progression_record.current_state));
     printf("GPU autonomous: %s\n", g_decode_loop_elimination_state.progression_record.gpu_autonomous ? "YES" : "NO");
-    printf("Tokens produced: %llu\n", g_decode_loop_elimination_state.progression_record.tokens_produced);
+    printf("Tokens produced: %lu\n", g_decode_loop_elimination_state.progression_record.tokens_produced);
     printf("Last signal: %s\n", llama_decode_signal_name(g_decode_loop_elimination_state.progression_record.last_signal));
     printf("CPU wait violations: %d\n", g_decode_loop_elimination_state.progression_record.cpu_wait_violations);
     printf("===========================\n\n");

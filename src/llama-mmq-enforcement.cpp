@@ -142,7 +142,7 @@ bool llama_mmq_enforcement_requires_mmq(int ggml_type) {
 // INITIALIZATION AND STATE MANAGEMENT
 // ============================================================================
 
-llama_mmq_enforcement_state_t * llama_mmq_enforcement_init(void * ctx_ptr) {
+llama_mmq_enforcement_state_t * llama_mmq_enforcement_init(void * ctx_ptr __attribute__((unused))) {
     if (g_mmq_enforcement_initialized.exchange(true)) {
         return g_mmq_enforcement_state;
     }
@@ -319,7 +319,7 @@ llama_quantization_detection_summary_t llama_mmq_enforcement_get_detection_summa
 
 bool llama_mmq_enforcement_bind_mmq_backend(
     llama_mmq_enforcement_state_t * state,
-    void * graph_ptr) {
+    void * graph_ptr __attribute__((unused))) {
 
     if (!state) {
         fprintf(stderr, "LLAMA_MMQ_ENFORCEMENT: Invalid state for MMQ binding\n");

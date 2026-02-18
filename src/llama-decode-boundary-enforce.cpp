@@ -21,14 +21,15 @@
 #endif
 
 // Global enforcement state (thread-local would be better for multi-context scenarios)
-static llama_decode_boundary_state g_decode_boundary_state = {
-    false,    // is_decode_active
-    false,    // graph_frozen
-    0,        // primary_gpu_backend
-    0,        // frozen_graph_hash
-    nullptr,  // frozen_backend_assignments
-    0         // n_frozen_nodes
-};
+// Note: Reserved for future use - decode boundary state tracking
+// static llama_decode_boundary_state g_decode_boundary_state = {
+//     false,    // is_decode_active
+//     false,    // graph_frozen
+//     0,        // primary_gpu_backend
+//     0,        // frozen_graph_hash
+//     nullptr,  // frozen_backend_assignments
+//     0         // n_frozen_nodes
+// };
 
 /**
  * Initialize decode boundary enforcement state
