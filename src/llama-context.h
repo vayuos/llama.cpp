@@ -1,9 +1,12 @@
 #pragma once
 
+#include "llama.h"
+#include "llama-cparams.h"
+#include "llama-graph.h"
+#include "llama-adapter.h"
+
 #include "ggml-cpp.h"
 #include "ggml-opt.h"
-#include "llama-adapter.h"
-#include "llama-cparams.h"
 #include "llama-decode-admission-control.h"
 #include "llama-decode-boundary-enforce.h"
 #include "llama-decode-cpu-hard-failure.h"
@@ -78,8 +81,6 @@
 #include "llama-pcie-traffic-watchdog.h"
 #include "llama-decode-stability-harness.h"
 #include "llama-decode-acceptance-criteria.h"
-#include "llama-graph.h"
-#include "llama.h"
 
 #include <map>
 #include <mutex>
