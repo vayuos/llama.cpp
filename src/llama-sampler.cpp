@@ -645,10 +645,11 @@ static bool llama_sampler_backend_support(
     const int64_t n = 1024*1024;
 
     llama_sampler_data data = {
-        /*.logits     = */ ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n),
-        /*.probs      = */ nullptr,
-        /*.sampled    = */ nullptr,
-        /*.candidates = */ ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n),
+        /*.logits      = */ ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n),
+        /*.probs       = */ nullptr,
+        /*.sampled     = */ nullptr,
+        /*.candidates  = */ ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n),
+        /*.last_tokens = */ nullptr,
     };
 
     ggml_cgraph * gf = ggml_new_graph(ctx);
@@ -3012,15 +3013,6 @@ float llama_sampler_get_temp(const struct llama_sampler * smpl) {
         return ctx->temp;
     }
     return -1.0f;
-}
-
-uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl) {
-    if (!smpl) return 0;
-    if (smpl->iface == &llama_sampler_dist_i) {
-        auto * ctx = (llama_sampler_dist *) smpl->ctx;
-        return ctx->seed;
-    }
-    return 0; // Or some indicator? Seed 0 is valid though.
 }
 
 // top-n-sigma
