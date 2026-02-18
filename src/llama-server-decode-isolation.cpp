@@ -794,7 +794,7 @@ void dump_isolation_state() {
 // ============================================================================
 
 streaming_manager::streaming_manager(size_t queue_capacity)
-    : streaming_active(false), tokens_produced(0), tokens_consumed(0), backpressure_events(0) {
+    : queue(queue_capacity), streaming_active(false), tokens_produced(0), tokens_consumed(0), backpressure_events(0) {
     initialize(queue_capacity);
 }
 
