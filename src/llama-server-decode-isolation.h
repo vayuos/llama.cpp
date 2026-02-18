@@ -374,6 +374,21 @@ void llama_record_decode_latency(int64_t latency_us);
 void llama_print_isolation_diagnostics();
 void llama_dump_isolation_state();
 
+// C++ internal functions (exported for testing)
 #ifdef __cplusplus
+bool initialize_decode_isolation(
+    int32_t total_cores,
+    const std::vector<int32_t> & decode_core_ids,
+    int32_t decode_priority,
+    int32_t decode_thread_count,
+    int32_t server_thread_count);
+
+bool pin_current_thread_to_decode(int32_t thread_index);
+bool pin_current_thread_to_server(int32_t worker_index);
+
+void validate_isolation_config();
+void dump_isolation_state();
+const char * get_last_violation_message();
+void set_isolation_verbose_logging(bool enable);
 }  // extern "C"
 #endif

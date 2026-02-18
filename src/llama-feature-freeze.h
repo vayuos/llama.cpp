@@ -255,6 +255,18 @@ void llama_print_feature_freeze_validation();
 void llama_print_compiled_features();
 void llama_dump_feature_statistics();
 
+// Additional function declarations
+int llama_feature_freeze_init(void);
+const llama_feature_freeze_validation_state* llama_feature_freeze_get_validation_state(void);
+uint32_t llama_feature_freeze_get_profile(void);
+const char* llama_feature_freeze_get_profile_name(void);
+const llama_feature_freeze_capabilities* llama_feature_freeze_get_features(void);
+int llama_feature_freeze_validate_integrity(void);
+const llama_feature_freeze_metrics* llama_feature_freeze_get_metrics(void);
+void llama_feature_freeze_log_config(void);
+int llama_feature_freeze_is_feature_enabled(uint32_t feature_id);
+void llama_feature_freeze_register_validator(llama_feature_freeze_validate_hardware_fn fn);
+
 #ifdef __cplusplus
 }
 #endif

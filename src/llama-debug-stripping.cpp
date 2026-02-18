@@ -35,39 +35,44 @@ std::atomic<uint64_t> g_llama_debug_timing_cuda_kernel(0);
 std::atomic<uint64_t> g_llama_debug_timing_sampling(0);
 
 /**
+ * Initialize debug stripping state in C++17 compatible way
+ */
+static llama_debug_stripping_state init_debug_stripping_state() {
+    llama_debug_stripping_state state = {};
+    state.config.enable_debug_logging = LLAMA_ENABLE_DEBUG;
+    state.config.enable_timing_instrumentation = LLAMA_ENABLE_TIMING_INSTRUMENTATION;
+    state.config.enable_hot_path_assertions = LLAMA_ENABLE_HOT_PATH_ASSERTIONS;
+    state.config.enable_sampling_traces = LLAMA_ENABLE_SAMPLING_TRACES;
+    state.config.enable_server_decode_logging = LLAMA_ENABLE_SERVER_DECODE_LOGGING;
+    state.config.abort_on_assertion_failure = true;
+    state.config.collect_metrics = LLAMA_ENABLE_DEBUG_METRICS;
+    state.config.verbose_metrics = LLAMA_ENABLE_DEBUG;
+    state.config.max_timing_ns_per_token = 10000000;  // 10ms
+    state.config.max_debug_operations_per_token = 100;
+
+    state.metrics.decode_loop_entries = 0;
+    state.metrics.graph_execute_entries = 0;
+    state.metrics.cuda_kernel_launches = 0;
+    state.metrics.sampling_entries = 0;
+    state.metrics.debug_logs_suppressed = 0;
+    state.metrics.timing_operations_skipped = 0;
+    state.metrics.assertions_skipped = 0;
+    state.metrics.feature_probes_skipped = 0;
+    state.metrics.decode_loop_total_ns = 0;
+    state.metrics.graph_execute_total_ns = 0;
+    state.metrics.sampling_total_ns = 0;
+    state.metrics.compile_time_guard_bypasses = 0;
+    state.metrics.runtime_guard_invocations = 0;
+
+    state.initialized = false;
+    state.initialization_status = 0;
+    return state;
+}
+
+/**
  * Global debug stripping state
  */
-llama_debug_stripping_state g_llama_debug_stripping = {
-    .config = {
-        .enable_debug_logging = LLAMA_ENABLE_DEBUG,
-        .enable_timing_instrumentation = LLAMA_ENABLE_TIMING_INSTRUMENTATION,
-        .enable_hot_path_assertions = LLAMA_ENABLE_HOT_PATH_ASSERTIONS,
-        .enable_sampling_traces = LLAMA_ENABLE_SAMPLING_TRACES,
-        .enable_server_decode_logging = LLAMA_ENABLE_SERVER_DECODE_LOGGING,
-        .abort_on_assertion_failure = true,
-        .collect_metrics = LLAMA_ENABLE_DEBUG_METRICS,
-        .verbose_metrics = LLAMA_ENABLE_DEBUG,
-        .max_timing_ns_per_token = 10000000, // 10ms
-        .max_debug_operations_per_token = 100,
-    },
-    .metrics = {
-        .decode_loop_entries = 0,
-        .graph_execute_entries = 0,
-        .cuda_kernel_launches = 0,
-        .sampling_entries = 0,
-        .debug_logs_suppressed = 0,
-        .timing_operations_skipped = 0,
-        .assertions_skipped = 0,
-        .feature_probes_skipped = 0,
-        .decode_loop_total_ns = 0,
-        .graph_execute_total_ns = 0,
-        .sampling_total_ns = 0,
-        .compile_time_guard_bypasses = 0,
-        .runtime_guard_invocations = 0,
-    },
-    .initialized = false,
-    .initialization_status = 0,
-};
+llama_debug_stripping_state g_llama_debug_stripping = init_debug_stripping_state();
 
 /**
  * Runtime guard state (mutex for thread-safety)

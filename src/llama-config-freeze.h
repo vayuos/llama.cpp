@@ -307,6 +307,33 @@ void llama_print_config_violation_report();
 void llama_dump_frozen_config();
 void llama_dump_config_statistics();
 
+// Additional function declarations
+int llama_config_freeze_init(llama_frozen_config * config);
+llama_frozen_config * llama_config_freeze_new(void);
+int llama_config_freeze_cleanup(llama_frozen_config * config);
+void llama_config_freeze_free(llama_frozen_config * config);
+int llama_config_freeze_parse_cli(llama_frozen_config * config, int argc, const char ** argv);
+int llama_config_freeze_resolve_env(llama_frozen_config * config);
+int llama_config_freeze_bind_backend(llama_frozen_config * config, llama_context * ctx);
+int llama_config_freeze_bind_sampler(llama_frozen_config * config);
+int llama_config_freeze_bind_attention(llama_frozen_config * config);
+int llama_config_freeze_allocate_memory(llama_frozen_config * config, llama_context * ctx);
+int llama_config_freeze_startup_complete(llama_frozen_config * config);
+int llama_config_freeze_lock_decode(llama_frozen_config * config);
+bool llama_config_freeze_is_locked(const llama_frozen_config * config);
+int llama_config_freeze_reject_reconfig(llama_frozen_config * config, const char * attempted_change);
+int llama_config_freeze_execute_backend(const llama_frozen_config * config, llama_context * ctx, const void * data);
+int llama_config_freeze_execute_sampler(const llama_frozen_config * config, float * logits, int32_t n_vocab, int32_t * token_out, uint32_t flags);
+int llama_config_freeze_execute_attention(const llama_frozen_config * config, ggml_cgraph * graph, ggml_tensor * q, ggml_tensor * k, ggml_tensor * v);
+int llama_config_freeze_validate_complete(const llama_frozen_config * config);
+uint64_t llama_config_freeze_instrument_decode(llama_frozen_config * config, int (*decode_fn)(llama_context *));
+void llama_config_freeze_print_config(const llama_frozen_config * config);
+char * llama_config_freeze_status_report(const llama_frozen_config * config);
+int llama_config_freeze_verify_zero_reads(const llama_frozen_config * config);
+int llama_config_freeze_assert_decode_inactive(const llama_frozen_config * config, const char * caller);
+int llama_config_freeze_assert_frozen(const llama_frozen_config * config);
+int llama_config_freeze_guard_feature_toggle(llama_frozen_config * config, llama_frozen_feature_flags feature_flag, bool new_value);
+
 #define CONFIG_FREEZE_GUARD(config_name) \
     do { \
         if (g_config_freeze_engine && g_config_freeze_engine->is_config_frozen()) { \

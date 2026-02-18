@@ -18,13 +18,13 @@ static std::mutex g_violation_message_mutex;
 #define LOG_ISOLATION(fmt, ...) \
     do { \
         if (g_isolation_verbose) { \
-            LOG_INF("[ISOLATION] " fmt, __VA_ARGS__); \
+            LOG_INF("[ISOLATION] " fmt __VA_OPT__(,) __VA_ARGS__); \
         } \
     } while(0)
 
 #define LOG_VIOLATION(fmt, ...) \
     do { \
-        LOG_ERR("[ISOLATION_VIOLATION] " fmt, __VA_ARGS__); \
+        LOG_ERR("[ISOLATION_VIOLATION] " fmt __VA_OPT__(,) __VA_ARGS__); \
         std::unique_lock<std::mutex> lock(g_violation_message_mutex); \
         g_last_violation_message = std::string("") + fmt; \
     } while(0)
@@ -365,6 +365,7 @@ bool decode_isolation_engine::platform_get_affinity(std::thread::id tid, decode_
 }
 
 bool decode_isolation_engine::platform_set_priority(std::thread::id tid, int32_t priority) {
+    (void)tid;  // Reserved for future platform-specific priority setting
     int policy = SCHED_OTHER;
     int native_priority = 0;
 
@@ -508,7 +509,7 @@ size_t decode_streaming_queue<T>::depth() const {
 }
 
 template<typename T>
-size_t decode_streaming_queue<T>::capacity() const {
+size_t decode_streaming_queue<T>::capacity_const() const {
     return buffer.size();
 }
 
@@ -593,6 +594,7 @@ void cross_domain_lock_detector::enter_critical_section(const std::string & lock
 }
 
 void cross_domain_lock_detector::exit_critical_section(const std::string & lock_name) {
+    (void)lock_name;  // Reserved for future lock contention tracking
     g_current_lock_name = "";
     g_current_domain = -1;
 }
@@ -672,6 +674,9 @@ bool initialize_decode_isolation(
     int32_t server_thread_count) {
 
     (void)total_cores;
+    (void)decode_priority;
+    (void)decode_thread_count;
+    (void)server_thread_count;
 
     auto & engine = decode_isolation_engine::instance();
     auto & streaming = streaming_manager::instance();

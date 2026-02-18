@@ -243,6 +243,10 @@ void llama_print_mutex_audit_report();
 void llama_print_hot_path_validation_results();
 void llama_dump_lock_free_statistics();
 
+// Module initialization
+bool llama_init_decode_mutex_elimination(void);
+void llama_cleanup_decode_mutex_elimination(void);
+
 // Enforcement macros for static analysis
 #define HOT_PATH_CHECK_MUTEX(name) \
     do { \

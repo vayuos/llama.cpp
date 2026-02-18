@@ -148,6 +148,7 @@ void backend_disable_engine::lock_backends() {
 }
 
 bool backend_disable_engine::attempt_backend_change(const char * backend_name) {
+    (void)backend_name;  // Backend name reserved for future per-backend validation
     if (backends_locked.load()) {
         record_dispatch_violation();
         return false;

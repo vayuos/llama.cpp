@@ -414,7 +414,7 @@ static bool run_mutex_elimination_tests(void) {
 
     // Test 5: Hot path validation
     hot_path_validation_result result = g_mutex_elimination_engine->validate_hot_path_cleanliness();
-    // Result may indicate issues, but test should pass if validation runs
+    (void)result;  // Validation result may indicate issues but test passes if validation runs
 
     // Test 6: Single-owner model verification
     if (!g_mutex_elimination_engine->verify_single_owner_model()) {

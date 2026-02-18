@@ -436,7 +436,7 @@ static bool run_logging_suppression_tests(void) {
     // Test 5: Logging blackout validation
     decode_logging_validation_result result =
         g_decode_logging_suppression_engine->validate_logging_blackout();
-    // Result may indicate issues, but test should pass if validation runs
+    (void)result;  // Validation result may indicate issues but test passes if validation runs
 
     // Test 6: Decode mode isolation verification
     if (!g_decode_logging_suppression_engine->verify_decode_mode_isolation()) {

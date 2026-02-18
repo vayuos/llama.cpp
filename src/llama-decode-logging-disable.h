@@ -235,6 +235,10 @@ void llama_print_logging_audit_report();
 void llama_print_decode_logging_validation_results();
 void llama_dump_request_logging_metrics();
 
+// Module initialization
+bool llama_init_decode_logging_suppression_module(void);
+void llama_cleanup_decode_logging_suppression_module(void);
+
 // Enforcement macros for logging guards
 #define DECODE_LOGGING_GUARD(identifier) \
     do { \
