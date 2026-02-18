@@ -42,7 +42,7 @@ bool gpu_allocation_alignment_engine::initialize() {
     return true;
 }
 
-bool gpu_allocation_alignment_engine::enable_strict_mode(bool enable) {
+bool gpu_allocation_alignment_engine::enable_strict_mode(bool /* enable */) {
     // Strict mode enforces additional validation during alignment checks
     return true;
 }
@@ -196,7 +196,7 @@ bool gpu_allocation_alignment_engine::deallocate_aligned(void * ptr) {
 }
 
 bool gpu_allocation_alignment_engine::validate_buffer_alignment(
-    const char * buffer_name, void * ptr, size_t size, size_t alignment) {
+    const char * /* buffer_name */, void * ptr, size_t /* size */, size_t alignment) {
 
     if (!ptr) {
         return false;
@@ -214,7 +214,7 @@ bool gpu_allocation_alignment_engine::validate_buffer_alignment(
 }
 
 bool gpu_allocation_alignment_engine::attempt_misaligned_view(
-    const char * buffer_name, size_t offset) {
+    const char * /* buffer_name */, size_t /* offset */) {
 
     if (alignment_enforced.load()) {
         alignment_violations.fetch_add(1);
@@ -224,7 +224,7 @@ bool gpu_allocation_alignment_engine::attempt_misaligned_view(
 }
 
 bool gpu_allocation_alignment_engine::verify_tensor_alignment(
-    const char * tensor_name, void * data, size_t stride) {
+    const char * /* tensor_name */, void * data, size_t stride) {
 
     if (!data) {
         return false;
@@ -248,7 +248,7 @@ bool gpu_allocation_alignment_engine::verify_tensor_alignment(
 }
 
 bool gpu_allocation_alignment_engine::verify_kv_cache_alignment(
-    size_t n_layer, size_t stride) {
+    size_t /* n_layer */, size_t stride) {
 
     if ((stride % KV_CACHE_ALIGNMENT) != 0) {
         alignment_violations.fetch_add(1);
@@ -259,7 +259,7 @@ bool gpu_allocation_alignment_engine::verify_kv_cache_alignment(
 }
 
 bool gpu_allocation_alignment_engine::verify_quantized_alignment(
-    const char * quant_format, void * data, size_t block_size) {
+    const char * /* quant_format */, void * data, size_t block_size) {
 
     if (!data) {
         return false;
@@ -302,7 +302,7 @@ void gpu_allocation_alignment_engine::record_alignment_status(
     alignment_status.push_back(status);
 }
 
-void gpu_allocation_alignment_engine::record_alignment_violation(const char * buffer_name) {
+void gpu_allocation_alignment_engine::record_alignment_violation(const char * /* buffer_name */) {
     alignment_violations.fetch_add(1);
 }
 
@@ -443,35 +443,35 @@ bool llama_deallocate_aligned(void * ptr) {
     return false;
 }
 
-bool llama_validate_buffer_alignment(const char * buffer_name, void * ptr, size_t size, size_t alignment) {
+bool llama_validate_buffer_alignment(const char * /* buffer_name */, void * ptr, size_t /* size */, size_t alignment) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->validate_buffer_alignment(buffer_name, ptr, size, alignment);
     }
     return false;
 }
 
-bool llama_attempt_misaligned_view(const char * buffer_name, size_t offset) {
+bool llama_attempt_misaligned_view(const char * /* buffer_name */, size_t /* offset */) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->attempt_misaligned_view(buffer_name, offset);
     }
     return true;
 }
 
-bool llama_verify_tensor_alignment(const char * tensor_name, void * data, size_t stride) {
+bool llama_verify_tensor_alignment(const char * /* tensor_name */, void * data, size_t stride) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->verify_tensor_alignment(tensor_name, data, stride);
     }
     return false;
 }
 
-bool llama_verify_kv_cache_alignment(size_t n_layer, size_t stride) {
+bool llama_verify_kv_cache_alignment(size_t /* n_layer */, size_t stride) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->verify_kv_cache_alignment(n_layer, stride);
     }
     return false;
 }
 
-bool llama_verify_quantized_alignment(const char * quant_format, void * data, size_t block_size) {
+bool llama_verify_quantized_alignment(const char * /* quant_format */, void * data, size_t block_size) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->verify_quantized_alignment(quant_format, data, block_size);
     }

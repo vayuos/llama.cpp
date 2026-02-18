@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cmath>
 #include <chrono>
+#include <thread>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -141,7 +142,7 @@ bool gpu_utilization_probe::end_token_measurement() {
         tokens_per_sec,
         false,  // idle_gap_flagged (set below)
         false,  // underutilized_flagged (set below)
-        std::chrono::high_resolution_clock::now().time_since_epoch().count(),
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
         true
     };
 
@@ -208,7 +209,7 @@ bool gpu_utilization_probe::record_alert(const char * description, uint64_t toke
         token_num,
         detected,
         threshold,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count()
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count())
     };
 
     alerts.push_back(alert);
@@ -317,7 +318,7 @@ bool gpu_utilization_probe::finalize_measurements() {
         (summary.avg_utilization_ratio < critical_underutilization_threshold);
 
     summary.measurement_timestamp_ns =
-        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 
     fprintf(stdout, "[PROBE] Finalized %llu measurements\n",
             (unsigned long long)summary.total_tokens_measured);
