@@ -7,6 +7,7 @@
  */
 
 #include "llama-fallback-elimination.h"
+#include "llama-backend-immutability-enforce.h"
 #include <cstring>
 #include <cstdio>
 #include <ctime>

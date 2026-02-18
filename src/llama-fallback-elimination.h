@@ -21,6 +21,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include "llama-backend-immutability-enforce.h"
 
 // ============================================================================
 // FALLBACK ELIMINATION STATE DEFINITION

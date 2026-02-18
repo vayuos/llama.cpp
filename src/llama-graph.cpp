@@ -211,16 +211,6 @@ void llm_graph_input_cls::set_input(const llama_ubatch * ubatch) {
         std::vector<int> target_pos(n_seqs_unq, -1);
         std::vector<int> target_row(n_seqs_unq, -1);
 
-                        // Enforce single-backend ownership for decode-critical ops
-                        if ((node->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL)) {
-                            int backend_type = ggml_backend_dev_type(ggml_backend_get_device(ggml_backend_sched_get_tensor_backend(sched, node)));
-                            if (backend_type != GGML_BACKEND_DEVICE_TYPE_GPU) {
-                                fprintf(stderr, "ERROR: Decode-critical op must execute entirely on GPU backend.\n");
-                                abort();
-                            }
-                            // Freeze backend ownership after graph freeze
-                            node->flags |= GGML_TENSOR_FLAG_BACKEND_FROZEN;
-                        }
         const bool last = (cparams.pooling_type == LLAMA_POOLING_TYPE_LAST ||
                            (cparams.pooling_type == LLAMA_POOLING_TYPE_RANK &&
                             arch == LLM_ARCH_QWEN3)  // qwen3 reranking & embedding models use last token
@@ -2615,7 +2605,7 @@ void llm_graph_context::build_sampling() const {
             /*.probs       =*/nullptr,
             /*.sampled     =*/nullptr,
             /*.candidates  =*/nullptr,
-            /*.last_tokens =*/params.t_decode_history,
+            /*.last_tokens =*/res->t_decode_history,
         };
 
         assert(sampler->iface->backend_apply);
@@ -2799,7 +2789,7 @@ void llm_graph_context::build_autonomous_advancement() const {
         ggml_build_forward_expand(gf, update_stop);
 
         // 6. Update History (GPU-Resident)
-        struct ggml_tensor * history = params.t_decode_history;
+        struct ggml_tensor * history = res->t_decode_history;
         if (history != nullptr) {
             int history_size = history->ne[0];
             if (history_size > 1) {
