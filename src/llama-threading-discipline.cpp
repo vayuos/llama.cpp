@@ -112,7 +112,7 @@ bool llama_threading_discipline_validate_invariant(
     }
 
     // Thread count must be stable
-    if (state->metrics.active_thread_count != state->decode_thread_count) {
+    if (state->metrics.active_thread_count != (uint32_t)state->decode_thread_count) {
         LLAMA_LOG_ERROR(
             "THREADING DISCIPLINE: Thread count changed during decode!\n"
             "  Expected: %d\n"
@@ -130,6 +130,8 @@ bool llama_threading_discipline_validate_invariant(
 bool llama_threading_discipline_audit_cond_vars(
     const llama_threading_discipline_state * state,
     void * worker_loop_address) {
+
+    (void)worker_loop_address;  // Reserved for future runtime code analysis
 
     if (!state || !state->in_decode_phase) {
         return true;
@@ -181,6 +183,8 @@ bool llama_threading_discipline_enable_persistent_workers(
 bool llama_threading_discipline_check_no_per_node_barriers(
     const llama_threading_discipline_state * state,
     int graph_nodes) {
+
+    (void)graph_nodes;  // Reserved for future per-node barrier cost analysis
 
     if (!state || !state->in_decode_phase) {
         return true;

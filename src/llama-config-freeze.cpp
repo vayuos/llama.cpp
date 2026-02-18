@@ -895,6 +895,9 @@ int llama_config_freeze_guard_feature_toggle(
     llama_frozen_feature_flags feature_flag,
     bool new_value
 ) {
+    (void)feature_flag;  // Reserved for future per-feature toggle validation
+    (void)new_value;     // Reserved for future feature value enforcement
+
     if (!config) {
         fprintf(stderr, "[CONFIG_FREEZE] ERROR: null config in guard_feature_toggle\n");
         return -1;

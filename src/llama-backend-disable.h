@@ -163,6 +163,10 @@ void llama_print_backend_disable_validation();
 void llama_print_active_backend_snapshot();
 void llama_dump_backend_statistics();
 
+// Module initialization
+bool llama_init_backend_disable_module(void);
+void llama_cleanup_backend_disable_module(void);
+
 #define BACKEND_DISPATCH_GUARD(backend_name, decode_context) \
     do { \
         if (g_backend_disable_engine && g_backend_disable_engine->are_backends_locked()) { \

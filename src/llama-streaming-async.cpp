@@ -88,11 +88,11 @@ void enforce_decode_purity(const char * operation_name) {
     std::abort();
 }
 
-bool assert_in_decode_domain() {
+static bool assert_in_decode_domain() {
     return verify_domain(streaming_execution_domain::DECODE, "domain_assertion");
 }
 
-bool assert_in_streaming_domain() {
+static bool assert_in_streaming_domain() {
     return verify_domain(streaming_execution_domain::STREAMING, "domain_assertion");
 }
 
@@ -100,10 +100,13 @@ bool assert_in_streaming_domain() {
 // TOKEN CONVERSION (Streaming domain only - Rule #1)
 // ============================================================================
 
-std::string streaming_token_to_text(
+static std::string streaming_token_to_text(
     int32_t token_id,
     const void * model_vocab,
     bool use_special) {
+
+    (void)model_vocab;  // Reserved for future token conversion from vocab
+    (void)use_special;  // Reserved for future special token handling
 
     // Verify we're in streaming domain
     verify_domain(streaming_execution_domain::STREAMING, "token_to_text");
@@ -115,7 +118,7 @@ std::string streaming_token_to_text(
     return oss.str();
 }
 
-std::string streaming_build_json_chunk(
+static std::string streaming_build_json_chunk(
     const streaming_token & token,
     const std::string & text_content,
     bool include_logits,
@@ -366,6 +369,7 @@ bool streaming_worker::start() {
 }
 
 bool streaming_worker::stop(int32_t timeout_ms) {
+    (void)timeout_ms;  // Reserved for future timeout-based shutdown
     if (!running) return true;
 
     shutdown_requested.store(true, std::memory_order_release);
@@ -386,6 +390,7 @@ uint32_t streaming_worker::register_http_context(const streaming_http_context & 
 }
 
 void streaming_worker::unregister_http_context(uint32_t context_id) {
+    (void)context_id;  // Reserved for future context cleanup
     verify_domain(streaming_execution_domain::STREAMING, "unregister_http_context");
 }
 
@@ -393,11 +398,15 @@ void streaming_worker::link_decode_to_http(
     const streaming_decode_context & decode_context,
     uint32_t http_context_id) {
 
+    (void)decode_context;     // Reserved for future decode-HTTP linking
+    (void)http_context_id;    // Reserved for future context management
+
     // Can be called from either domain
     // Placeholder implementation
 }
 
 void streaming_worker::signal_sequence_complete(uint32_t sequence_id) {
+    (void)sequence_id;  // Reserved for future sequence completion tracking
     // Placeholder - flush remaining tokens for sequence
 }
 
@@ -423,6 +432,7 @@ streaming_worker_metrics streaming_worker::get_metrics() const {
 }
 
 bool streaming_worker::flush_pending(uint32_t sequence_id) {
+    (void)sequence_id;  // Reserved for sequence-specific flushing
     verify_domain(streaming_execution_domain::STREAMING, "flush_pending");
     return true;
 }
@@ -471,6 +481,7 @@ bool streaming_worker::process_token(const streaming_token & token) {
 }
 
 bool streaming_worker::flush_batch_to_http(uint32_t sequence_id) {
+    (void)sequence_id;  // Reserved for sequence-specific HTTP flushing
     verify_domain(streaming_execution_domain::STREAMING, "flush_batch_to_http");
 
     // Send batch data to HTTP connection (placeholder)
@@ -508,6 +519,8 @@ bool async_streaming_engine::initialize(
     int32_t worker_count,
     size_t queue_capacity,
     size_t batch_size) {
+
+    (void)queue_capacity;  // Reserved for dynamic queue sizing
 
     if (initialized.load(std::memory_order_acquire)) {
         return true;  // Already initialized
@@ -560,6 +573,8 @@ bool async_streaming_engine::decode_emit_token(
     const streaming_token & token,
     uint32_t sequence_id) {
 
+    (void)sequence_id;  // Reserved for sequence tracking
+
     // Verify decode domain
     if (!verify_domain(streaming_execution_domain::DECODE, "decode_emit_token")) {
         return false;
@@ -606,7 +621,6 @@ uint32_t async_streaming_engine::register_http_context(const streaming_http_cont
     http_contexts[context.sequence_id] = context;
 
     // Assign to least-loaded worker (round-robin for now)
-    size_t min_sequences = SIZE_MAX;
     streaming_worker * target_worker = nullptr;
 
     for (auto & worker : workers) {

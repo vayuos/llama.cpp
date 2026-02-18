@@ -6,28 +6,6 @@
  */
 
 #include "llama-kernel-fusion-enforce.h"
-
-// Define logging and abort macros if not present
-#ifndef LLAMA_LOG_INFO
-#define LLAMA_LOG_INFO(...) fprintf(stdout, __VA_ARGS__)
-#endif
-
-#ifndef LLAMA_LOG_WARN
-#define LLAMA_LOG_WARN(...) fprintf(stderr, __VA_ARGS__)
-#endif
-
-#ifndef LLAMA_LOG_ERROR
-#define LLAMA_LOG_ERROR(...) fprintf(stderr, __VA_ARGS__)
-#endif
-
-#ifndef LLAMA_LOG_DEBUG
-#define LLAMA_LOG_DEBUG(...) fprintf(stderr, __VA_ARGS__)
-#endif
-
-#ifndef LLAMA_ABORT
-#define LLAMA_ABORT(msg) do { fprintf(stderr, "LLAMA_ABORT: %s\n", msg); abort(); } while(0)
-#endif
-
 #include "llama-impl.h"
 
 #include "../ggml/src/ggml-impl.h"
@@ -116,7 +94,7 @@ bool llama_kernel_fusion_enforce_qkv(
     // Scan graph for Q, K, V projections
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
-        const char * name = node->name ? node->name : "";
+        const char * name = node->name;
 
         // Count individual Q/K/V projections
         if (strstr(name, "_q_proj") || strstr(name, "_q_in") ||
@@ -179,14 +157,14 @@ bool llama_kernel_fusion_enforce_norm_matmul(
         }
 
         // Check for fused norm+matmul
-        if (strstr(node->name ? node->name : "", "norm_mul") ||
-            strstr(node->name ? node->name : "", "norm_mat")) {
+        if (strstr(node->name, "norm_mul") ||
+            strstr(node->name, "norm_mat")) {
             fused_norm_matmul++;
         }
     }
 
     // If standalone norms found with many of them → likely violation
-    if (norm_only > state->layer_count / 2) {
+    if ((uint32_t)norm_only > state->layer_count / 2) {
         LLAMA_LOG_ERROR(
             "KERNEL FUSION: RMSNorm not fused with MatMul!\n"
             "  Found %d standalone norm kernels\n"
@@ -221,7 +199,7 @@ bool llama_kernel_fusion_enforce_bias_activation(
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
         const char * op_name = ggml_op_name(node->op);
-        const char * name = node->name ? node->name : "";
+        const char * name = node->name;
 
         // Standalone bias add
         if ((strcmp(op_name, "add") == 0) && strstr(name, "bias")) {
@@ -236,7 +214,7 @@ bool llama_kernel_fusion_enforce_bias_activation(
     }
 
     // If standalone kernels found, they should be fused
-    if (standalone_bias > state->layer_count / 2) {
+    if ((uint32_t)standalone_bias > state->layer_count / 2) {
         LLAMA_LOG_ERROR(
             "KERNEL FUSION: Bias add kernels not fused!\n"
             "  Found %d standalone bias kernels\n"
@@ -246,7 +224,7 @@ bool llama_kernel_fusion_enforce_bias_activation(
         return false;
     }
 
-    if (standalone_activation > state->layer_count / 2) {
+    if ((uint32_t)standalone_activation > state->layer_count / 2) {
         LLAMA_LOG_ERROR(
             "KERNEL FUSION: Activation kernels not fused!\n"
             "  Found %d standalone activation kernels\n"
@@ -282,7 +260,7 @@ bool llama_kernel_fusion_enforce_flash_attention(
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
         const char * op_name = ggml_op_name(node->op);
-        const char * name = node->name ? node->name : "";
+        const char * name = node->name;
 
         // Look for attention operations
         if (strstr(name, "attn") || strstr(name, "attention")) {
@@ -337,7 +315,7 @@ bool llama_kernel_fusion_eliminate_micro_kernels(
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
         const char * op_name = ggml_op_name(node->op);
-        const char * name = node->name ? node->name : "";
+        const char * name = node->name;
 
         // Element-wise ops that should be inlined
         if (strcmp(op_name, "scale") == 0 ||
@@ -356,7 +334,7 @@ bool llama_kernel_fusion_eliminate_micro_kernels(
     }
 
     // If many micro-kernels found, warn (but don't abort if some are acceptable)
-    if (micro_kernel_count > state->layer_count) {
+    if ((uint32_t)micro_kernel_count > state->layer_count) {
         LLAMA_LOG_WARN(
             "KERNEL FUSION: Many micro-kernels found (%d)\n"
             "  Consider inlining element-wise and unary ops\n",
@@ -399,14 +377,14 @@ bool llama_kernel_fusion_eliminate_memory_ops(
     }
 
     // If many redundant operations, warn
-    if (redundant_copies > state->layer_count / 4) {
+    if ((uint32_t)redundant_copies > state->layer_count / 4) {
         LLAMA_LOG_WARN(
             "KERNEL FUSION: Redundant copy kernels detected (%d)\n"
             "  Should be eliminated in decode path\n",
             redundant_copies);
     }
 
-    if (reshape_count > state->layer_count / 2) {
+    if ((uint32_t)reshape_count > state->layer_count / 2) {
         LLAMA_LOG_WARN(
             "KERNEL FUSION: Reshape kernels in decode path (%d)\n"
             "  Layout should be frozen pre-decode\n",
@@ -484,7 +462,7 @@ bool llama_kernel_fusion_collapse_kv_update(
     // Scan for separate KV write operations
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
-        const char * name = node->name ? node->name : "";
+        const char * name = node->name;
 
         // Separate KV write kernel
         if (strstr(name, "kv_write") || strstr(name, "cache_append") ||
@@ -520,7 +498,7 @@ bool llama_kernel_fusion_collapse_sampling(
     // Scan for sampling kernels
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
-        const char * name = node->name ? node->name : "";
+        const char * name = node->name;
 
         // Fused sampling kernel
         if (strstr(name, "sample_") && strstr(name, "fused")) {

@@ -355,6 +355,8 @@ bool llama_decode_path_isolation_execute_direct(
     const char * operation_name,
     bool (*operation_fn)(void * data),
     void * user_data) {
+    (void)operation_name;  // Reserved for future detailed operation tracing
+
     if (!state || !operation_fn) return false;
 
     uint64_t start_ns = get_time_ns();
@@ -1006,7 +1008,7 @@ char * llama_decode_path_isolation_audit_decode_path(
         "   Result: %s\n\n",
         state->max_per_token_submissions,
         state->max_allowed_submissions_per_token,
-        state->max_per_token_submissions <= state->max_allowed_submissions_per_token ?
+        state->max_per_token_submissions <= (uint32_t)state->max_allowed_submissions_per_token ?
             "COMPLIANT" : "VIOLATION");
 
     offset += snprintf(report + offset, 8192 - offset,

@@ -156,6 +156,10 @@ void llama_print_probing_removal_validation();
 void llama_print_capabilities_snapshot();
 void llama_dump_probing_statistics();
 
+// Module initialization
+bool llama_init_probing_removal_module(void);
+void llama_cleanup_probing_removal_module(void);
+
 #define PROBING_GUARD(probe_type, location) \
     do { \
         if (g_probing_removal_engine) { \

@@ -341,7 +341,7 @@ static void * llama_server_worker_thread_fn(void * args_void) {
         }
 
         // Token dequeued successfully - now do all the expensive work
-        auto token_start_ns = std::chrono::high_resolution_clock::now();
+        // auto token_start_ns = std::chrono::high_resolution_clock::now();  // Reserved for future timing analysis
 
         // Convert token to text (expensive, not in decode!)
         // Note: This is where token_to_text would be called
@@ -921,6 +921,7 @@ llama_json_violation_type_t llama_json_isolation_get_last_violation(
 const char * llama_json_isolation_get_violation_message(
     const llama_json_isolation_context_t * ctx
 ) {
+    (void)ctx;  // Context reserved for future per-context violation tracking
     pthread_mutex_lock(&g_violation_message_mutex);
     const char * msg = g_last_violation_message.c_str();
     pthread_mutex_unlock(&g_violation_message_mutex);
@@ -1043,6 +1044,7 @@ int llama_json_isolation_set_token_to_text_fn(
     llama_json_isolation_context_t * ctx,
     llama_token_to_text_fn fn
 ) {
+    (void)fn;  // Token-to-text callback reserved for future implementation
     if (!ctx) {
         return -1;
     }

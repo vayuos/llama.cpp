@@ -357,7 +357,9 @@ bool llama_oversubscription_override_openmp(
     }
 
     control->omp_override_active = true;
+    (void)force_disable;  // Parameter used only in _OPENMP block
 #else
+    (void)force_disable;  // Unused without OpenMP
     control->openmp_mode = LLAMA_OPENMP_NORMAL;
     LLAMA_LOG_INFO("[OVERSUBSCRIPTION] OpenMP not available (no override)\n");
 #endif
@@ -524,8 +526,7 @@ bool llama_oversubscription_validate_per_token_scheduling(llama_oversubscription
         return true;
     }
 
-    // Count how many threads were woken for this token
-    uint64_t current_wakes = control->wake_events_total;
+    // Update wake count for active decode threads
     for (int i = 0; i < control->n_threads_tracked; i++) {
         if (control->threads[i].active_in_decode) {
             control->threads[i].wake_count_per_token++;
