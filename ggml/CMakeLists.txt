@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.14...3.28) # for add_link_options and implicit target directories.
-project("ggml" C CXX ASM)
+cmake_minimum_required(VERSION 3.18) # for add_link_options, implicit target directories, and CUDA support
+project("ggml" C CXX ASM CUDA)
 
 ### GGML Version
 set(GGML_VERSION_MAJOR 0)
