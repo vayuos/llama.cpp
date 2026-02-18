@@ -5,6 +5,7 @@ find_package(CUDAToolkit)
 if (CUDAToolkit_FOUND)
     message(STATUS "CUDA Toolkit found")
 
+    # Configure CMAKE_CUDA_ARCHITECTURES BEFORE enabling CUDA language
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         # native == GPUs available at build time
         # 50     == Maxwell, lowest CUDA 12 standard
@@ -24,16 +25,19 @@ if (CUDAToolkit_FOUND)
         # The default behavior for a non-native is to build virtual architectures as needed to cover all features needed
         #     for best performance and to also build real architectures for the most commonly used GPUs.
         if (GGML_NATIVE AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.6" AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
-            set(CMAKE_CUDA_ARCHITECTURES "native")
+            set(CMAKE_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures")
         else()
-            set(CMAKE_CUDA_ARCHITECTURES "75-virtual;80-virtual;86-real")
+            # Build architecture list as a CMake list (not a semicolon string)
+            unset(CUDA_ARCHS)
 
             if (CUDAToolkit_VERSION VERSION_LESS "13")
-                set(CMAKE_CUDA_ARCHITECTURES "50-virtual;61-virtual;70-virtual;${CMAKE_CUDA_ARCHITECTURES}")
+                list(APPEND CUDA_ARCHS 50-virtual 61-virtual 70-virtual)
             endif ()
 
+            list(APPEND CUDA_ARCHS 75-virtual 80-virtual 86-real)
+
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
-                set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES};89-real")
+                list(APPEND CUDA_ARCHS 89-real)
             endif()
 
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.8")
@@ -47,11 +51,15 @@ if (CUDAToolkit_FOUND)
                 #     check Modules/Internal/CMakeCUDAArchitecturesValidate.cmake in the CMake git repository instead.
                 # However, the architectures 120a-real and 121a-real should work with basically any CMake version and
                 #     until the release of e.g. Rubin there is no benefit to shipping virtual architectures for Blackwell.
-                set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES};120a-real")
+                list(APPEND CUDA_ARCHS 120a-real)
             endif()
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.9")
-                set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES};121a-real")
+                list(APPEND CUDA_ARCHS 121a-real)
             endif()
+
+            # Convert list to semicolon-separated string for CMAKE_CUDA_ARCHITECTURES
+            string(REPLACE ";" ";" CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHS}")
+            set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}" CACHE STRING "CUDA architectures")
         endif()
     endif()
 
