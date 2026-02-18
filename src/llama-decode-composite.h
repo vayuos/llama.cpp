@@ -2,10 +2,13 @@
 
 /**
  * Decode Composite Operation Enforcement Header
- * 
+ *
  * Ensures that composite decode operations (attention, matmul, norm, softmax, etc.)
  * execute entirely on GPU with no mixed CPU/GPU execution paths.
  */
+
+#include "ggml.h"
+#include "ggml-backend.h"
 
 #ifdef __cplusplus
 extern "C" {
