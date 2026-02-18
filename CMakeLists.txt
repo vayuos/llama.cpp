@@ -1,16 +1,6 @@
-cmake_minimum_required(VERSION 3.18) # for add_link_options, implicit target directories, and CUDA support
-project("llama.cpp" C CXX CUDA)
+cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories
+project("llama.cpp" C CXX)
 include(CheckIncludeFileCXX)
-
-# Enable CUDA language for GPU compilation if GGML_CUDA is enabled
-if (NOT DEFINED GGML_CUDA)
-    set(GGML_CUDA ON)
-endif()
-
-if (GGML_CUDA)
-    enable_language(CUDA OPTIONAL)
-    message(STATUS "CUDA language enabled for GPU support")
-endif()
 
 #set(CMAKE_WARN_DEPRECATED YES)
 set(CMAKE_WARN_UNUSED_CLI YES)
@@ -48,26 +38,10 @@ if (NOT MSVC)
     endif()
 endif()
 
-# Set CUDA architecture to Ada Lovelace (89) for Ada GPUs
-if (NOT CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 89 CACHE STRING "CUDA architectures to compile for" FORCE)
-endif()
-
-# CRITICAL: Ensure CUDA compiler is found and properly configured
+# CUDA configuration - let original auto-detection work
 if (GGML_CUDA)
-    find_package(CUDAToolkit REQUIRED)
-    message(STATUS "CUDA Toolkit found at: ${CUDAToolkit_INSTALL_PREFIX}")
-    message(STATUS "CUDA nvcc compiler: ${CMAKE_CUDA_COMPILER}")
-
-    # CRITICAL: Compile CUDA directly into each .o file (NO deferred device linking)
-    # This ensures kernels are available immediately when linking tools
+    # CRITICAL: Ensure CUDA_SEPARABLE_COMPILATION is OFF for direct compilation
     set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
-
-    # Compile for the target architecture directly
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -fPIC -O3 --use_fast_math")
-
-    # Ensure device code is resolved at compile time, not link time
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_89,code=sm_89")
 endif()
 
 # Add path to modules
