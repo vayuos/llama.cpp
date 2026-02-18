@@ -7,6 +7,7 @@
 
 #include "llama-decode-composite.h"
 #include "../ggml/src/ggml-impl.h"
+#include "../ggml/include/ggml-backend.h"
 
 #include <cstring>
 
