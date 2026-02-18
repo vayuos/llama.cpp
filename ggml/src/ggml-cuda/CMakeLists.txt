@@ -106,67 +106,27 @@ if (CUDAToolkit_FOUND)
     list(APPEND GGML_HEADERS_CUDA "../../include/ggml-cuda.h")
 
     file(GLOB   GGML_SOURCES_CUDA "*.cu")
-
-    # CRITICAL: Mark all .cu files as CUDA source
-    foreach(CUDA_FILE ${GGML_SOURCES_CUDA})
-        set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-    endforeach()
-
     file(GLOB   SRCS "template-instances/fattn-tile*.cu")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
-
-    # Mark template instances as CUDA
-    foreach(CUDA_FILE ${SRCS})
-        set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-    endforeach()
     file(GLOB   SRCS "template-instances/fattn-mma*.cu")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
-    foreach(CUDA_FILE ${SRCS})
-        set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-    endforeach()
-
     file(GLOB   SRCS "template-instances/mmq*.cu")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
-    foreach(CUDA_FILE ${SRCS})
-        set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-    endforeach()
-
     file(GLOB   SRCS "template-instances/mmf*.cu")
     list(APPEND GGML_SOURCES_CUDA ${SRCS})
-    foreach(CUDA_FILE ${SRCS})
-        set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-    endforeach()
 
     if (GGML_CUDA_FA_ALL_QUANTS)
         file(GLOB   SRCS "template-instances/fattn-vec*.cu")
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
-        foreach(CUDA_FILE ${SRCS})
-            set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-        endforeach()
         add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
     else()
         file(GLOB   SRCS "template-instances/fattn-vec*q4_0-q4_0.cu")
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
-        foreach(CUDA_FILE ${SRCS})
-            set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-        endforeach()
-
         file(GLOB   SRCS "template-instances/fattn-vec*q8_0-q8_0.cu")
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
-        foreach(CUDA_FILE ${SRCS})
-            set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-        endforeach()
-
         file(GLOB   SRCS "template-instances/fattn-vec*f16-f16.cu")
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
-        foreach(CUDA_FILE ${SRCS})
-            set_source_files_properties(${CUDA_FILE} PROPERTIES LANGUAGE CUDA)
-        endforeach()
     endif()
-
-    # CRITICAL FIX: Explicitly add CUDA language to ensure compilation
-    enable_language(CUDA)
-    set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_C_COMPILER})
 
     ggml_add_backend_library(ggml-cuda
                              ${GGML_HEADERS_CUDA}
@@ -174,10 +134,8 @@ if (CUDAToolkit_FOUND)
                             )
 
     # CRITICAL: Compile CUDA directly into object files (no deferred device linking)
-    # This ensures kernels are available immediately and linked into each .o file
     set_target_properties(ggml-cuda PROPERTIES
         CUDA_SEPARABLE_COMPILATION OFF
-        CUDA_STANDARD 17
         POSITION_INDEPENDENT_CODE ON
     )
 
