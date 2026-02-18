@@ -58,7 +58,8 @@ if (CUDAToolkit_FOUND)
             endif()
 
             # Convert list to semicolon-separated string for CMAKE_CUDA_ARCHITECTURES
-            string(REPLACE ";" ";" CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHS}")
+            # Join the list with semicolons
+            string(JOIN ";" CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCHS})
             set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}" CACHE STRING "CUDA architectures")
         endif()
     endif()
