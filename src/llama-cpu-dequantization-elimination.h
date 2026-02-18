@@ -149,6 +149,10 @@ void llama_print_cpu_dequant_elimination_validation();
 void llama_print_cpu_dequant_config_snapshot();
 void llama_dump_cpu_dequant_statistics();
 
+// Self-test module initialization (internal use)
+bool llama_init_cpu_dequant_elimination_module(void);
+void llama_cleanup_cpu_dequant_elimination_module(void);
+
 #define DECODE_FORBIDDEN_CPU_DEQUANT(tensor, type) \
     do { \
         if (g_cpu_dequant_elimination_engine && llama_is_decode_phase_active()) { \
