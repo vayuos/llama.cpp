@@ -105,7 +105,24 @@ typedef struct {
         int top_k;
         float top_p;
         float temperature;
+        bool deterministic;
     } sampling_params;
+
+    struct {
+        bool gpu_offload;
+        bool flash_attn_requested;
+        bool determinism_requested;
+        bool logging_requested;
+    } cli_config;
+
+    struct {
+        bool llama_server;
+        bool llama_graph_reuse_disable;
+        bool llama_graph_result_debug;
+        bool llama_batch_debug;
+        bool llama_trace_enabled;
+        int llama_trace_level;
+    } env_config;
 
     llama_frozen_threading_mode threading_mode;
     int n_threads;
@@ -115,6 +132,8 @@ typedef struct {
     llama_frozen_memory_strategy memory_strategy;
     struct {
         uint64_t kv_cache_size;
+        bool pinned_host_memory;
+        bool unified_memory;
     } memory_config;
 
     uint64_t lock_timestamp_us;
@@ -122,6 +141,7 @@ typedef struct {
 
     llama_frozen_sampling_mode sampling_mode;
     llama_frozen_config_metrics metrics;
+    uint64_t enabled_features;
 } llama_frozen_config;
 
 typedef enum {
