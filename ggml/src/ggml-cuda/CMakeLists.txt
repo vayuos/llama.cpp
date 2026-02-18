@@ -137,6 +137,9 @@ if (CUDAToolkit_FOUND)
                              ${GGML_SOURCES_CUDA}
                             )
 
+    # Explicitly mark all .cu files as CUDA language for proper compilation
+    set_source_files_properties(${GGML_SOURCES_CUDA} PROPERTIES LANGUAGE CUDA)
+
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
     if (GGML_CUDA_GRAPHS)
