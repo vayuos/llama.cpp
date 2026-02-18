@@ -100,6 +100,7 @@ public:
     bool resolve_quantization_format_at_load(quantization_format_type primary,
                                             quantization_format_type kv,
                                             quantization_format_type attention);
+    bool validate_format_backend_compatibility(quantization_format_type format) const;
     bool validate_format_backend_compatibility(quantization_format_type format);
     bool lock_quantization_format();
 

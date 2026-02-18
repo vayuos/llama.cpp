@@ -63,10 +63,6 @@ bool quantization_format_freeze_engine::resolve_quantization_format_at_load(
 
 
 bool quantization_format_freeze_engine::validate_format_backend_compatibility(quantization_format_type format) const {
-    return const_cast<quantization_format_freeze_engine*>(this)->validate_format_backend_compatibility_impl(format);
-}
-
-bool quantization_format_freeze_engine::validate_format_backend_compatibility_impl(quantization_format_type format) {
     // Verify format is compatible with selected backend
     switch (format) {
         case QUANT_FORMAT_Q4_0:
@@ -87,6 +83,10 @@ bool quantization_format_freeze_engine::validate_format_backend_compatibility_im
         default:
             return false;
     }
+}
+
+bool quantization_format_freeze_engine::validate_format_backend_compatibility(quantization_format_type format) {
+    return const_cast<const quantization_format_freeze_engine*>(this)->validate_format_backend_compatibility(format);
 }
 
 bool quantization_format_freeze_engine::lock_quantization_format() {
