@@ -19,16 +19,16 @@
 // ============================================================================
 
 static struct llama_fallback_elimination_state g_fallback_elimination = {
-    .total_attempts = 0,
-    .attempts = NULL,
-    .max_attempts = 512,
-    .violation_count = 0,
-    .last_violation_type = LLAMA_FALLBACK_VIOL_UNKNOWN,
-    .last_violation_message = NULL,
-    .audit_count = 0,
-    .problematic_paths_found = 0,
-    .decode_active = false,
-    .strict_enforcement_active = true,
+    0,                              // total_attempts
+    NULL,                           // attempts
+    512,                            // max_attempts
+    0,                              // violation_count
+    LLAMA_FALLBACK_VIOL_UNKNOWN,    // last_violation_type
+    NULL,                           // last_violation_message
+    0,                              // audit_count
+    0,                              // problematic_paths_found
+    false,                          // decode_active
+    true,                           // strict_enforcement_active
 };
 
 static bool g_enforce_strict = true;

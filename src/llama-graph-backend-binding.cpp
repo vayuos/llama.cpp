@@ -17,11 +17,11 @@
 // ============================================================================
 
 static struct llama_graph_binding_registry g_graph_binding_registry = {
-    .graphs = NULL,
-    .graph_count = 0,
-    .max_graphs = 256,
-    .total_violations = 0,
-    .rejection_count = 0,
+    NULL,                    // graphs
+    0,                       // graph_count
+    256,                     // max_graphs
+    0,                       // total_violations
+    0,                       // rejection_count
 };
 
 static bool g_enforce_strict = true;

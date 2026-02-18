@@ -220,6 +220,8 @@ bool gpu_memory_fragmentation_monitor::verify_pointer_unchanged(
 
 bool gpu_memory_fragmentation_monitor::attempt_new_allocation(
     const char * buffer_name, size_t size) {
+    (void)buffer_name;  // Reserved for future use
+    (void)size;         // Reserved for future use
 
     if (topology_locked.load() && monitoring_active.load()) {
         allocation_events.fetch_add(1);
