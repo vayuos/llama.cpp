@@ -343,7 +343,7 @@ bool decode_acceptance_validator::record_gate_result(acceptance_gate gate_id,
         description,
         passed,
         failure_reason,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count(),
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
         is_critical
     };
 
@@ -369,7 +369,7 @@ bool decode_acceptance_validator::record_violation(const char * description,
     acceptance_violation violation = {
         description,
         gate,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count(),
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
         evidence_source,
         is_blocking
     };
