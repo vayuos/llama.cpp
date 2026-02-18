@@ -3,7 +3,7 @@
 #pragma once
 
 #include "../ggml/include/ggml-opt.h"
-#include "llama-cpp.h"
+#include "../include/llama-cpp.h"
 
 #include <set>
 #include <sstream>
