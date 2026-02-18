@@ -1,0 +1,137 @@
+================================================================================
+IMMEDIATE ACTIONS - Session 5 Extended
+Build Location Fix + Struct Definitions
+================================================================================
+
+🎯 WHAT HAPPENED:
+  • Build from /home/viren/llama/llama_x86/llama.cpp/ discovered 2 new errors
+  • Errors: 'streaming_metrics' and 'admission_metrics' type not declared
+  • Root cause: Forward reference - methods returned undefined struct types
+  • FIX: Added struct definitions to header file
+
+✅ WHAT WAS FIXED:
+  • Added streaming_metrics struct (4 members)
+  • Added admission_metrics struct (4 members)
+  • File: /home/viren/source/llama.cpp/llama.cpp/src/llama-server-decode-isolation.h
+  • Lines added: ~20 lines
+
+⚠️  CRITICAL ISSUE DISCOVERED:
+  • Build runs from: /home/viren/llama/llama_x86/llama.cpp/
+  • Fixes applied to: /home/viren/source/llama.cpp/llama.cpp/
+  • These may be SEPARATE directories!
+  • Fixes need to be SYNCED to build location
+
+================================================================================
+DO THIS NOW (3 QUICK STEPS)
+================================================================================
+
+STEP 1: Check if files are symlinked (30 seconds)
+────────────────────────────────────────────────
+
+Run this command:
+  ls -la /home/viren/llama/llama_x86/llama.cpp/src/llama-server-decode-isolation.h
+
+If output shows "-> /home/viren/source/...":
+  ✅ Files are symlinked - fixes apply automatically - skip to STEP 3
+
+If output shows a regular file:
+  ⚠️  Files are separate copies - proceed to STEP 2
+
+
+STEP 2: Sync fixes to build directory (1 minute)
+─────────────────────────────────────────────────
+
+OPTION A - Automatic (Recommended):
+  bash /home/viren/source/llama.cpp/llama.cpp/SYNC_FIXES_TO_BUILD.sh
+
+OPTION B - Manual:
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-server-decode-isolation.h \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-debug-stripping.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-json-isolation.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-config-freeze.h \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+
+STEP 3: Resume build (5-15 minutes)
+───────────────────────────────────
+
+cd /home/viren/llama/llama_x86/llama.cpp/build
+make -j$(nproc)
+
+
+DONE! ✅
+
+================================================================================
+EXPECTED RESULTS AFTER REBUILD
+================================================================================
+
+Build should:
+  ✅ Progress past the 'streaming_metrics' error
+  ✅ Progress past the 'admission_metrics' error
+  ✅ Continue compiling sections 46+
+  ✅ Advance from 41% toward 72%+
+
+May encounter:
+  • Additional errors in sections 46-76 (normal - we'll fix as they appear)
+  • Warnings about C++20 designated initializers (non-blocking)
+
+Success indicator:
+  • Build progresses without "streaming_metrics" or "admission_metrics" errors
+  • Build percentage increases beyond 41%
+
+Failure indicator:
+  • Same errors still appearing (files didn't sync properly)
+  • New errors about missing types
+
+
+================================================================================
+IF SOMETHING GOES WRONG
+================================================================================
+
+If build still fails with same errors:
+  1. Verify STEP 1 - Did files sync correctly?
+  2. Check file dates - Are new files present?
+     ls -la /home/viren/llama/llama_x86/llama.cpp/src/llama-server-decode-isolation.h
+  3. Verify grep for new structs:
+     grep "struct streaming_metrics" /home/viren/llama/llama_x86/llama.cpp/src/llama-server-decode-isolation.h
+  4. Force rebuild:
+     cd /home/viren/llama/llama_x86/llama.cpp/build
+     make clean
+     make -j$(nproc)
+
+If new errors appear:
+  1. Take note of error messages
+  2. Report the new errors
+  3. We'll fix them in next iteration
+
+
+================================================================================
+REFERENCE DOCUMENTATION
+================================================================================
+
+For more details, see:
+  • SESSION_5_EXTENDED_UPDATE.md - Comprehensive technical analysis
+  • REBUILD_INSTRUCTIONS.txt - Build procedures
+  • FIXES_SUMMARY.txt - All fixes applied
+  • BUILD_LOCATION_INFO.txt - Directory structure info
+
+For automated help:
+  • SYNC_FIXES_TO_BUILD.sh - Sync script
+
+
+================================================================================
+SUMMARY
+================================================================================
+
+Before:     41% (45/76 sections) + 2 new struct errors
+After Sync: Ready to rebuild - structs defined + fixes applied
+Expected:   72%+ (55+/76 sections) after successful compilation
+
+Status: ✅ Ready to Sync & Rebuild
+
+
+Questions? See SESSION_5_EXTENDED_UPDATE.md for full details.
+================================================================================
