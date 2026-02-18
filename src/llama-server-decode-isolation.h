@@ -109,6 +109,26 @@ struct isolation_metrics {
 };
 
 /**
+ * Streaming metrics - async token stream monitoring
+ */
+struct streaming_metrics {
+    uint64_t tokens_produced;
+    uint64_t tokens_consumed;
+    uint64_t backpressure_events;
+    float throughput_tokens_per_sec;
+};
+
+/**
+ * Admission metrics - request admission tracking
+ */
+struct admission_metrics {
+    int32_t queue_depth;
+    int64_t recent_decode_latency_us;
+    uint64_t admissions_rejected;
+    float rejection_rate_percent;
+};
+
+/**
  * Decode domain - decode thread configuration and state
  */
 struct decode_domain {
