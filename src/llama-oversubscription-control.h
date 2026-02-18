@@ -418,7 +418,7 @@ bool llama_oversubscription_validate_per_token_scheduling(llama_oversubscription
  * @return true if thread creation allowed, false/abort if decode active and denied
  */
 bool llama_oversubscription_check_thread_creation_allowed(
-    const llama_oversubscription_control * control,
+    llama_oversubscription_control * control,
     uint32_t new_thread_id);
 
 /**
