@@ -103,7 +103,7 @@ add_library(${TARGET} STATIC
     jinja/caps.h
     )
 
-target_include_directories(${TARGET} PUBLIC . ../vendor)
+target_include_directories(${TARGET} PUBLIC . ../vendor ../include ../ggml/include)
 target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 
 if (BUILD_SHARED_LIBS)
