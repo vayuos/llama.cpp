@@ -336,7 +336,7 @@ int llama_sampling_elimination_signal_gpu_token_ready(int32_t token) {
 
     g_sampling_validation.state_record.gpu_state = LLAMA_GPU_SAMPLING_TOKEN_READY;
     g_sampling_validation.state_record.gpu_samples_produced++;
-    g_sampling_validation.state_record.last_token_sampled = token;
+    // Token is tracked via gpu_samples_produced counter
     return 0;
 }
 
