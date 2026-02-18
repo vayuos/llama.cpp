@@ -43,7 +43,7 @@ bool decode_cpu_execution_detector::initialize() {
     return true;
 }
 
-bool decode_cpu_execution_detector::enable_strict_mode(bool enable) {
+bool decode_cpu_execution_detector::enable_strict_mode(bool /* enable */) {
     // Strict mode enforces immediate termination on any CPU execution
     return true;
 }
@@ -119,7 +119,7 @@ bool decode_cpu_execution_detector::register_op_binding(
     const char * op_name, decode_critical_op_type op_type, bool is_decode_critical) {
 
     op_binding_record binding = {
-        op_name, op_type, BACKEND_CUDA, BACKEND_UNKNOWN, is_decode_critical, false
+        op_name, op_type, EXEC_BACKEND_CUDA, EXEC_BACKEND_UNKNOWN, is_decode_critical, false
     };
     op_bindings.push_back(binding);
     op_registry[op_name] = binding;
@@ -127,7 +127,7 @@ bool decode_cpu_execution_detector::register_op_binding(
 }
 
 bool decode_cpu_execution_detector::set_op_expected_backend(
-    const char * op_name, execution_backend backend) {
+    const char * /* op_name */, execution_backend backend) {
 
     auto it = op_registry.find(op_name);
     if (it == op_registry.end()) {
@@ -153,7 +153,7 @@ bool decode_cpu_execution_detector::detect_cpu_op_execution(
     const op_binding_record & binding = it->second;
 
     // If decode-critical and actual backend is CPU, abort immediately
-    if (binding.is_decode_critical && actual_backend == BACKEND_CPU) {
+    if (binding.is_decode_critical && actual_backend == EXEC_BACKEND_CPU) {
         cpu_attempts.fetch_add(1);
         violations_blocked.fetch_add(1);
 
@@ -202,7 +202,7 @@ bool decode_cpu_execution_detector::verify_tensor_backend_access(
     }
 
     // If tensor is GPU-resident and CPU is accessing during decode, abort
-    if (tensor_backend == BACKEND_CUDA && decode_in_progress.load()) {
+    if (tensor_backend == EXEC_BACKEND_CUDA && decode_in_progress.load()) {
         // This should have been prevented by host_access_prevention
         // But we check again as defense-in-depth
         violations_blocked.fetch_add(1);
@@ -219,7 +219,7 @@ bool decode_cpu_execution_detector::verify_sampling_authority(execution_backend 
     }
 
     // Sampling must be GPU-exclusive during decode
-    if (sampling_backend != BACKEND_CUDA) {
+    if (sampling_backend != EXEC_BACKEND_CUDA) {
         violations_blocked.fetch_add(1);
         std::cerr << "\n[FATAL] CPU sampling attempted during decode phase" << std::endl;
         std::cerr << "Sampling backend: " << static_cast<int>(sampling_backend) << std::endl;
@@ -255,7 +255,7 @@ bool decode_cpu_execution_detector::attempt_cpu_tensor_access(
         return true;
     }
 
-    if (tensor_backend == BACKEND_CUDA) {
+    if (tensor_backend == EXEC_BACKEND_CUDA) {
         violations_blocked.fetch_add(1);
         std::cerr << "\n[FATAL] CPU attempted to access GPU decode tensor: " << tensor_name << std::endl;
         return false;
@@ -265,11 +265,11 @@ bool decode_cpu_execution_detector::attempt_cpu_tensor_access(
 }
 
 void decode_cpu_execution_detector::record_op_execution(
-    const char * op_name, execution_backend backend) {
+    const char * /* op_name */, execution_backend backend) {
 
     monitored_ops.fetch_add(1);
 
-    if (backend == BACKEND_GPU || backend == BACKEND_CUDA) {
+    if (backend == EXEC_BACKEND_GPU || backend == EXEC_BACKEND_CUDA) {
         gpu_ops_count.fetch_add(1);
     }
 }
@@ -279,7 +279,7 @@ void decode_cpu_execution_detector::record_violation(
     decode_critical_op_type op_type, execution_backend cpu_backend) {
 
     cpu_execution_violation_record violation = {
-        op_name, tensor_name, op_type, cpu_backend, BACKEND_CUDA,
+        op_name, tensor_name, op_type, cpu_backend, EXEC_BACKEND_CUDA,
         decode_in_progress.load(), true,
         std::chrono::high_resolution_clock::now().time_since_epoch().count()
     };
@@ -288,7 +288,7 @@ void decode_cpu_execution_detector::record_violation(
 }
 
 void decode_cpu_execution_detector::record_backend_mismatch(
-    const char * op_name, execution_backend expected, execution_backend actual) {
+    const char * /* op_name */, execution_backend expected, execution_backend actual) {
 
     if (expected != actual) {
         violations_blocked.fetch_add(1);
@@ -650,25 +650,25 @@ static bool run_cpu_detector_tests(void) {
     }
 
     // Test 7: Set expected backend
-    if (!llama_set_op_expected_backend("attention_matmul", 1)) { // BACKEND_CUDA = 1
+    if (!llama_set_op_expected_backend("attention_matmul", 1)) { // EXEC_BACKEND_CUDA = 1
         std::cerr << "[CPU_DETECTOR] TEST FAILED: Set expected backend" << std::endl;
         return false;
     }
 
     // Test 8: Detect CPU op (should fail)
-    if (llama_detect_cpu_op_execution("attention_matmul", 0)) { // BACKEND_CPU = 0
+    if (llama_detect_cpu_op_execution("attention_matmul", 0)) { // EXEC_BACKEND_CPU = 0
         std::cerr << "[CPU_DETECTOR] TEST FAILED: CPU op not detected" << std::endl;
         return false;
     }
 
     // Test 9: Allow GPU op (should succeed)
-    if (!llama_detect_cpu_op_execution("attention_matmul", 1)) { // BACKEND_CUDA = 1
+    if (!llama_detect_cpu_op_execution("attention_matmul", 1)) { // EXEC_BACKEND_CUDA = 1
         std::cerr << "[CPU_DETECTOR] TEST FAILED: GPU op not allowed" << std::endl;
         return false;
     }
 
     // Test 10: Block CPU tensor access
-    if (llama_attempt_cpu_tensor_access("kv_cache", 1)) { // BACKEND_CUDA = 1
+    if (llama_attempt_cpu_tensor_access("kv_cache", 1)) { // EXEC_BACKEND_CUDA = 1
         std::cerr << "[CPU_DETECTOR] TEST FAILED: CPU tensor access not blocked" << std::endl;
         return false;
     }

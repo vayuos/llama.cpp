@@ -43,14 +43,14 @@ bool decode_buffer_freeze_engine::initialize() {
     return true;
 }
 
-bool decode_buffer_freeze_engine::enable_strict_mode(bool enable) {
+bool decode_buffer_freeze_engine::enable_strict_mode(bool /* enable */) {
     // Strict mode enforces additional validation during buffer freeze
     return true;
 }
 
 bool decode_buffer_freeze_engine::plan_buffer_allocation(
     size_t n_ctx, size_t n_layer, size_t n_embd,
-    size_t max_batch, size_t max_seq_len) {
+    size_t max_batch, size_t /* max_seq_len */) {
 
     if (current_phase.load() != BUFFER_FREEZE_PLANNING) {
         return false; // Wrong phase
@@ -163,7 +163,7 @@ bool decode_buffer_freeze_engine::lock_buffer_structure() {
     return true;
 }
 
-bool decode_buffer_freeze_engine::attempt_buffer_relocation(const char * buffer_name) {
+bool decode_buffer_freeze_engine::attempt_buffer_relocation(const char * /* buffer_name */) {
     if (buffers_frozen.load()) {
         relocation_blocks.fetch_add(1);
         buffer_binding_record record = {
@@ -187,7 +187,7 @@ bool decode_buffer_freeze_engine::attempt_buffer_resize(const char * buffer_name
     return true;
 }
 
-bool decode_buffer_freeze_engine::attempt_tensor_rebinding(const char * tensor_name) {
+bool decode_buffer_freeze_engine::attempt_tensor_rebinding(const char * /* tensor_name */) {
     if (graph_frozen.load()) {
         rebind_blocks.fetch_add(1);
         buffer_binding_record record = {
@@ -209,7 +209,7 @@ void decode_buffer_freeze_engine::record_buffer_binding(
     buffer_count.fetch_add(1);
 }
 
-void decode_buffer_freeze_engine::record_relocation_attempt(const char * buffer_name) {
+void decode_buffer_freeze_engine::record_relocation_attempt(const char * /* buffer_name */) {
     buffer_binding_record record = {
         buffer_name, 0, nullptr, false, true, true
     };
@@ -223,7 +223,7 @@ void decode_buffer_freeze_engine::record_resize_attempt(const char * buffer_name
     resize_attempts.push_back(record);
 }
 
-void decode_buffer_freeze_engine::record_rebind_attempt(const char * tensor_name) {
+void decode_buffer_freeze_engine::record_rebind_attempt(const char * /* tensor_name */) {
     buffer_binding_record record = {
         tensor_name, 0, nullptr, false, true, false
     };
@@ -307,7 +307,7 @@ bool llama_init_decode_buffer_freeze() {
     return g_decode_buffer_freeze_engine != nullptr;
 }
 
-bool llama_enable_buffer_freeze_strict_mode(bool enable) {
+bool llama_enable_buffer_freeze_strict_mode(bool /* enable */) {
     if (g_decode_buffer_freeze_engine) {
         return g_decode_buffer_freeze_engine->enable_strict_mode(enable);
     }
@@ -315,7 +315,7 @@ bool llama_enable_buffer_freeze_strict_mode(bool enable) {
 }
 
 bool llama_plan_buffer_allocation(size_t n_ctx, size_t n_layer, size_t n_embd,
-                                 size_t max_batch, size_t max_seq_len) {
+                                 size_t max_batch, size_t /* max_seq_len */) {
     if (g_decode_buffer_freeze_engine) {
         return g_decode_buffer_freeze_engine->plan_buffer_allocation(
             n_ctx, n_layer, n_embd, max_batch, max_seq_len);
@@ -351,7 +351,7 @@ bool llama_lock_buffer_structure() {
     return false;
 }
 
-bool llama_attempt_buffer_relocation(const char * buffer_name) {
+bool llama_attempt_buffer_relocation(const char * /* buffer_name */) {
     if (g_decode_buffer_freeze_engine) {
         return g_decode_buffer_freeze_engine->attempt_buffer_relocation(buffer_name);
     }
@@ -365,7 +365,7 @@ bool llama_attempt_buffer_resize(const char * buffer_name, size_t new_size) {
     return true;
 }
 
-bool llama_attempt_tensor_rebinding(const char * tensor_name) {
+bool llama_attempt_tensor_rebinding(const char * /* tensor_name */) {
     if (g_decode_buffer_freeze_engine) {
         return g_decode_buffer_freeze_engine->attempt_tensor_rebinding(tensor_name);
     }
@@ -399,7 +399,7 @@ void llama_record_buffer_binding(const char * name, size_t size, void * ptr, boo
     }
 }
 
-void llama_record_relocation_attempt(const char * buffer_name) {
+void llama_record_relocation_attempt(const char * /* buffer_name */) {
     if (g_decode_buffer_freeze_engine) {
         g_decode_buffer_freeze_engine->record_relocation_attempt(buffer_name);
     }
@@ -411,7 +411,7 @@ void llama_record_resize_attempt(const char * buffer_name, size_t new_size) {
     }
 }
 
-void llama_record_rebind_attempt(const char * tensor_name) {
+void llama_record_rebind_attempt(const char * /* tensor_name */) {
     if (g_decode_buffer_freeze_engine) {
         g_decode_buffer_freeze_engine->record_rebind_attempt(tensor_name);
     }
