@@ -140,7 +140,7 @@ bool pcie_traffic_watchdog::record_transfer(pcie_transfer_type type,
         direction,
         size_bytes,
         source_location,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count(),
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
         monitoring_active.load(),
         false  // violation (set below)
     };
@@ -256,7 +256,7 @@ bool pcie_traffic_watchdog::record_violation(const char * description,
         direction,
         size,
         location,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count(),
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
         is_critical
     };
 
