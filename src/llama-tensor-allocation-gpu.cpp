@@ -170,15 +170,14 @@ int llama_tensor_allocation_gpu_mark_tensor_reserved(uint64_t tensor_id, uint64_
         }
     }
 
-    struct llama_tensor_reservation_record reservation = {
-        .tensor_id = tensor_id,
-        .status = LLAMA_TENSOR_RESERVATION_GPU_ALLOCATED,
-        .owner = LLAMA_TENSOR_OWNER_DECODE,
-        .reserved_size_bytes = size_bytes,
-        .actual_size_bytes = 0,
-        .gpu_device_ptr = 0,
-        .is_locked = false,
-    };
+    struct llama_tensor_reservation_record reservation;
+    reservation.tensor_id = tensor_id;
+    reservation.status = LLAMA_TENSOR_RESERVATION_GPU_ALLOCATED;
+    reservation.owner = LLAMA_TENSOR_OWNER_DECODE;
+    reservation.reserved_size_bytes = size_bytes;
+    reservation.actual_size_bytes = 0;
+    reservation.gpu_device_ptr = 0;
+    reservation.is_locked = false;
 
     g_tensor_reservations[tensor_id] = reservation;
     g_tensor_allocation_validation.state_record.total_decode_tensors_reserved++;
@@ -469,15 +468,14 @@ int llama_tensor_allocation_gpu_track_allocation(
     uint64_t size_bytes,
     enum llama_allocation_phase phase
 ) {
-    struct llama_tensor_allocation_record record = {
-        .phase = phase,
-        .violation = LLAMA_TENSOR_ALLOCATION_VIOLATION_NONE,
-        .owner = LLAMA_TENSOR_OWNER_DECODE,
-        .tensor_id = tensor_id,
-        .size_bytes = size_bytes,
-        .timestamp_ns = (uint64_t)0,
-        .was_violation = false,
-    };
+    struct llama_tensor_allocation_record record;
+    record.phase = phase;
+    record.violation = LLAMA_TENSOR_ALLOCATION_VIOLATION_NONE;
+    record.owner = LLAMA_TENSOR_OWNER_DECODE;
+    record.tensor_id = tensor_id;
+    record.size_bytes = size_bytes;
+    record.timestamp_ns = (uint64_t)0;
+    record.was_violation = false;
 
     g_tensor_allocations[tensor_id] = record;
     g_allocation_history.push_back(record);
