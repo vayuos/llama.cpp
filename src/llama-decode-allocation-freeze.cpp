@@ -50,6 +50,8 @@ bool decode_allocation_freeze_engine::enable_strict_mode(bool enable) {
 
 bool decode_allocation_freeze_engine::compute_buffer_allocation_plan(
     size_t n_ctx, size_t n_layer, size_t n_embd, size_t quant_format) {
+    // Note: quant_format reserved for future quantization-aware memory calculations
+    (void)quant_format;
 
     if (current_phase.load() != ALLOC_FREEZE_INIT_PHASE) {
         return false; // Wrong phase
