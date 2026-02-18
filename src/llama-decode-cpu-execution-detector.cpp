@@ -127,7 +127,7 @@ bool decode_cpu_execution_detector::register_op_binding(
 }
 
 bool decode_cpu_execution_detector::set_op_expected_backend(
-    const char * /* op_name */, execution_backend backend) {
+    const char * op_name, execution_backend backend) {
 
     auto it = op_registry.find(op_name);
     if (it == op_registry.end()) {
