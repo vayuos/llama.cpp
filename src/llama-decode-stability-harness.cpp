@@ -411,7 +411,7 @@ bool decode_stability_harness::record_violation(const char * invariant_name,
         token_num,
         value,
         threshold,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count(),
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count()),
         is_critical
     };
 
@@ -730,7 +730,7 @@ static bool stability_harness_test_lifecycle_test() {
     }
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, false, false, 0
     };
 
@@ -759,7 +759,7 @@ static bool stability_harness_sample_recording_test() {
     harness->begin_stability_test();
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, false, false, 0
     };
 
@@ -794,7 +794,7 @@ static bool stability_harness_pcie_violation_detection_test() {
     harness->begin_stability_test();
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 512*1024, 0, 0, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 512*1024, 0, 0, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, true, false, 0  // pcie_violation_detected = true
     };
 
@@ -822,7 +822,7 @@ static bool stability_harness_finalize_test() {
     harness->begin_stability_test();
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 1024*1024, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 1024*1024, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, false, false, 0
     };
 
@@ -860,7 +860,7 @@ static bool stability_harness_json_export_test() {
     harness->begin_stability_test();
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, false, false, 0
     };
 
@@ -892,7 +892,7 @@ static bool stability_harness_disabled_noop_test() {
     // Don't enable harness
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 0, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, false, false, 0
     };
 
@@ -929,7 +929,7 @@ static bool stability_harness_full_workflow_test() {
     }
 
     stability_token_sample sample = {
-        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 1024*1024, 10.0, 2048*1024*1024, 4096*1024*1024, 1024,
+        1, 2.5, 2.7, 0.2, 0.93, 0, 0, 1024*1024, 10.0, 2048ULL*1024*1024, 4096ULL*1024*1024, 1024,
         40.0, false, false, false, 0
     };
 
