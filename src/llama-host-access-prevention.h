@@ -246,4 +246,6 @@ void llama_print_decode_isolation_statistics();
 
 #ifdef __cplusplus
 }
+bool llama_init_host_access_prevention_module(void);
+void llama_cleanup_host_access_prevention_module(void);
 #endif

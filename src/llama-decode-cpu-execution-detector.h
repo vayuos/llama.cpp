@@ -245,4 +245,6 @@ void llama_print_decode_purity_report();
 
 #ifdef __cplusplus
 }
+bool llama_init_decode_cpu_execution_detector_module(void);
+void llama_cleanup_decode_cpu_execution_detector_module(void);
 #endif

@@ -230,4 +230,6 @@ void llama_print_buffer_freeze_violations();
 
 #ifdef __cplusplus
 }
+bool llama_init_decode_buffer_freeze_module(void);
+void llama_cleanup_decode_buffer_freeze_module(void);
 #endif

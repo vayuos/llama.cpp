@@ -104,7 +104,7 @@ bool decode_cpu_execution_detector::begin_decode_phase() {
     detection_active.store(true);
     immutable_config.decode_in_progress = true;
     immutable_config.detector_arm_timestamp_ns =
-        std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     return true;
 }
 
@@ -127,7 +127,7 @@ bool decode_cpu_execution_detector::register_op_binding(
 }
 
 bool decode_cpu_execution_detector::set_op_expected_backend(
-    const char * /* op_name */, execution_backend backend) {
+    const char * op_name, execution_backend backend) {
 
     auto it = op_registry.find(op_name);
     if (it == op_registry.end()) {
@@ -265,11 +265,11 @@ bool decode_cpu_execution_detector::attempt_cpu_tensor_access(
 }
 
 void decode_cpu_execution_detector::record_op_execution(
-    const char * /* op_name */, execution_backend backend) {
+    const char * op_name, execution_backend backend) {
 
     monitored_ops.fetch_add(1);
 
-    if (backend == EXEC_BACKEND_GPU || backend == EXEC_BACKEND_CUDA) {
+    if (backend == EXEC_BACKEND_CUDA) {
         gpu_ops_count.fetch_add(1);
     }
 }
@@ -281,14 +281,14 @@ void decode_cpu_execution_detector::record_violation(
     cpu_execution_violation_record violation = {
         op_name, tensor_name, op_type, cpu_backend, EXEC_BACKEND_CUDA,
         decode_in_progress.load(), true,
-        std::chrono::high_resolution_clock::now().time_since_epoch().count()
+        static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count())
     };
     violation_log.push_back(violation);
     violations_blocked.fetch_add(1);
 }
 
 void decode_cpu_execution_detector::record_backend_mismatch(
-    const char * /* op_name */, execution_backend expected, execution_backend actual) {
+    const char * op_name, execution_backend expected, execution_backend actual) {
 
     if (expected != actual) {
         violations_blocked.fetch_add(1);
