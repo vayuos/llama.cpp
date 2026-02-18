@@ -63,7 +63,7 @@ bool host_access_prevention_engine::mark_kv_cache_gpu_exclusive() {
 
         buffer_ownership_record record = {
             "kv_cache", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
-        };
+        , false};
         buffer_classifications.push_back(record);
         buffer_registry["kv_cache"] = record;
     }
@@ -77,7 +77,7 @@ bool host_access_prevention_engine::mark_activations_gpu_exclusive() {
 
         buffer_ownership_record record = {
             "activations", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
-        };
+        , false};
         buffer_classifications.push_back(record);
         buffer_registry["activations"] = record;
     }
@@ -91,7 +91,7 @@ bool host_access_prevention_engine::mark_logits_gpu_only() {
 
         buffer_ownership_record record = {
             "logits", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
-        };
+        , false};
         buffer_classifications.push_back(record);
         buffer_registry["logits"] = record;
     }
@@ -105,7 +105,7 @@ bool host_access_prevention_engine::mark_sampling_gpu_only() {
 
         buffer_ownership_record record = {
             "sampling", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
-        };
+        , false};
         buffer_classifications.push_back(record);
         buffer_registry["sampling"] = record;
     }
@@ -119,7 +119,7 @@ bool host_access_prevention_engine::mark_quantized_weights_gpu_locked() {
 
         buffer_ownership_record record = {
             "quantized_weights", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
-        };
+        , false};
         buffer_classifications.push_back(record);
         buffer_registry["quantized_weights"] = record;
     }
@@ -133,7 +133,7 @@ bool host_access_prevention_engine::mark_cuda_workspace_gpu_only() {
 
         buffer_ownership_record record = {
             "cuda_workspace", BUFFER_CLASS_GPU_EXCLUSIVE, true, false, true
-        };
+        , false};
         buffer_classifications.push_back(record);
         buffer_registry["cuda_workspace"] = record;
     }

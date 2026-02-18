@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <string>
 #include <map>
+#include "llama-backend-immutability-enforce.h"
 #include <vector>
 
 // ============================================================================

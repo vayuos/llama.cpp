@@ -443,35 +443,35 @@ bool llama_deallocate_aligned(void * ptr) {
     return false;
 }
 
-bool llama_validate_buffer_alignment(const char * /* buffer_name */, void * ptr, size_t /* size */, size_t alignment) {
+bool llama_validate_buffer_alignment(const char * buffer_name, void * ptr, size_t size, size_t alignment) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->validate_buffer_alignment(buffer_name, ptr, size, alignment);
     }
     return false;
 }
 
-bool llama_attempt_misaligned_view(const char * /* buffer_name */, size_t /* offset */) {
+bool llama_attempt_misaligned_view(const char * buffer_name, size_t offset) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->attempt_misaligned_view(buffer_name, offset);
     }
     return true;
 }
 
-bool llama_verify_tensor_alignment(const char * /* tensor_name */, void * data, size_t stride) {
+bool llama_verify_tensor_alignment(const char * tensor_name, void * data, size_t stride) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->verify_tensor_alignment(tensor_name, data, stride);
     }
     return false;
 }
 
-bool llama_verify_kv_cache_alignment(size_t /* n_layer */, size_t stride) {
+bool llama_verify_kv_cache_alignment(size_t n_layer, size_t stride) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->verify_kv_cache_alignment(n_layer, stride);
     }
     return false;
 }
 
-bool llama_verify_quantized_alignment(const char * /* quant_format */, void * data, size_t block_size) {
+bool llama_verify_quantized_alignment(const char * quant_format, void * data, size_t block_size) {
     if (g_gpu_allocation_alignment_engine) {
         return g_gpu_allocation_alignment_engine->verify_quantized_alignment(quant_format, data, block_size);
     }
