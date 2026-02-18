@@ -453,6 +453,11 @@ extern std::atomic<uint64_t> g_llama_debug_timing_sampling;
  */
 extern llama_debug_stripping_state g_llama_debug_stripping;
 
+/**
+ * Initialize debug stripping state with default configuration
+ */
+void init_debug_stripping_state(llama_debug_stripping_state & state);
+
 // ============================================================================
 // PUBLIC API
 // ============================================================================
