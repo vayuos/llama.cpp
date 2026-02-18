@@ -102,15 +102,15 @@ void fused_kernel_coverage_engine::record_fused_kernel_launch(active_quant_forma
     }
 }
 
-void fused_kernel_coverage_engine::record_cpu_kernel_launch(active_quant_format format) {
+void fused_kernel_coverage_engine::record_cpu_kernel_launch(active_quant_format /* format */) {
     cpu_kernel_launches.fetch_add(1);
 }
 
-void fused_kernel_coverage_engine::record_dense_gemv_launch(active_quant_format format) {
+void fused_kernel_coverage_engine::record_dense_gemv_launch(active_quant_format /* format */) {
     dense_gemv_launches.fetch_add(1);
 }
 
-void fused_kernel_coverage_engine::record_split_kernel_launch(active_quant_format format) {
+void fused_kernel_coverage_engine::record_split_kernel_launch(active_quant_format /* format */) {
     split_kernel_launches.fetch_add(1);
 }
 

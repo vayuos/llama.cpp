@@ -129,7 +129,7 @@ void mmq_enforcement_engine::lock_mmq_enforcement() {
     current_phase.store(mmq_enforce_phase::MMQ_ENFORCE_LOCKED);
 }
 
-bool mmq_enforcement_engine::attempt_fallback_dispatch(const char * backend_name) {
+bool mmq_enforcement_engine::attempt_fallback_dispatch(const char * /* backend_name */) {
     if (mmq_enforcement_locked.load()) {
         fallback_attempts_blocked.fetch_add(1);
         return false; // Fallback rejected

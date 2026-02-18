@@ -35,10 +35,7 @@ std::atomic<uint64_t> g_llama_debug_timing_cuda_kernel(0);
 std::atomic<uint64_t> g_llama_debug_timing_sampling(0);
 
 /**
- * Initialize debug stripping state in C++17 compatible way
- */
-static llama_debug_stripping_state init_debug_stripping_state() {
-    llama_debug_stripping_state state = {};
+static void init_debug_stripping_state(llama_debug_stripping_state & state) {
     state.config.enable_debug_logging = LLAMA_ENABLE_DEBUG;
     state.config.enable_timing_instrumentation = LLAMA_ENABLE_TIMING_INSTRUMENTATION;
     state.config.enable_hot_path_assertions = LLAMA_ENABLE_HOT_PATH_ASSERTIONS;
@@ -50,30 +47,35 @@ static llama_debug_stripping_state init_debug_stripping_state() {
     state.config.max_timing_ns_per_token = 10000000;  // 10ms
     state.config.max_debug_operations_per_token = 100;
 
-    state.metrics.decode_loop_entries = 0;
-    state.metrics.graph_execute_entries = 0;
-    state.metrics.cuda_kernel_launches = 0;
-    state.metrics.sampling_entries = 0;
-    state.metrics.debug_logs_suppressed = 0;
-    state.metrics.timing_operations_skipped = 0;
-    state.metrics.assertions_skipped = 0;
-    state.metrics.feature_probes_skipped = 0;
-    state.metrics.decode_loop_total_ns = 0;
-    state.metrics.graph_execute_total_ns = 0;
-    state.metrics.sampling_total_ns = 0;
-    state.metrics.compile_time_guard_bypasses = 0;
-    state.metrics.runtime_guard_invocations = 0;
+    state.metrics.decode_loop_entries.store(0);
+    state.metrics.graph_execute_entries.store(0);
+    state.metrics.cuda_kernel_launches.store(0);
+    state.metrics.sampling_entries.store(0);
+    state.metrics.debug_logs_suppressed.store(0);
+    state.metrics.timing_operations_skipped.store(0);
+    state.metrics.assertions_skipped.store(0);
+    state.metrics.feature_probes_skipped.store(0);
+    state.metrics.decode_loop_total_ns.store(0);
+    state.metrics.graph_execute_total_ns.store(0);
+    state.metrics.sampling_total_ns.store(0);
+    state.metrics.compile_time_guard_bypasses.store(0);
+    state.metrics.runtime_guard_invocations.store(0);
 
-    state.initialized = false;
-    state.initialization_status = 0;
-    return state;
+    state.initialized.store(false);
+    state.initialization_status.store(0);
 }
 
 /**
- * Global debug stripping state
+ * Global debug stripping state - zero-initialized by default
  */
-llama_debug_stripping_state g_llama_debug_stripping = init_debug_stripping_state();
+llama_debug_stripping_state g_llama_debug_stripping;
 
+/**
+ * Static initializer to configure debug stripping state
+ */
+static struct _debug_stripping_init {
+    _debug_stripping_init() { init_debug_stripping_state(g_llama_debug_stripping); }
+} _debug_stripping_initializer;
 /**
  * Runtime guard state (mutex for thread-safety)
  */

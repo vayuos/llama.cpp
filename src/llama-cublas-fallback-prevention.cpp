@@ -31,7 +31,7 @@ fallback_prevention_engine::fallback_prevention_engine()
       graph_rebuilds_prevented(0) {
 
     immutable_config = {
-        BACKEND_NONE, false, false, false, false, false, 0
+        CUBLAS_BACKEND_NONE, false, false, false, false, false, 0
     };
 }
 
@@ -45,7 +45,7 @@ bool fallback_prevention_engine::enable_strict_mode(bool enable) {
     return true;
 }
 
-bool fallback_prevention_engine::bind_decode_backend(backend_selection backend) {
+bool fallback_prevention_engine::bind_decode_backend(cublas_backend_selection backend) {
     if (backend_locked.load()) {
         return false; // Backend already locked
     }
@@ -72,7 +72,7 @@ bool fallback_prevention_engine::validate_no_mid_decode_switch() {
     return true;
 }
 
-bool fallback_prevention_engine::attempt_backend_switch(const char * new_backend) {
+bool fallback_prevention_engine::attempt_backend_switch(const char * /* new_backend */) {
     if (backend_locked.load()) {
         backend_switches_blocked.fetch_add(1);
         return false; // Backend switch rejected
@@ -174,7 +174,7 @@ bool fallback_prevention_engine::verify_decode_path_immutable() const {
 // DECODE BACKEND GUARD IMPLEMENTATION
 // ============================================================================
 
-decode_backend_guard::decode_backend_guard(backend_selection backend)
+decode_backend_guard::decode_backend_guard(cublas_backend_selection backend)
     : bound_backend(backend), is_locked(false) {
     if (g_fallback_prevention_engine) {
         g_fallback_prevention_engine->bind_decode_backend(backend);
@@ -189,11 +189,11 @@ bool decode_backend_guard::is_backend_bound() const {
     return is_locked;
 }
 
-bool decode_backend_guard::attempt_switch(backend_selection new_backend) {
+bool decode_backend_guard::attempt_switch(cublas_backend_selection new_backend) {
     if (g_fallback_prevention_engine) {
         return g_fallback_prevention_engine->attempt_backend_switch(
-            new_backend == BACKEND_CUBLAS ? "cuBLAS" :
-            new_backend == BACKEND_DENSE_CUDA ? "Dense_CUDA" : "Unknown"
+            new_backend == CUBLAS_BACKEND_CUBLAS ? "cuBLAS" :
+            new_backend == CUBLAS_BACKEND_DENSE_CUDA ? "Dense_CUDA" : "Unknown"
         );
     }
     return true;
@@ -222,7 +222,7 @@ bool llama_enable_fallback_prevention_strict_mode(bool enable) {
     return false;
 }
 
-bool llama_bind_decode_backend(backend_selection backend) {
+bool llama_bind_decode_backend(cublas_backend_selection backend) {
     if (g_fallback_prevention_engine) {
         return g_fallback_prevention_engine->bind_decode_backend(backend);
     }
@@ -278,11 +278,11 @@ bool llama_attempt_cpu_fallback(const char * reason) {
     return true;
 }
 
-backend_selection llama_get_decode_backend() {
+cublas_backend_selection llama_get_decode_backend() {
     if (g_fallback_prevention_engine) {
         return g_fallback_prevention_engine->get_config().decode_backend;
     }
-    return BACKEND_NONE;
+    return CUBLAS_BACKEND_NONE;
 }
 
 bool llama_is_decode_backend_locked() {
@@ -395,19 +395,19 @@ void llama_print_backend_lock_status() {
 
     std::string backend_name;
     switch (cfg.decode_backend) {
-        case BACKEND_MMQ:
+        case CUBLAS_BACKEND_MMQ:
             backend_name = "MMQ";
             break;
-        case BACKEND_CUTLASS:
+        case CUBLAS_BACKEND_CUTLASS:
             backend_name = "CUTLASS";
             break;
-        case BACKEND_CUBLAS:
+        case CUBLAS_BACKEND_CUBLAS:
             backend_name = "cuBLAS";
             break;
-        case BACKEND_DENSE_CUDA:
+        case CUBLAS_BACKEND_DENSE_CUDA:
             backend_name = "Dense_CUDA";
             break;
-        case BACKEND_CPU:
+        case CUBLAS_BACKEND_CPU:
             backend_name = "CPU";
             break;
         default:
@@ -439,7 +439,7 @@ static bool run_fallback_prevention_tests(void) {
         return false;
     }
 
-    if (!llama_bind_decode_backend(BACKEND_MMQ)) {
+    if (!llama_bind_decode_backend(CUBLAS_BACKEND_MMQ)) {
         std::cerr << "[FALLBACK_PREVENT] TEST FAILED: Backend binding" << std::endl;
         return false;
     }
