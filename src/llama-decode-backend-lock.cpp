@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <cinttypes>
 #include <map>
 
 // ============================================================================
@@ -18,23 +19,23 @@
 // ============================================================================
 
 static struct llama_backend_lock_validation_state g_backend_lock_state = {
-    .lock_record = {
-        .state = LLAMA_BACKEND_LOCK_UNLOCKED,
-        .locked_backend = GGML_BACKEND_CPU,  // Default to CPU (will be GPU during decode)
-        .lock_acquire_time_ns = 0,
-        .lock_release_time_ns = 0,
-        .decode_token_count = 0,
-        .lock_held = false,
-        .backend_valid = true,
-        .invalidation_reason = LLAMA_BACKEND_LOCK_VALID,
-        .violation_count = 0,
-        .last_violation = LLAMA_BACKEND_LOCK_VIOL_NONE,
-        .last_violation_location = NULL,
+    {
+        LLAMA_BACKEND_LOCK_UNLOCKED,
+        GGML_BACKEND_DEVICE_TYPE_CPU,
+        0,
+        0,
+        0,
+        false,
+        true,
+        LLAMA_BACKEND_LOCK_VALID,
+        0,
+        LLAMA_BACKEND_LOCK_VIOL_NONE,
+        NULL
     },
-    .total_violations = 0,
-    .total_invalidations = 0,
-    .enforcement_strict = true,
-    .debug_verify_backend_identity = false,
+    0,
+    0,
+    true,
+    false
 };
 
 static bool g_backend_lock_enforcement_strict = true;
@@ -68,7 +69,7 @@ int llama_backend_lock_init(void) {
 // ENFORCEMENT POINT 1: Backend Lock Acquisition
 // ============================================================================
 
-int llama_backend_lock_acquire(enum ggml_backend_type backend_to_lock) {
+int llama_backend_lock_acquire(enum ggml_backend_dev_type backend_to_lock) {
     if (g_backend_lock_state.lock_record.lock_held) {
         fprintf(stderr, "ERROR: Backend lock already held. Cannot re-acquire.\n");
         if (g_backend_lock_enforcement_strict) {
@@ -80,7 +81,7 @@ int llama_backend_lock_acquire(enum ggml_backend_type backend_to_lock) {
     g_backend_lock_state.lock_record.state = LLAMA_BACKEND_LOCK_ACQUIRING;
 
     // Validate backend selection
-    if (backend_to_lock != GGML_BACKEND_GPU && backend_to_lock != GGML_BACKEND_CUDA) {
+    if (backend_to_lock != GGML_BACKEND_DEVICE_TYPE_GPU) {
         fprintf(stderr, "FATAL: Backend lock requires GPU backend. Got non-GPU backend.\n");
         g_backend_lock_state.lock_record.state = LLAMA_BACKEND_LOCK_INVALID;
         if (g_backend_lock_enforcement_strict) {
@@ -165,7 +166,7 @@ int llama_backend_lock_verify_held(void) {
 // ENFORCEMENT POINT 4: Prevent Backend Change
 // ============================================================================
 
-int llama_backend_lock_prevent_backend_change(enum ggml_backend_type new_backend) {
+int llama_backend_lock_prevent_backend_change(enum ggml_backend_dev_type new_backend) {
     if (!g_backend_lock_state.lock_record.lock_held) {
         return 0; // Lock not held, no prevention needed
     }
@@ -312,9 +313,9 @@ bool llama_backend_lock_is_held(void) {
     return g_backend_lock_state.lock_record.lock_held;
 }
 
-enum ggml_backend_type llama_backend_lock_get_locked_backend(void) {
+enum ggml_backend_dev_type llama_backend_lock_get_locked_backend(void) {
     if (!g_backend_lock_state.lock_record.lock_held) {
-        return GGML_BACKEND_CPU; // Default when not locked
+        return GGML_BACKEND_DEVICE_TYPE_CPU; // Default when not locked
     }
     return g_backend_lock_state.lock_record.locked_backend;
 }
@@ -383,7 +384,7 @@ int llama_backend_lock_verify_all_operations_same_backend(
 }
 
 int llama_backend_lock_assert_explicit_backend_decision(
-    enum ggml_backend_type backend
+    enum ggml_backend_dev_type backend
 ) {
     if (!g_backend_lock_state.lock_record.lock_held) {
         return 0;
@@ -558,7 +559,7 @@ int llama_backend_lock_verify_immutability_invariant(void) {
     return 0;
 }
 
-int llama_backend_lock_assert_backend_matches_locked(enum ggml_backend_type actual_backend) {
+int llama_backend_lock_assert_backend_matches_locked(enum ggml_backend_dev_type actual_backend) {
     if (!g_backend_lock_state.lock_record.lock_held) {
         return 0;
     }
@@ -608,7 +609,7 @@ int llama_backend_lock_selftest(void) {
     // TEST 2: Lock acquisition
     fprintf(stdout, "Test 2: Lock Acquisition...");
     test_count++;
-    if (llama_backend_lock_acquire(GGML_BACKEND_CUDA) == 0 &&
+    if (llama_backend_lock_acquire(GGML_BACKEND_DEVICE_TYPE_GPU) == 0 &&
         g_backend_lock_state.lock_record.lock_held &&
         g_backend_lock_state.lock_record.state == LLAMA_BACKEND_LOCK_ACQUIRED) {
         fprintf(stdout, " PASS\n");
@@ -620,7 +621,7 @@ int llama_backend_lock_selftest(void) {
     // TEST 3: Query locked backend
     fprintf(stdout, "Test 3: Query Locked Backend...");
     test_count++;
-    if (llama_backend_lock_get_locked_backend() == GGML_BACKEND_CUDA) {
+    if (llama_backend_lock_get_locked_backend() == GGML_BACKEND_DEVICE_TYPE_GPU) {
         fprintf(stdout, " PASS\n");
         pass_count++;
     } else {
@@ -641,7 +642,7 @@ int llama_backend_lock_selftest(void) {
     fprintf(stdout, "Test 5: Prevent Backend Change...");
     test_count++;
     llama_backend_lock_set_enforcement_strict(false); // Set permissive mode
-    if (llama_backend_lock_prevent_backend_change(GGML_BACKEND_CPU) != 0) {
+    if (llama_backend_lock_prevent_backend_change(GGML_BACKEND_DEVICE_TYPE_CPU) != 0) {
         fprintf(stdout, " PASS\n");
         pass_count++;
     } else {

@@ -20,25 +20,25 @@
 // ============================================================================
 
 static struct llama_greedy_sampling_gpu_validation_state g_greedy_sampling_validation = {
-    .config = {0},
-    .state_record = {
-        .current_mode = LLAMA_GREEDY_SAMPLING_NONE,
-        .gpu_state = LLAMA_GPU_ARGMAX_UNINITIALIZED,
-        .gpu_argmax_active = false,
-        .cpu_sampling_bypassed = false,
-        .device_resident_mode = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_GREEDY_VIOLATION_NONE,
-        .total_tokens_sampled = 0,
-        .total_gpu_time_ns = 0,
-        .total_cpu_time_ns = 0,
+    /* config */ {},
+    /* state_record */ {
+        /* current_mode */ LLAMA_GREEDY_SAMPLING_NONE,
+        /* gpu_state */ LLAMA_GPU_ARGMAX_UNINITIALIZED,
+        /* gpu_argmax_active */ false,
+        /* cpu_sampling_bypassed */ false,
+        /* device_resident_mode */ false,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_GREEDY_VIOLATION_NONE,
+        /* total_tokens_sampled */ 0,
+        /* total_gpu_time_ns */ 0,
+        /* total_cpu_time_ns */ 0,
     },
-    .last_execution = {0},
-    .total_greedy_samples = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_greedy_sampling = false,
-    .verify_bitwise_identical = true,
+    /* last_execution */ {},
+    /* total_greedy_samples */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_greedy_sampling */ false,
+    /* verify_bitwise_identical */ true,
 };
 
 // Per-bypass tracking: map bypass ID to attempt count

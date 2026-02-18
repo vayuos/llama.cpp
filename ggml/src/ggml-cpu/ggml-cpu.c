@@ -2070,6 +2070,14 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 // GPU sampling operation; no CPU implementation needed
             } break;
+        case GGML_OP_SAMPLE_CANDIDATES:
+            {
+                // GPU sampling operation; no CPU implementation needed
+            } break;
+        case GGML_OP_FUSED_MUL_MAT_BIAS_ACT:
+            {
+                // Fused kernel; no CPU implementation needed
+            } break;
         case GGML_OP_NONE:
             {
                 // nop

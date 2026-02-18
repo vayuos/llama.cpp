@@ -56,6 +56,7 @@ enum llama_gpu_token_selection_state {
 /**
  * CPU sampling operations that must be bypassed
  */
+/*
 enum llama_cpu_sampling_bypass {
     LLAMA_SAMPLING_BYPASS_NONE = 0,
     LLAMA_SAMPLING_BYPASS_LOGITS_READ = 1,      // Skip CPU logits read
@@ -65,6 +66,8 @@ enum llama_cpu_sampling_bypass {
     LLAMA_SAMPLING_BYPASS_VALIDATION = 5,       // Skip CPU token validation
     LLAMA_SAMPLING_BYPASS_ENTRY_POINT = 6,      // Skip CPU sampling entry
 };
+*/
+#include "llama-greedy-sampling-gpu.h"
 
 // ============================================================================
 // TOKEN SELECTION VIOLATION ENUMERATION

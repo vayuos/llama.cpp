@@ -19,24 +19,24 @@
 // ============================================================================
 
 static struct llama_tensor_metadata_elimination_validation_state g_tensor_metadata_validation = {
-    .state_record = {
-        .current_owner = LLAMA_TENSOR_META_OWNER_UNKNOWN,
-        .gpu_state = LLAMA_GPU_TENSOR_META_UNINITIALIZED,
-        .cpu_mutations_eliminated = false,
-        .metadata_frozen = false,
-        .all_descriptors_precomputed = false,
-        .cpu_mutation_violations = 0,
-        .last_violation = LLAMA_TENSOR_META_VIOLATION_NONE,
-        .tensors_validated = 0,
-        .gpu_metadata_start_time_ns = 0,
+    /* state_record */ {
+        /* current_owner */ LLAMA_TENSOR_META_OWNER_UNKNOWN,
+        /* gpu_state */ LLAMA_GPU_TENSOR_META_UNINITIALIZED,
+        /* cpu_mutations_eliminated */ false,
+        /* metadata_frozen */ false,
+        /* all_descriptors_precomputed */ false,
+        /* cpu_mutation_violations */ 0,
+        /* last_violation */ LLAMA_TENSOR_META_VIOLATION_NONE,
+        /* tensors_validated */ 0,
+        /* gpu_metadata_start_time_ns */ 0,
     },
-    .initial_snapshot = {0},
-    .current_snapshot = {0},
-    .total_mutation_attempts = 0,
-    .total_violations = 0,
-    .metadata_frozen_for_decode = false,
-    .enforcement_strict = true,
-    .debug_detect_cpu_mutations = false,
+    /* initial_snapshot */ {0, 0, 0, false, false, LLAMA_TENSOR_META_FREEZE_UNKNOWN, 0},
+    /* current_snapshot */ {0, 0, 0, false, false, LLAMA_TENSOR_META_FREEZE_UNKNOWN, 0},
+    /* total_mutation_attempts */ 0,
+    /* total_violations */ 0,
+    /* metadata_frozen_for_decode */ false,
+    /* enforcement_strict */ true,
+    /* debug_detect_cpu_mutations */ false,
 };
 
 // Per-mutation tracking: map mutation ID to violation count
@@ -78,7 +78,7 @@ int llama_tensor_metadata_elimination_eliminate_cpu_mutations(void) {
         }
     }
 
-    g_tensor_metadata_validation.cpu_mutations_eliminated = true;
+    g_tensor_metadata_validation.state_record.cpu_mutations_eliminated = true;
     return 0;
 }
 
@@ -96,7 +96,7 @@ int llama_tensor_metadata_elimination_freeze_tensor_descriptors(void) {
     // Enforcement Point 3: Freeze all tensor descriptors
     // Once initial descriptors are prepared, they become immutable
 
-    g_tensor_metadata_validation.metadata_frozen = true;
+    g_tensor_metadata_validation.state_record.metadata_frozen = true;
     g_tensor_metadata_validation.current_snapshot = g_tensor_metadata_validation.initial_snapshot;
 
     return 0;
@@ -140,7 +140,7 @@ int llama_tensor_metadata_elimination_assert_gpu_metadata_owns_state(void) {
 int llama_tensor_metadata_elimination_forbid_per_token_reshapes(void) {
     // Enforcement Point 6: Forbid CPU from performing per-token reshapes
 
-    if (g_tensor_metadata_validation.metadata_frozen) {
+    if (g_tensor_metadata_validation.state_record.metadata_frozen) {
         // After freeze, reshapes are forbidden
         return 0;
     }
@@ -152,7 +152,7 @@ int llama_tensor_metadata_elimination_freeze_descriptor_snapshot(void) {
     // Enforcement Point 7: Freeze descriptor snapshot
 
     g_tensor_metadata_validation.initial_snapshot = g_tensor_metadata_validation.current_snapshot;
-    g_tensor_metadata_validation.metadata_frozen = true;
+    g_tensor_metadata_validation.state_record.metadata_frozen = true;
     g_tensor_metadata_validation.state_record.metadata_frozen = true;
 
     return 0;
@@ -320,7 +320,7 @@ int llama_tensor_metadata_elimination_set_gpu_metadata_prepared(void) {
 
 int llama_tensor_metadata_elimination_set_gpu_metadata_frozen(void) {
     g_tensor_metadata_validation.state_record.gpu_state = LLAMA_GPU_TENSOR_META_FROZEN;
-    g_tensor_metadata_validation.metadata_frozen = true;
+    g_tensor_metadata_validation.state_record.metadata_frozen = true;
     g_tensor_metadata_validation.state_record.gpu_metadata_start_time_ns = (uint64_t)time(NULL) * 1000000000ULL;
     return 0;
 }
@@ -346,7 +346,7 @@ int llama_tensor_metadata_elimination_snapshot_initial_metadata(void) {
 }
 
 int llama_tensor_metadata_elimination_freeze_descriptors(void) {
-    g_tensor_metadata_validation.metadata_frozen = true;
+    g_tensor_metadata_validation.state_record.metadata_frozen = true;
     g_tensor_metadata_validation.metadata_frozen_for_decode = true;
     return 0;
 }
@@ -381,11 +381,11 @@ enum llama_gpu_tensor_metadata_state llama_tensor_metadata_elimination_get_gpu_m
 // ============================================================================
 
 int llama_tensor_metadata_elimination_verify_cpu_mutations_eliminated(void) {
-    return g_tensor_metadata_validation.cpu_mutations_eliminated ? 0 : -1;
+    return g_tensor_metadata_validation.state_record.cpu_mutations_eliminated ? 0 : -1;
 }
 
 int llama_tensor_metadata_elimination_verify_metadata_frozen(void) {
-    return g_tensor_metadata_validation.metadata_frozen ? 0 : -1;
+    return g_tensor_metadata_validation.state_record.metadata_frozen ? 0 : -1;
 }
 
 int llama_tensor_metadata_elimination_verify_descriptors_precomputed(void) {
@@ -424,8 +424,8 @@ void llama_tensor_metadata_elimination_print_metadata_state(void) {
     fprintf(stderr, "\n=== TENSOR METADATA STATE ===\n");
     fprintf(stderr, "Owner: %s\n", llama_tensor_metadata_owner_name(g_tensor_metadata_validation.state_record.current_owner));
     fprintf(stderr, "GPU State: %s\n", llama_gpu_tensor_metadata_state_name(g_tensor_metadata_validation.state_record.gpu_state));
-    fprintf(stderr, "CPU Mutations Eliminated: %s\n", g_tensor_metadata_validation.cpu_mutations_eliminated ? "YES" : "NO");
-    fprintf(stderr, "Metadata Frozen: %s\n", g_tensor_metadata_validation.metadata_frozen ? "YES" : "NO");
+    fprintf(stderr, "CPU Mutations Eliminated: %s\n", g_tensor_metadata_validation.state_record.cpu_mutations_eliminated ? "YES" : "NO");
+    fprintf(stderr, "Metadata Frozen: %s\n", g_tensor_metadata_validation.state_record.metadata_frozen ? "YES" : "NO");
     fprintf(stderr, "All Descriptors Precomputed: %s\n", g_tensor_metadata_validation.state_record.all_descriptors_precomputed ? "YES" : "NO");
     fprintf(stderr, "Total Violations: %d\n", g_tensor_metadata_validation.state_record.cpu_mutation_violations);
     fprintf(stderr, "Tensors Validated: %llu\n", (unsigned long long)g_tensor_metadata_validation.state_record.tensors_validated);
@@ -505,7 +505,7 @@ int llama_tensor_metadata_elimination_selftest(void) {
     // Test 2: Metadata freeze
     {
         llama_tensor_metadata_elimination_freeze_descriptor_snapshot();
-        if (!g_tensor_metadata_validation.metadata_frozen) {
+        if (!g_tensor_metadata_validation.state_record.metadata_frozen) {
             fprintf(stderr, "SELFTEST FAILED: Test 2 - Metadata freeze\n");
             return -1;
         }

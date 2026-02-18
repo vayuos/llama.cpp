@@ -6,6 +6,28 @@
  */
 
 #include "llama-kernel-fusion-enforce.h"
+
+// Define logging and abort macros if not present
+#ifndef LLAMA_LOG_INFO
+#define LLAMA_LOG_INFO(...) fprintf(stdout, __VA_ARGS__)
+#endif
+
+#ifndef LLAMA_LOG_WARN
+#define LLAMA_LOG_WARN(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
+#ifndef LLAMA_LOG_ERROR
+#define LLAMA_LOG_ERROR(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
+#ifndef LLAMA_LOG_DEBUG
+#define LLAMA_LOG_DEBUG(...) fprintf(stderr, __VA_ARGS__)
+#endif
+
+#ifndef LLAMA_ABORT
+#define LLAMA_ABORT(msg) do { fprintf(stderr, "LLAMA_ABORT: %s\n", msg); abort(); } while(0)
+#endif
+
 #include "llama-impl.h"
 
 #include "../ggml/src/ggml-impl.h"
@@ -13,6 +35,8 @@
 
 #include <cstring>
 #include <algorithm>
+#include <cstdlib>
+#include <cstdio>
 
 /**
  * Initialize kernel fusion enforcement
@@ -79,7 +103,7 @@ void llama_kernel_fusion_activate(
  * [CRITICAL] Enforce QKV fusion
  */
 bool llama_kernel_fusion_enforce_qkv(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph || !state->enforce_qkv_fusion) {
@@ -130,7 +154,7 @@ bool llama_kernel_fusion_enforce_qkv(
  * [CRITICAL] Enforce RMSNorm + MatMul fusion
  */
 bool llama_kernel_fusion_enforce_norm_matmul(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph || !state->enforce_norm_matmul_fusion) {
@@ -183,7 +207,7 @@ bool llama_kernel_fusion_enforce_norm_matmul(
  * [CRITICAL] Enforce Bias + Activation fusion
  */
 bool llama_kernel_fusion_enforce_bias_activation(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph || !state->enforce_bias_activation) {
@@ -243,7 +267,7 @@ bool llama_kernel_fusion_enforce_bias_activation(
  * [CRITICAL] Enforce Flash Attention
  */
 bool llama_kernel_fusion_enforce_flash_attention(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph || !state->enforce_flash_attention) {
@@ -300,7 +324,7 @@ bool llama_kernel_fusion_enforce_flash_attention(
  * [CRITICAL] Eliminate micro-kernels
  */
 bool llama_kernel_fusion_eliminate_micro_kernels(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph) {
@@ -346,7 +370,7 @@ bool llama_kernel_fusion_eliminate_micro_kernels(
  * [CRITICAL] Eliminate redundant memory ops
  */
 bool llama_kernel_fusion_eliminate_memory_ops(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph) {
@@ -396,7 +420,7 @@ bool llama_kernel_fusion_eliminate_memory_ops(
  * [CRITICAL] Enforce single CUDA stream
  */
 bool llama_kernel_fusion_enforce_single_stream(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     int n_streams) {
 
     if (!state || !state->enforce_single_stream) {
@@ -448,7 +472,7 @@ bool llama_kernel_fusion_enforce_persistent_model(
  * [CRITICAL] Collapse KV update into attention
  */
 bool llama_kernel_fusion_collapse_kv_update(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph) {
@@ -483,7 +507,7 @@ bool llama_kernel_fusion_collapse_kv_update(
  * [CRITICAL] Collapse sampling sub-kernels
  */
 bool llama_kernel_fusion_collapse_sampling(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph) {
@@ -528,7 +552,7 @@ bool llama_kernel_fusion_collapse_sampling(
  * [CRITICAL] Validate kernel launch count
  */
 bool llama_kernel_fusion_validate_launch_count(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     uint64_t actual_launches) {
 
     if (!state) {
@@ -633,7 +657,7 @@ llama_kernel_metrics llama_kernel_fusion_get_metrics(
  * Audit entire graph
  */
 bool llama_kernel_fusion_audit_graph(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph) {
 
     if (!state || !graph) {

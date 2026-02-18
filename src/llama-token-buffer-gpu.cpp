@@ -19,30 +19,36 @@
 // ============================================================================
 
 static struct llama_gpu_token_buffer_validation_state g_token_buffer_validation = {
-    .config = {
-        .gpu_token_buffer_enabled = false,
-        .cpu_enqueue_forbidden = false,
-        .mode = LLAMA_TOKEN_BUFFER_NONE,
-        .buffer_capacity = 0,
-        .batch_size = 0,
-        .validate_buffer_bounds = true,
-        .enforce_gpu_only_buffering = false,
+    /* config */ {
+        /* gpu_token_buffer_enabled */ false,
+        /* cpu_enqueue_forbidden */ false,
+        /* mode */ LLAMA_TOKEN_BUFFER_NONE,
+        /* buffer_capacity */ 0,
+        /* batch_size */ 0,
+        /* validate_buffer_bounds */ true,
+        /* enforce_gpu_only_buffering */ false,
     },
-    .state_record = {
-        .current_mode = LLAMA_TOKEN_BUFFER_NONE,
-        .buffer_state = LLAMA_GPU_TOKEN_BUFFER_UNINITIALIZED,
-        .buffer_capacity = 0,
-        .current_tokens_in_buffer = 0,
-        .total_enqueue_operations = 0,
-        .total_dequeue_operations = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_TOKEN_BUFFER_VIOLATION_NONE,
+    /* state_record */ {
+        /* current_mode */ LLAMA_TOKEN_BUFFER_NONE,
+        /* buffer_state */ LLAMA_GPU_TOKEN_BUFFER_UNINITIALIZED,
+        /* buffer_capacity */ 0,
+        /* current_tokens_in_buffer */ 0,
+        /* total_enqueue_operations */ 0,
+        /* total_dequeue_operations */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_TOKEN_BUFFER_VIOLATION_NONE,
     },
-    .last_operation = {0},
-    .total_buffer_operations = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_token_buffer = false,
+    /* last_operation */ {
+        /* tokens_before */ 0,
+        /* tokens_after */ 0,
+        /* operations_count */ 0,
+        /* timestamp_ns */ 0,
+        /* operation_on_gpu */ false,
+    },
+    /* total_buffer_operations */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_token_buffer */ false,
 };
 
 // Per-operation CPU attempt tracking

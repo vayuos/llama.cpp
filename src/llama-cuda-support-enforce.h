@@ -489,4 +489,3 @@ void llama_print_cuda_support_requirement_statement(void);
  */
 int llama_cuda_support_enforce_selftest(void);
 
-#endif // LLAMA_CUDA_SUPPORT_ENFORCE_H

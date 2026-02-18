@@ -91,6 +91,10 @@ struct decode_token_event {
     int64_t timestamp_ns;
 };
 
+#ifdef __cplusplus
+}
+#endif
+
 /**
  * Streaming queue for lock-free token passing
  */
@@ -239,6 +243,9 @@ private:
 /**
  * Global instance management
  */
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern decode_isolation_engine * g_decode_isolation_engine;
 
 bool llama_init_server_decode_isolation(const std::vector<int32_t> & decode_cores,

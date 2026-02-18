@@ -85,7 +85,7 @@ void llama_kernel_fusion_activate(
  * @return true if QKV properly fused, false if split kernels detected
  */
 bool llama_kernel_fusion_enforce_qkv(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -100,7 +100,7 @@ bool llama_kernel_fusion_enforce_qkv(
  * @return true if fusion enforced, false if split detected
  */
 bool llama_kernel_fusion_enforce_norm_matmul(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -114,7 +114,7 @@ bool llama_kernel_fusion_enforce_norm_matmul(
  * @return true if fused, false if split kernels found
  */
 bool llama_kernel_fusion_enforce_bias_activation(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -129,7 +129,7 @@ bool llama_kernel_fusion_enforce_bias_activation(
  * @return true if flash attention detected, false if multi-stage
  */
 bool llama_kernel_fusion_enforce_flash_attention(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -147,7 +147,7 @@ bool llama_kernel_fusion_enforce_flash_attention(
  * @return true if no micro-kernels, false if found
  */
 bool llama_kernel_fusion_eliminate_micro_kernels(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -163,7 +163,7 @@ bool llama_kernel_fusion_eliminate_micro_kernels(
  * @return true if no redundant memory ops, false if found
  */
 bool llama_kernel_fusion_eliminate_memory_ops(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -177,7 +177,7 @@ bool llama_kernel_fusion_eliminate_memory_ops(
  * @return true if single stream, false if multiple
  */
 bool llama_kernel_fusion_enforce_single_stream(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     int n_streams);
 
 /**
@@ -207,7 +207,7 @@ bool llama_kernel_fusion_enforce_persistent_model(
  * @return true if fused, false if separate kernels
  */
 bool llama_kernel_fusion_collapse_kv_update(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -222,7 +222,7 @@ bool llama_kernel_fusion_collapse_kv_update(
  * @return true if single kernel, false if split
  */
 bool llama_kernel_fusion_collapse_sampling(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**
@@ -236,7 +236,7 @@ bool llama_kernel_fusion_collapse_sampling(
  * @return true if within target, false if exceeds
  */
 bool llama_kernel_fusion_validate_launch_count(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     uint64_t actual_launches);
 
 /**
@@ -296,7 +296,7 @@ llama_kernel_metrics llama_kernel_fusion_get_metrics(
  * @return true if all requirements met, false if any violation
  */
 bool llama_kernel_fusion_audit_graph(
-    const llama_kernel_fusion_state * state,
+    llama_kernel_fusion_state * state,
     struct ggml_cgraph * graph);
 
 /**

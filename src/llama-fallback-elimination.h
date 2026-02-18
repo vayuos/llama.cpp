@@ -510,4 +510,3 @@ void llama_print_zero_fallback_policy_statement(void);
  */
 int llama_fallback_elimination_selftest(void);
 
-#endif // LLAMA_FALLBACK_ELIMINATION_H

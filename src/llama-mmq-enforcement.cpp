@@ -295,14 +295,15 @@ bool llama_mmq_enforcement_is_quantized_model(
     return state->model_quantized;
 }
 
-llama_quantization_detection_t llama_mmq_enforcement_get_detection_summary(
+llama_quantization_detection_summary_t llama_mmq_enforcement_get_detection_summary(
     const llama_mmq_enforcement_state_t * state) {
 
-    llama_quantization_detection_t summary;
+    llama_quantization_detection_summary_t summary;
     summary.model_is_quantized = state ? state->model_quantized : false;
-    summary.total_quantized_tensors.store(g_quantized_tensor_count.load());
-    summary.total_quantized_bytes.store(g_quantized_bytes_total.load());
-    summary.unique_quant_types.store(g_quantized_tensors.size());
+    summary.dominant_category = state ? state->dominant_category : LLAMA_QUANT_CATEGORY_NONE;
+    summary.total_quantized_tensors = g_quantized_tensor_count.load();
+    summary.total_quantized_bytes = g_quantized_bytes_total.load();
+    summary.unique_quant_types = g_quantized_tensors.size();
     summary.first_quantized_tensor = nullptr;
 
     if (!g_quantized_tensors.empty()) {
@@ -674,14 +675,22 @@ const char * llama_mmq_enforcement_get_graph_violation_report(void * graph_ptr) 
 // METRIC COLLECTION AND REPORTING FUNCTIONS
 // ============================================================================
 
-llama_mmq_enforcement_metrics_t llama_mmq_enforcement_get_metrics(
+llama_mmq_enforcement_metrics_log_t llama_mmq_enforcement_get_metrics(
     llama_mmq_enforcement_state_t * state) {
 
-    if (!state) {
-        llama_mmq_enforcement_metrics_t empty = {};
-        return empty;
-    }
+    llama_mmq_enforcement_metrics_log_t snapshot = {};
+    if (!state) return snapshot;
 
+    snapshot.total_models_processed = state->metrics.total_models_processed.load();
+    snapshot.quantized_models = state->metrics.quantized_models.load();
+    snapshot.quantized_graphs_built = state->metrics.quantized_graphs_built.load();
+    snapshot.mmq_backend_bound_graphs = state->metrics.mmq_backend_bound_graphs.load();
+    snapshot.cumulative_quantized_bytes = state->metrics.cumulative_quantized_bytes.load();
+    snapshot.kernel_fusion_bytes = state->metrics.kernel_fusion_bytes.load();
+    snapshot.verification_time_ns = state->metrics.verification_time_ns.load();
+    snapshot.verification_count = state->metrics.verification_count.load();
+    snapshot.last_verification_passed = state->metrics.last_verification_passed.load();
+    
     // Calculate CPU fallback prevention rate
     uint64_t total_attempts = state->violations.cpu_fallback_attempts.load();
     double prevention_rate = 100.0;
@@ -689,19 +698,30 @@ llama_mmq_enforcement_metrics_t llama_mmq_enforcement_get_metrics(
         prevention_rate = 100.0;  // All attempts blocked
     }
     state->metrics.cpu_fallback_prevention_rate.store(prevention_rate);
+    snapshot.cpu_fallback_prevention_rate = prevention_rate;
 
-    return state->metrics;
+    return snapshot;
 }
 
-llama_mmq_enforcement_violations_t llama_mmq_enforcement_get_violations(
+llama_mmq_enforcement_violations_log_t llama_mmq_enforcement_get_violations(
     llama_mmq_enforcement_state_t * state) {
 
-    if (!state) {
-        llama_mmq_enforcement_violations_t empty = {};
-        return empty;
-    }
+    llama_mmq_enforcement_violations_log_t snapshot = {};
+    if (!state) return snapshot;
 
-    return state->violations;
+    snapshot.quantized_models_detected = state->violations.quantized_models_detected.load();
+    snapshot.mmq_bindings_succeeded = state->violations.mmq_bindings_succeeded.load();
+    snapshot.cpu_fallback_attempts = state->violations.cpu_fallback_attempts.load();
+    snapshot.cublas_path_violations = state->violations.cublas_path_violations.load();
+    snapshot.backend_switch_attempts = state->violations.backend_switch_attempts.load();
+    snapshot.hybrid_placement_attempts = state->violations.hybrid_placement_attempts.load();
+    snapshot.mixed_backend_graph_nodes = state->violations.mixed_backend_graph_nodes.load();
+    snapshot.fused_kernel_launches = state->violations.fused_kernel_launches.load();
+    snapshot.decode_locks_enforced = state->violations.decode_locks_enforced.load();
+    snapshot.runtime_assertions_passed = state->violations.runtime_assertions_passed.load();
+    snapshot.total_enforcement_violations = state->violations.total_enforcement_violations.load();
+
+    return snapshot;
 }
 
 const char * llama_mmq_enforcement_get_violation_report(

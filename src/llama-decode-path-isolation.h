@@ -657,4 +657,3 @@ int llama_decode_path_isolation_get_isolation_depth(void);
 }
 #endif
 
-#endif /* LLAMA_DECODE_PATH_ISOLATION_H */

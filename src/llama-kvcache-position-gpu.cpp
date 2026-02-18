@@ -10,6 +10,7 @@
 
 #include "llama-kvcache-position-gpu.h"
 #include <map>
+#include <string>
 #include <cstring>
 #include <cstdio>
 #include <cassert>
@@ -22,35 +23,43 @@
  * Global validation state for GPU KV-cache position tracking
  */
 static struct llama_gpu_kvcache_position_validation_state g_kvcache_position_validation_state = {
-    .config = {
-        .gpu_position_tracking_enabled = false,
-        .cpu_updates_forbidden = false,
-        .mode = LLAMA_KVCACHE_POSITION_NONE,
-        .prefill_position = 0,
-        .max_position = 0,
-        .validate_position_bounds = true,
-        .sync_position_periodically = false,
-        .sync_interval_tokens = 0,
+    {
+        false,                      // gpu_position_tracking_enabled
+        false,                      // cpu_updates_forbidden
+        LLAMA_KVCACHE_POSITION_NONE, // mode
+        0,                          // prefill_position
+        0,                          // max_position
+        true,                       // validate_position_bounds
+        false,                      // sync_position_periodically
+        0                           // sync_interval_tokens
     },
-    .state_record = {
-        .current_mode = LLAMA_KVCACHE_POSITION_NONE,
-        .gpu_position_state = LLAMA_GPU_POSITION_UNINITIALIZED,
-        .current_position = 0,
-        .prefill_position = 0,
-        .max_position = 0,
-        .position_updates_count = 0,
-        .last_update_timestamp_ns = 0,
-        .last_sync_timestamp_ns = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_KVCACHE_POSITION_VIOLATION_NONE,
-        .position_locked = false,
+    {
+        LLAMA_KVCACHE_POSITION_NONE,     // current_mode
+        LLAMA_GPU_POSITION_UNINITIALIZED, // gpu_position_state
+        0,                               // current_position
+        0,                               // prefill_position
+        0,                               // max_position
+        0,                               // position_updates_count
+        0,                               // last_update_timestamp_ns
+        0,                               // last_sync_timestamp_ns
+        0,                               // total_violations
+        LLAMA_KVCACHE_POSITION_VIOLATION_NONE, // last_violation
+        false                            // position_locked
     },
-    .last_update = {0},
-    .total_position_updates = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_position_tracking = false,
-    .verify_position_consistency = false,
+    {
+        LLAMA_GPU_POSITION_UPDATE_NONE, // update_type
+        0,                             // position_before
+        0,                             // position_after
+        0,                             // tokens_processed
+        0,                             // timestamp_ns
+        false,                         // update_on_gpu
+        0                              // cpu_violations_detected
+    },
+    0,      // total_position_updates
+    0,      // total_violations
+    true,   // enforcement_strict
+    false,  // debug_position_tracking
+    false   // verify_position_consistency
 };
 
 /**

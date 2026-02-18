@@ -19,31 +19,37 @@
 // ============================================================================
 
 static struct llama_gpu_attention_state_validation_state g_attention_state_validation = {
-    .config = {
-        .gpu_attention_state_enabled = false,
-        .cpu_attention_updates_forbidden = false,
-        .mode = LLAMA_ATTENTION_STATE_NONE,
-        .num_heads = 0,
-        .head_dim = 0,
-        .num_layers = 0,
-        .validate_attention_bounds = true,
-        .enforce_gpu_only_attention = false,
+    /* config */ {
+        /* gpu_attention_state_enabled */ false,
+        /* cpu_attention_updates_forbidden */ false,
+        /* mode */ LLAMA_ATTENTION_STATE_NONE,
+        /* num_heads */ 0,
+        /* head_dim */ 0,
+        /* num_layers */ 0,
+        /* validate_attention_bounds */ true,
+        /* enforce_gpu_only_attention */ false,
     },
-    .state_record = {
-        .current_mode = LLAMA_ATTENTION_STATE_NONE,
-        .attention_state = LLAMA_GPU_ATTENTION_STATE_UNINITIALIZED,
-        .num_heads = 0,
-        .head_dim = 0,
-        .state_updates_count = 0,
-        .state_reads_count = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_ATTENTION_STATE_VIOLATION_NONE,
+    /* state_record */ {
+        /* current_mode */ LLAMA_ATTENTION_STATE_NONE,
+        /* attention_state */ LLAMA_GPU_ATTENTION_STATE_UNINITIALIZED,
+        /* num_heads */ 0,
+        /* head_dim */ 0,
+        /* state_updates_count */ 0,
+        /* state_reads_count */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_ATTENTION_STATE_VIOLATION_NONE,
     },
-    .last_computation = {0},
-    .total_attention_computations = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_attention_state = false,
+    /* last_computation */ {
+        /* sequence_length */ 0,
+        /* batch_size */ 0,
+        /* heads_computed */ 0,
+        /* timestamp_ns */ 0,
+        /* computation_on_gpu */ false,
+    },
+    /* total_attention_computations */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_attention_state */ false,
 };
 
 // Per-operation CPU attempt tracking

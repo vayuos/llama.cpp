@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <cinttypes>
 #include <map>
 
 // ============================================================================
@@ -18,22 +19,22 @@
 // ============================================================================
 
 static struct llama_rebuild_prohibition_validation_state g_rebuild_prohibition_state = {
-    .prohibition_record = {
-        .decode_progress = LLAMA_DECODE_PROGRESS_NOT_STARTED,
-        .decode_in_progress = false,
-        .decode_start_timestamp_ns = 0,
-        .decode_step_count = 0,
-        .graph_id_at_decode_start = 0,
-        .graph_version_at_decode_start = 0,
-        .rebuild_attempt_count = 0,
-        .last_trigger = LLAMA_REBUILD_TRIGGER_NONE,
-        .last_location = LLAMA_REBUILD_LOC_UNKNOWN,
-        .last_violation = LLAMA_REBUILD_VIOL_NONE,
+    /* prohibition_record */ {
+        /* decode_progress */ LLAMA_DECODE_PROGRESS_NOT_STARTED,
+        /* decode_in_progress */ false,
+        /* decode_start_timestamp_ns */ 0,
+        /* decode_step_count */ 0,
+        /* graph_id_at_decode_start */ 0,
+        /* graph_version_at_decode_start */ 0,
+        /* rebuild_attempt_count */ 0,
+        /* last_trigger */ LLAMA_REBUILD_TRIGGER_NONE,
+        /* last_location */ LLAMA_REBUILD_LOC_UNKNOWN,
+        /* last_violation */ LLAMA_REBUILD_VIOL_NONE
     },
-    .total_rebuild_attempts = 0,
-    .total_rebuild_violations = 0,
-    .enforcement_strict = true,
-    .debug_assert_graph_immutable_per_step = false,
+    /* total_rebuild_attempts */ 0,
+    /* total_rebuild_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_assert_graph_immutable_per_step */ false
 };
 
 static bool g_rebuild_prohibition_enforcement_strict = true;

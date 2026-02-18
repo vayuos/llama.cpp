@@ -459,7 +459,7 @@ bool streaming_worker::process_token(const streaming_token & token) {
     verify_domain(streaming_execution_domain::STREAMING, "process_token");
 
     // Convert token to text
-    std::string text = streaming_token_to_text(token.token_id, model_vocab);
+    std::string text = streaming_token_to_text(token.token_id, model_vocab, false);
 
     // Build JSON chunk
     std::string json = streaming_build_json_chunk(token, text, false, true);
@@ -483,18 +483,28 @@ bool streaming_worker::flush_batch_to_http(uint32_t sequence_id) {
 // STREAMING SYSTEM SINGLETON
 // ============================================================================
 
-static streaming_system * g_streaming_system = nullptr;
-static std::mutex g_streaming_system_mutex;
+static async_streaming_engine * g_async_streaming_engine = nullptr;
+static std::mutex g_async_streaming_engine_mutex;
 
-streaming_system & streaming_system::instance() {
-    std::lock_guard<std::mutex> lock(g_streaming_system_mutex);
-    if (!g_streaming_system) {
-        g_streaming_system = new streaming_system();
-    }
-    return *g_streaming_system;
+async_streaming_engine::async_streaming_engine()
+    : initialized(false), shutdown_in_progress(false), token_queue(4096), model_vocab(nullptr) {
 }
 
-bool streaming_system::initialize(
+async_streaming_engine::~async_streaming_engine() {
+    if (initialized.load()) {
+        shutdown();
+    }
+}
+
+async_streaming_engine & async_streaming_engine::instance() {
+    std::lock_guard<std::mutex> lock(g_async_streaming_engine_mutex);
+    if (!g_async_streaming_engine) {
+        g_async_streaming_engine = new async_streaming_engine();
+    }
+    return *g_async_streaming_engine;
+}
+
+bool async_streaming_engine::initialize(
     int32_t worker_count,
     size_t queue_capacity,
     size_t batch_size) {
@@ -524,7 +534,7 @@ bool streaming_system::initialize(
     return true;
 }
 
-void streaming_system::shutdown(int32_t timeout_ms) {
+void async_streaming_engine::shutdown(int32_t timeout_ms) {
     shutdown_in_progress.store(true, std::memory_order_release);
 
     // Stop all workers
@@ -538,15 +548,15 @@ void streaming_system::shutdown(int32_t timeout_ms) {
     initialized.store(false, std::memory_order_release);
 }
 
-streaming_token_queue * streaming_system::get_token_queue() {
+streaming_token_queue * async_streaming_engine::get_token_queue() {
     return &token_queue;
 }
 
-void streaming_system::register_vocab(const void * vocab) {
+void async_streaming_engine::register_vocab(const void * vocab) {
     model_vocab = vocab;
 }
 
-bool streaming_system::decode_emit_token(
+bool async_streaming_engine::decode_emit_token(
     const streaming_token & token,
     uint32_t sequence_id) {
 
@@ -559,11 +569,11 @@ bool streaming_system::decode_emit_token(
     return token_queue.try_push(token);
 }
 
-size_t streaming_system::get_queue_depth() const {
+size_t async_streaming_engine::get_queue_depth() const {
     return token_queue.depth();
 }
 
-void streaming_system::signal_decode_start(
+void async_streaming_engine::signal_decode_start(
     uint32_t sequence_id,
     uint32_t slot_id,
     void * user_context) {
@@ -580,7 +590,7 @@ void streaming_system::signal_decode_start(
     decode_contexts[sequence_id] = ctx;
 }
 
-void streaming_system::signal_decode_complete(uint32_t sequence_id) {
+void async_streaming_engine::signal_decode_complete(uint32_t sequence_id) {
     // Flush any pending tokens for this sequence
     for (auto & worker : workers) {
         if (worker) {
@@ -592,7 +602,7 @@ void streaming_system::signal_decode_complete(uint32_t sequence_id) {
     decode_contexts.erase(sequence_id);
 }
 
-uint32_t streaming_system::register_http_context(const streaming_http_context & context) {
+uint32_t async_streaming_engine::register_http_context(const streaming_http_context & context) {
     http_contexts[context.sequence_id] = context;
 
     // Assign to least-loaded worker (round-robin for now)
@@ -613,7 +623,7 @@ uint32_t streaming_system::register_http_context(const streaming_http_context & 
     return context.sequence_id;
 }
 
-void streaming_system::unregister_http_context(uint32_t context_id) {
+void async_streaming_engine::unregister_http_context(uint32_t context_id) {
     http_contexts.erase(context_id);
 
     // Notify all workers
@@ -624,7 +634,7 @@ void streaming_system::unregister_http_context(uint32_t context_id) {
     }
 }
 
-void streaming_system::link_decode_to_http(uint32_t sequence_id, uint32_t context_id) {
+void async_streaming_engine::link_decode_to_http(uint32_t sequence_id, uint32_t context_id) {
     for (auto & worker : workers) {
         if (worker && worker->is_running()) {
             auto it = decode_contexts.find(sequence_id);
@@ -636,12 +646,12 @@ void streaming_system::link_decode_to_http(uint32_t sequence_id, uint32_t contex
     }
 }
 
-bool streaming_system::is_initialized() const {
+bool async_streaming_engine::is_initialized() const {
     return initialized.load(std::memory_order_acquire);
 }
 
-streaming_system_metrics streaming_system::get_metrics() const {
-    streaming_system_metrics m;
+async_streaming_engine_metrics async_streaming_engine::get_metrics() const {
+    async_streaming_engine_metrics m;
     m.initialized = initialized.load(std::memory_order_acquire);
     m.worker_count = workers.size();
     m.queue_depth = token_queue.depth();
@@ -660,7 +670,7 @@ streaming_system_metrics streaming_system::get_metrics() const {
     return m;
 }
 
-uint32_t streaming_system::flush_all_pending() {
+uint32_t async_streaming_engine::flush_all_pending() {
     uint32_t total_flushed = 0;
 
     for (auto & worker : workers) {
@@ -681,7 +691,7 @@ bool validate_streaming_domain_separation() {
     // Check: no mutexes in decode path
     // Check: streaming worker isolated
 
-    if (!streaming_system::instance().is_initialized()) {
+    if (!async_streaming_engine::instance().is_initialized()) {
         return false;
     }
 
@@ -709,11 +719,11 @@ bool validate_streaming_throughput_independence(
 // ============================================================================
 
 void dump_streaming_state() {
-    streaming_system & sys = streaming_system::instance();
+    async_streaming_engine & sys = async_streaming_engine::instance();
 
     std::cout << "\n=== STREAMING SYSTEM STATE ===" << std::endl;
 
-    streaming_system_metrics m = sys.get_metrics();
+    async_streaming_engine_metrics m = sys.get_metrics();
 
     std::cout << "Initialized: " << (m.initialized ? "yes" : "no") << std::endl;
     std::cout << "Worker count: " << m.worker_count << std::endl;
@@ -735,8 +745,8 @@ void dump_streaming_state() {
 }
 
 std::string get_streaming_status() {
-    streaming_system & sys = streaming_system::instance();
-    streaming_system_metrics m = sys.get_metrics();
+    async_streaming_engine & sys = async_streaming_engine::instance();
+    async_streaming_engine_metrics m = sys.get_metrics();
 
     std::ostringstream oss;
     oss << "Streaming system: " << (m.initialized ? "INITIALIZED" : "NOT INITIALIZED")

@@ -20,6 +20,102 @@
 extern "C" {
 #endif
 
+#ifndef LLAMA_FEATURE_CUDA_ENABLED
+#define LLAMA_FEATURE_CUDA_ENABLED 1
+#endif
+#ifndef LLAMA_FEATURE_CPU_ENABLED
+#define LLAMA_FEATURE_CPU_ENABLED 0
+#endif
+#ifndef LLAMA_FEATURE_CUBLAS_ENABLED
+#define LLAMA_FEATURE_CUBLAS_ENABLED 1
+#endif
+#ifndef LLAMA_FEATURE_MMQ_ENABLED
+#define LLAMA_FEATURE_MMQ_ENABLED 1
+#endif
+#ifndef LLAMA_FEATURE_FLASH_ATTENTION_ENABLED
+#define LLAMA_FEATURE_FLASH_ATTENTION_ENABLED 0
+#endif
+#ifndef LLAMA_FEATURE_CUDA_GRAPHS_ENABLED
+#define LLAMA_FEATURE_CUDA_GRAPHS_ENABLED 0
+#endif
+#ifndef LLAMA_FEATURE_HYBRID_MEMORY_ENABLED
+#define LLAMA_FEATURE_HYBRID_MEMORY_ENABLED 0
+#endif
+#ifndef LLAMA_FEATURE_SPECULATIVE_DECODE_ENABLED
+#define LLAMA_FEATURE_SPECULATIVE_DECODE_ENABLED 0
+#endif
+#ifndef LLAMA_FEATURE_DETERMINISM_STRICT
+#define LLAMA_FEATURE_DETERMINISM_STRICT 0
+#endif
+#ifndef LLAMA_FEATURE_EXPERIMENTAL_KERNELS
+#define LLAMA_FEATURE_EXPERIMENTAL_KERNELS 0
+#endif
+#ifndef LLAMA_FEATURE_PROFILE_NAME
+#define LLAMA_FEATURE_PROFILE_NAME "default"
+#endif
+#ifndef LLAMA_FEATURE_FREEZE_PROFILE
+#define LLAMA_FEATURE_FREEZE_PROFILE 1
+#endif
+
+typedef enum {
+    LLAMA_FEATURE_FREEZE_STATE_UNINITIALIZED = 0,
+    LLAMA_FEATURE_FREEZE_STATE_VALIDATED = 1,
+    LLAMA_FEATURE_FREEZE_STATE_IMMUTABLE = 2,
+    LLAMA_FEATURE_FREEZE_STATE_HARDWARE_MISMATCH = 3,
+    LLAMA_FEATURE_FREEZE_STATE_ERROR = 4
+} llama_feature_freeze_state;
+
+typedef struct {
+    llama_feature_freeze_state state;
+    int hardware_compatible;
+    int validation_error_code;
+    const char * validation_error_message;
+} llama_feature_freeze_validation_state;
+
+typedef struct {
+    bool cuda_enabled;
+    bool cpu_enabled;
+    bool cublas_enabled;
+    bool mmq_enabled;
+    bool flash_attention_enabled;
+    bool cuda_graphs_enabled;
+    bool hybrid_memory_enabled;
+    bool speculative_decode_enabled;
+    bool determinism_strict;
+    bool experimental_kernels;
+    uint32_t reserved;
+} llama_feature_freeze_capabilities;
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+
+typedef struct {
+    std::atomic<uint64_t> build_time_features_resolved;
+    std::atomic<uint64_t> runtime_feature_checks_blocked;
+    std::atomic<uint64_t> compile_out_paths_eliminated;
+    std::atomic<uint64_t> decode_branches_removed;
+    std::atomic<uint64_t> feature_symbol_lookups_eliminated;
+} llama_feature_freeze_metrics;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef int (*llama_feature_freeze_validate_hardware_fn)(void);
+typedef int (*llama_feature_freeze_validate_features_fn)(void);
+
+typedef struct {
+    const char * profile_name;
+    uint32_t profile_id;
+    llama_feature_freeze_capabilities capabilities;
+    void (*compute_dispatch)(void);
+    void (*memory_dispatch)(void);
+    void (*sync_dispatch)(void);
+    llama_feature_freeze_validate_hardware_fn validate_hardware;
+    llama_feature_freeze_validate_features_fn validate_features;
+} llama_feature_freeze_dispatch_table;
+
 typedef enum {
     FEATURE_FREEZE_UNINITIALIZED = 0,
     FEATURE_FREEZE_STARTUP = 1,
@@ -62,6 +158,11 @@ typedef struct {
     bool no_runtime_branching;
 } feature_freeze_validation_result;
 
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+
+#ifdef __cplusplus
 class feature_freeze_engine {
 private:
     feature_snapshot compiled_features;
@@ -123,6 +224,11 @@ public:
     bool is_feature_available() const;
     void record_feature_check();
 };
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern feature_freeze_engine * g_feature_freeze_engine;
 
@@ -149,6 +255,10 @@ void llama_print_feature_freeze_validation();
 void llama_print_compiled_features();
 void llama_dump_feature_statistics();
 
+#ifdef __cplusplus
+}
+#endif
+
 #define FEATURE_COMPILE_CHECK(feature_name) \
     do { \
         if (g_feature_freeze_engine) { \
@@ -162,7 +272,3 @@ void llama_dump_feature_statistics();
             return false; \
         } \
     } while(0)
-
-#ifdef __cplusplus
-}
-#endif

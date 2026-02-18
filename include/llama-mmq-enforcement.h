@@ -199,6 +199,18 @@ typedef struct {
     llama_quantized_tensor_t * first_quantized_tensor; // Pointer to first quantized tensor
 } llama_quantization_detection_t;
 
+/**
+ * Quantization detection summary for external query (non-atomic)
+ */
+typedef struct {
+    bool model_is_quantized;
+    llama_quant_category_t dominant_category;
+    size_t total_quantized_tensors;
+    uint64_t total_quantized_bytes;
+    size_t unique_quant_types;
+    llama_quantized_tensor_t * first_quantized_tensor;
+} llama_quantization_detection_summary_t;
+
 // ============================================================================
 // MMQ BINDING AND ENFORCEMENT STRUCTURES
 // ============================================================================
@@ -240,6 +252,7 @@ typedef struct {
     std::atomic<uint64_t> cpu_fallback_attempts;            // Attempted CPU fallbacks (blocked)
     std::atomic<uint64_t> cublas_path_violations;           // cuBLAS path access attempts (blocked)
     std::atomic<uint64_t> backend_switch_attempts;          // Runtime backend switch attempts (blocked)
+    std::atomic<uint64_t> unused_backend_symbols_found;     // Detected unused backend symbols
     std::atomic<uint64_t> hybrid_placement_attempts;        // Hybrid layer placement attempts (blocked)
     std::atomic<uint64_t> mixed_backend_graph_nodes;        // Mixed backend nodes in graphs (blocked)
     std::atomic<uint64_t> fused_kernel_launches;            // Successful fused kernel launches
@@ -247,6 +260,23 @@ typedef struct {
     std::atomic<uint64_t> runtime_assertions_passed;        // Runtime assertions that passed
     std::atomic<uint64_t> total_enforcement_violations;     // All enforcement violations
 } llama_mmq_enforcement_violations_t;
+
+/**
+ * Snapshot of violations for reporting (non-atomic)
+ */
+typedef struct {
+    uint64_t quantized_models_detected;
+    uint64_t mmq_bindings_succeeded;
+    uint64_t cpu_fallback_attempts;
+    uint64_t cublas_path_violations;
+    uint64_t backend_switch_attempts;
+    uint64_t hybrid_placement_attempts;
+    uint64_t mixed_backend_graph_nodes;
+    uint64_t fused_kernel_launches;
+    uint64_t decode_locks_enforced;
+    uint64_t runtime_assertions_passed;
+    uint64_t total_enforcement_violations;
+} llama_mmq_enforcement_violations_log_t;
 
 /**
  * MMQ enforcement metrics (lock-free)
@@ -265,6 +295,22 @@ typedef struct {
 } llama_mmq_enforcement_metrics_t;
 
 /**
+ * MMQ enforcement metrics snapshot (non-atomic)
+ */
+typedef struct {
+    size_t total_models_processed;
+    size_t quantized_models;
+    size_t quantized_graphs_built;
+    size_t mmq_backend_bound_graphs;
+    uint64_t cumulative_quantized_bytes;
+    uint64_t kernel_fusion_bytes;
+    uint64_t verification_time_ns;
+    uint32_t verification_count;
+    bool last_verification_passed;
+    double cpu_fallback_prevention_rate;
+} llama_mmq_enforcement_metrics_log_t;
+
+/**
  * MMQ enforcement state machine
  */
 typedef struct {
@@ -272,6 +318,7 @@ typedef struct {
     bool model_quantized;                     // true if model contains quantized tensors
     bool mmq_backend_bound;                   // true if MMQ backend is bound
     bool decode_backend_locked;               // true if decode backend is locked
+    llama_quant_category_t dominant_category; // Most common quantization type
     llama_decode_isolation_level_t isolation_level; // Decode isolation level
     llama_mmq_enforcement_violations_t violations;
     llama_mmq_enforcement_metrics_t metrics;
@@ -432,7 +479,7 @@ extern bool llama_mmq_enforcement_is_quantized_model(
  * @param state State handle
  * @return Detection summary struct
  */
-extern llama_quantization_detection_t llama_mmq_enforcement_get_detection_summary(
+extern llama_quantization_detection_summary_t llama_mmq_enforcement_get_detection_summary(
     const llama_mmq_enforcement_state_t * state
 );
 
@@ -623,7 +670,7 @@ extern const char * llama_mmq_enforcement_get_graph_violation_report(
  * @param state State handle
  * @return Metrics struct
  */
-extern llama_mmq_enforcement_metrics_t llama_mmq_enforcement_get_metrics(
+extern llama_mmq_enforcement_metrics_log_t llama_mmq_enforcement_get_metrics(
     llama_mmq_enforcement_state_t * state
 );
 
@@ -632,7 +679,7 @@ extern llama_mmq_enforcement_metrics_t llama_mmq_enforcement_get_metrics(
  * @param state State handle
  * @return Violation tracking struct
  */
-extern llama_mmq_enforcement_violations_t llama_mmq_enforcement_get_violations(
+extern llama_mmq_enforcement_violations_log_t llama_mmq_enforcement_get_violations(
     llama_mmq_enforcement_state_t * state
 );
 
@@ -757,4 +804,3 @@ extern bool llama_mmq_enforcement_requires_mmq(int ggml_type);
 }
 #endif
 
-#endif // LLAMA_MMQ_ENFORCEMENT_H

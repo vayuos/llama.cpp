@@ -142,7 +142,7 @@ bool llama_decode_boundary_validate_tensor_residency(
  * @return true if op can execute on requested backend, false/abort otherwise
  */
 bool llama_decode_boundary_reject_fallback_ops(
-    ggml_op_type op_type,
+    enum ggml_op op_type,
     int requested_backend,
     const llama_decode_boundary_state * state);
 

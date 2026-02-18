@@ -582,4 +582,3 @@ int llama_json_isolation_set_token_to_text_fn(
 }  // extern "C"
 #endif
 
-#endif  // LLAMA_JSON_ISOLATION_H

@@ -17,49 +17,49 @@
 // ============================================================================
 
 static struct llama_gpu_topp_validation_state g_topp_validation_state = {
-    .config = {
-        .topp_filtering_enabled = false,
-        .topp_value = 0.95f,
-        .gpu_topp_enabled = false,
-        .probabilities_on_gpu = false,
-        .mode = LLAMA_TOPP_FILTERING_NONE,
-        .sort_strategy = LLAMA_TOPP_SORT_PARTIAL_RADIX,
-        .fused_softmax_cumsum = false,
-        .fused_full_pipeline = false,
-        .use_deterministic_cumsum = true,
+    /* config */ {
+        /* topp_filtering_enabled */ false,
+        /* topp_value */ 0.95f,
+        /* gpu_topp_enabled */ false,
+        /* probabilities_on_gpu */ false,
+        /* mode */ LLAMA_TOPP_FILTERING_NONE,
+        /* sort_strategy */ LLAMA_TOPP_SORT_PARTIAL_RADIX,
+        /* fused_softmax_cumsum */ false,
+        /* fused_full_pipeline */ false,
+        /* use_deterministic_cumsum */ true,
     },
-    .state_record = {
-        .current_mode = LLAMA_TOPP_FILTERING_NONE,
-        .gpu_topp_state = LLAMA_GPU_TOPP_UNINITIALIZED,
-        .cumsum_state = LLAMA_GPU_CUMSUM_UNINITIALIZED,
-        .gpu_topp_active = false,
-        .cpu_topp_bypassed = false,
-        .probabilities_gpu_resident = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_TOPP_VIOLATION_NONE,
-        .total_tokens_filtered = 0,
-        .total_gpu_time_ns = 0,
-        .total_cpu_time_ns = 0,
+    /* state_record */ {
+        /* current_mode */ LLAMA_TOPP_FILTERING_NONE,
+        /* gpu_topp_state */ LLAMA_GPU_TOPP_UNINITIALIZED,
+        /* cumsum_state */ LLAMA_GPU_CUMSUM_UNINITIALIZED,
+        /* gpu_topp_active */ false,
+        /* cpu_topp_bypassed */ false,
+        /* probabilities_gpu_resident */ false,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_TOPP_VIOLATION_NONE,
+        /* total_tokens_filtered */ 0,
+        /* total_gpu_time_ns */ 0,
+        /* total_cpu_time_ns */ 0,
     },
-    .last_execution = {
-        .mode = LLAMA_TOPP_FILTERING_NONE,
-        .topp_state = LLAMA_GPU_TOPP_UNINITIALIZED,
-        .cumsum_state = LLAMA_GPU_CUMSUM_UNINITIALIZED,
-        .timestamp_ns = 0,
-        .tokens_processed = 0,
-        .topp_value_used = 0.95f,
-        .nucleus_size = 0,
-        .gpu_softmax_ns = 0,
-        .gpu_sort_ns = 0,
-        .gpu_cumsum_ns = 0,
-        .cpu_violations = 0,
-        .last_violation = LLAMA_TOPP_VIOLATION_NONE,
+    /* last_execution */ {
+        /* mode */ LLAMA_TOPP_FILTERING_NONE,
+        /* topp_state */ LLAMA_GPU_TOPP_UNINITIALIZED,
+        /* cumsum_state */ LLAMA_GPU_CUMSUM_UNINITIALIZED,
+        /* timestamp_ns */ 0,
+        /* tokens_processed */ 0,
+        /* topp_value_used */ 0.95f,
+        /* nucleus_size */ 0,
+        /* gpu_softmax_ns */ 0,
+        /* gpu_sort_ns */ 0,
+        /* gpu_cumsum_ns */ 0,
+        /* cpu_violations */ 0,
+        /* last_violation */ LLAMA_TOPP_VIOLATION_NONE,
     },
-    .total_topp_applications = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_topp_filtering = false,
-    .verify_bitwise_identical = false,
+    /* total_topp_applications */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_topp_filtering */ false,
+    /* verify_bitwise_identical */ false,
 };
 
 // Per-topp-operation tracking: track which top-p operations have been applied
@@ -481,6 +481,7 @@ void llama_topp_gpu_log_softmax_computed(void) {
 }
 
 void llama_topp_gpu_log_nucleus_set_size(uint32_t nucleus_size) {
+    (void)nucleus_size;
     // Debug logging: nucleus set size determined
 }
 
@@ -504,6 +505,7 @@ void llama_topp_gpu_report_violation(
     enum llama_topp_violation violation_type,
     const char* details
 ) {
+    (void)details;
     g_topp_validation_state.state_record.last_violation = violation_type;
     g_topp_validation_state.total_violations++;
 }

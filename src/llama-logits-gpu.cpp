@@ -11,49 +11,50 @@
 #include "llama-logits-gpu.h"
 #include <map>
 #include <vector>
+#include <algorithm> // for std::all_of
 
 // ============================================================================
 // GLOBAL STATE VARIABLES
 // ============================================================================
 
 static struct llama_gpu_logits_validation_state g_logits_validation_state = {
-    .config = {
-        .gpu_exclusive_logits = false,
-        .logits_cpu_access_forbidden = false,
-        .current_phase = LLAMA_DECODE_PHASE_UNINITIALIZED,
-        .access_mode = LLAMA_LOGITS_ACCESS_NONE,
-        .cpu_logits_materialization_allowed = true,
-        .enforce_gpu_resident_only = false,
-        .phase_aware_access = false,
+    /* config */ {
+        /* gpu_exclusive_logits */ false,
+        /* logits_cpu_access_forbidden */ false,
+        /* current_phase */ LLAMA_DECODE_PHASE_UNINITIALIZED,
+        /* access_mode */ LLAMA_LOGITS_ACCESS_NONE,
+        /* cpu_logits_materialization_allowed */ true,
+        /* enforce_gpu_resident_only */ false,
+        /* phase_aware_access */ false,
     },
-    .state_record = {
-        .current_phase = LLAMA_DECODE_PHASE_UNINITIALIZED,
-        .current_access_mode = LLAMA_LOGITS_ACCESS_NONE,
-        .buffer_state = LLAMA_GPU_LOGITS_UNINITIALIZED,
-        .materialization_state = LLAMA_LOGITS_MATERIALIZATION_NONE,
-        .cpu_logits_access_blocked = false,
-        .gpu_logits_resident = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_LOGITS_VIOLATION_NONE,
-        .total_tokens_processed = 0,
-        .total_gpu_residency_ns = 0,
+    /* state_record */ {
+        /* current_phase */ LLAMA_DECODE_PHASE_UNINITIALIZED,
+        /* current_access_mode */ LLAMA_LOGITS_ACCESS_NONE,
+        /* buffer_state */ LLAMA_GPU_LOGITS_UNINITIALIZED,
+        /* materialization_state */ LLAMA_LOGITS_MATERIALIZATION_NONE,
+        /* cpu_logits_access_blocked */ false,
+        /* gpu_logits_resident */ false,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_LOGITS_VIOLATION_NONE,
+        /* total_tokens_processed */ 0,
+        /* total_gpu_residency_ns */ 0,
     },
-    .last_execution = {
-        .phase = LLAMA_DECODE_PHASE_UNINITIALIZED,
-        .access_mode = LLAMA_LOGITS_ACCESS_NONE,
-        .buffer_state = LLAMA_GPU_LOGITS_UNINITIALIZED,
-        .timestamp_ns = 0,
-        .tokens_processed = 0,
-        .cpu_violations = 0,
-        .last_violation = LLAMA_LOGITS_VIOLATION_NONE,
-        .cpu_attempted_read = false,
-        .gpu_resident_maintained = false,
+    /* last_execution */ {
+        /* phase */ LLAMA_DECODE_PHASE_UNINITIALIZED,
+        /* access_mode */ LLAMA_LOGITS_ACCESS_NONE,
+        /* buffer_state */ LLAMA_GPU_LOGITS_UNINITIALIZED,
+        /* timestamp_ns */ 0,
+        /* tokens_processed */ 0,
+        /* cpu_violations */ 0,
+        /* last_violation */ LLAMA_LOGITS_VIOLATION_NONE,
+        /* cpu_attempted_read */ false,
+        /* gpu_resident_maintained */ false,
     },
-    .total_logits_accesses = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_logits_access = false,
-    .verify_gpu_residency = false,
+    /* total_logits_accesses */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_logits_access */ false,
+    /* verify_gpu_residency */ false,
 };
 
 // Per-operation tracking: track CPU logits operations attempted
@@ -501,6 +502,7 @@ void llama_logits_gpu_report_violation(
     enum llama_logits_violation violation_type,
     const char* details
 ) {
+    (void)details;
     g_logits_validation_state.state_record.last_violation = violation_type;
     g_logits_validation_state.total_violations++;
 }

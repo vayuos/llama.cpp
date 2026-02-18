@@ -11,6 +11,10 @@
 #include <cstring>
 #include <algorithm>
 
+#ifndef LLAMA_ABORT
+#define LLAMA_ABORT(msg) do { fprintf(stderr, "LLAMA_ABORT: %s\n", msg); abort(); } while(0)
+#endif
+
 /**
  * Initialize threading discipline state
  */

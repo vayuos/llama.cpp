@@ -461,4 +461,3 @@ void llama_reset_graph_binding_counters(void);
  */
 int llama_graph_backend_binding_selftest(void);
 
-#endif // LLAMA_GRAPH_BACKEND_BINDING_H

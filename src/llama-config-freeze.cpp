@@ -1,4 +1,7 @@
 #include "llama-config-freeze.h"
+#include "llama.h"
+#include "llama-impl.h"
+#include "ggml.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -180,28 +183,28 @@ int llama_config_freeze_init(llama_frozen_config * config) {
     memset(config, 0, sizeof(llama_frozen_config));
 
     // Initialize to uninitialized state
-    config->current_stage = llama_config_freeze_stage::UNINITIALIZED;
+    config->current_stage = UNINITIALIZED;
     config->configuration_locked = false;
     config->decode_active = false;
 
     // Default backend selection
-    config->backend_mode = llama_frozen_backend_mode::BACKEND_CPU;
+    config->backend_mode = BACKEND_CPU;
 
     // Default sampling
-    config->sampling_mode = llama_frozen_sampling_mode::SAMPLING_GREEDY;
+    config->sampling_mode = SAMPLING_GREEDY;
     config->sampling_params.top_k = 40;
     config->sampling_params.top_p = 0.95f;
     config->sampling_params.temperature = 0.8f;
     config->sampling_params.deterministic = false;
 
     // Default threading
-    config->threading_mode = llama_frozen_threading_mode::THREADING_MULTI;
+    config->threading_mode = THREADING_MULTI;
     config->n_threads = 4;
     config->n_threads_batch = 4;
     config->thread_affinity_pinned = false;
 
     // Default memory
-    config->memory_strategy = llama_frozen_memory_strategy::MEMORY_STATIC;
+    config->memory_strategy = MEMORY_STATIC;
     config->memory_config.kv_cache_size = 0;
     config->memory_config.pinned_host_memory = false;
     config->memory_config.unified_memory = false;
@@ -271,7 +274,7 @@ int llama_config_freeze_parse_cli(
     }
 
     // Verify we can transition to CLI_PARSING
-    if (llama_config_freeze_advance_stage(config, llama_config_freeze_stage::CLI_PARSING) != 0) {
+    if (llama_config_freeze_advance_stage(config, CLI_PARSING) != 0) {
         return -2;
     }
 
@@ -305,7 +308,7 @@ int llama_config_freeze_resolve_env(llama_frozen_config * config) {
     }
 
     // Verify we can transition to ENV_RESOLUTION
-    if (llama_config_freeze_advance_stage(config, llama_config_freeze_stage::ENV_RESOLUTION) != 0) {
+    if (llama_config_freeze_advance_stage(config, ENV_RESOLUTION) != 0) {
         return -2;
     }
 
@@ -361,24 +364,24 @@ int llama_config_freeze_bind_backend(
 
     // Determine backend from CLI and environment
     if (config->cli_config.gpu_offload) {
-        config->backend_mode = llama_frozen_backend_mode::BACKEND_CUDA;
+        config->backend_mode = BACKEND_CUDA;
         fprintf(stderr, "[CONFIG_FREEZE] Selected CUDA backend\n");
     } else {
-        config->backend_mode = llama_frozen_backend_mode::BACKEND_CPU;
+        config->backend_mode = BACKEND_CPU;
         fprintf(stderr, "[CONFIG_FREEZE] Selected CPU backend\n");
     }
 
     // Bind the selected dispatch function ONCE
     switch (config->backend_mode) {
-        case llama_frozen_backend_mode::BACKEND_CUDA:
-            config->backend_dispatch.selected_backend = llama_frozen_backend_mode::BACKEND_CUDA;
+        case BACKEND_CUDA:
+            config->backend_dispatch.selected_backend = BACKEND_CUDA;
             config->backend_dispatch.compute_fn = llama_backend_dispatch_cuda;
             config->backend_dispatch.backend_name = "CUDA";
             break;
 
         default:
-        case llama_frozen_backend_mode::BACKEND_CPU:
-            config->backend_dispatch.selected_backend = llama_frozen_backend_mode::BACKEND_CPU;
+        case BACKEND_CPU:
+            config->backend_dispatch.selected_backend = BACKEND_CPU;
             config->backend_dispatch.compute_fn = llama_backend_dispatch_cpu;
             config->backend_dispatch.backend_name = "CPU";
             break;
@@ -400,19 +403,19 @@ int llama_config_freeze_bind_sampler(llama_frozen_config * config) {
 
     // Determine sampling mode from CLI and environment
     // For now, default to greedy
-    config->sampling_mode = llama_frozen_sampling_mode::SAMPLING_TOP_K;
+    config->sampling_mode = SAMPLING_TOP_K;
 
     // Bind the selected sampling function ONCE
     switch (config->sampling_mode) {
-        case llama_frozen_sampling_mode::SAMPLING_TOP_K:
-            config->sampler_dispatch.sampling_mode = llama_frozen_sampling_mode::SAMPLING_TOP_K;
+        case SAMPLING_TOP_K:
+            config->sampler_dispatch.sampling_mode = SAMPLING_TOP_K;
             config->sampler_dispatch.sample_fn = llama_sampler_dispatch_topk;
             config->sampler_dispatch.mode_name = "TOP_K";
             break;
 
         default:
-        case llama_frozen_sampling_mode::SAMPLING_GREEDY:
-            config->sampler_dispatch.sampling_mode = llama_frozen_sampling_mode::SAMPLING_GREEDY;
+        case SAMPLING_GREEDY:
+            config->sampler_dispatch.sampling_mode = SAMPLING_GREEDY;
             config->sampler_dispatch.sample_fn = llama_sampler_dispatch_greedy;
             config->sampler_dispatch.mode_name = "GREEDY";
             break;
@@ -499,7 +502,7 @@ int llama_config_freeze_startup_complete(llama_frozen_config * config) {
     }
 
     // Transition to startup complete
-    if (llama_config_freeze_advance_stage(config, llama_config_freeze_stage::STARTUP_COMPLETE) != 0) {
+    if (llama_config_freeze_advance_stage(config, STARTUP_COMPLETE) != 0) {
         return -5;
     }
 
@@ -528,7 +531,7 @@ int llama_config_freeze_lock_decode(llama_frozen_config * config) {
     }
 
     // Advance state to DECODE_STARTING
-    if (llama_config_freeze_advance_stage(config, llama_config_freeze_stage::DECODE_STARTING) != 0) {
+    if (llama_config_freeze_advance_stage(config, DECODE_STARTING) != 0) {
         return -3;
     }
 
@@ -538,7 +541,7 @@ int llama_config_freeze_lock_decode(llama_frozen_config * config) {
     config->lock_timestamp_us = std::chrono::system_clock::now().time_since_epoch().count() / 1000;
 
     // Transition to FROZEN_LOCK_ENGAGED
-    if (llama_config_freeze_advance_stage(config, llama_config_freeze_stage::FROZEN_LOCK_ENGAGED) != 0) {
+    if (llama_config_freeze_advance_stage(config, FROZEN_LOCK_ENGAGED) != 0) {
         return -4;
     }
 
@@ -799,7 +802,7 @@ char * llama_config_freeze_status_report(const llama_frozen_config * config) {
         config->backend_dispatch.backend_name,
         config->backend_validated ? "YES" : "NO",
         config->sampler_dispatch.mode_name,
-        config->sampling_mode == llama_frozen_sampling_mode::SAMPLING_GREEDY ? "GREEDY" : "OTHER",
+        config->sampling_mode == SAMPLING_GREEDY ? "GREEDY" : "OTHER",
         config->attention_dispatch.attention_type
     );
 

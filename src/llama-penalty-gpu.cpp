@@ -17,47 +17,47 @@
 // ============================================================================
 
 static struct llama_gpu_penalty_validation_state g_penalty_validation_state = {
-    .config = {
-        .repeat_penalty_enabled = false,
-        .frequency_penalty_enabled = false,
-        .presence_penalty_enabled = false,
-        .repeat_penalty_value = 1.0f,
-        .frequency_penalty_value = 0.0f,
-        .presence_penalty_value = 0.0f,
-        .gpu_penalty_enabled = false,
-        .history_on_gpu = false,
-        .combined_kernel = false,
-        .penalty_type = LLAMA_PENALTY_TYPE_NONE,
+    /* config */ {
+        /* repeat_penalty_enabled */ false,
+        /* frequency_penalty_enabled */ false,
+        /* presence_penalty_enabled */ false,
+        /* repeat_penalty_value */ 1.0f,
+        /* frequency_penalty_value */ 0.0f,
+        /* presence_penalty_value */ 0.0f,
+        /* gpu_penalty_enabled */ false,
+        /* history_on_gpu */ false,
+        /* combined_kernel */ false,
+        /* penalty_type */ LLAMA_PENALTY_TYPE_NONE,
     },
-    .state_record = {
-        .current_penalty_type = LLAMA_PENALTY_TYPE_NONE,
-        .gpu_penalty_state = LLAMA_GPU_PENALTY_UNINITIALIZED,
-        .history_state = LLAMA_GPU_HISTORY_UNINITIALIZED,
-        .gpu_penalty_active = false,
-        .cpu_penalty_bypassed = false,
-        .history_gpu_resident = false,
-        .total_violations = 0,
-        .last_violation = LLAMA_PENALTY_VIOLATION_NONE,
-        .total_tokens_penalized = 0,
-        .total_gpu_time_ns = 0,
-        .total_cpu_time_ns = 0,
+    /* state_record */ {
+        /* current_penalty_type */ LLAMA_PENALTY_TYPE_NONE,
+        /* gpu_penalty_state */ LLAMA_GPU_PENALTY_UNINITIALIZED,
+        /* history_state */ LLAMA_GPU_HISTORY_UNINITIALIZED,
+        /* gpu_penalty_active */ false,
+        /* cpu_penalty_bypassed */ false,
+        /* history_gpu_resident */ false,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_PENALTY_VIOLATION_NONE,
+        /* total_tokens_penalized */ 0,
+        /* total_gpu_time_ns */ 0,
+        /* total_cpu_time_ns */ 0,
     },
-    .last_execution = {
-        .penalty_type = LLAMA_PENALTY_TYPE_NONE,
-        .penalty_state = LLAMA_GPU_PENALTY_UNINITIALIZED,
-        .history_state = LLAMA_GPU_HISTORY_UNINITIALIZED,
-        .timestamp_ns = 0,
-        .tokens_processed = 0,
-        .gpu_kernel_ns = 0,
-        .history_update_ns = 0,
-        .cpu_violations = 0,
-        .last_violation = LLAMA_PENALTY_VIOLATION_NONE,
+    /* last_execution */ {
+        /* penalty_type */ LLAMA_PENALTY_TYPE_NONE,
+        /* penalty_state */ LLAMA_GPU_PENALTY_UNINITIALIZED,
+        /* history_state */ LLAMA_GPU_HISTORY_UNINITIALIZED,
+        /* timestamp_ns */ 0,
+        /* tokens_processed */ 0,
+        /* gpu_kernel_ns */ 0,
+        /* history_update_ns */ 0,
+        /* cpu_violations */ 0,
+        /* last_violation */ LLAMA_PENALTY_VIOLATION_NONE,
     },
-    .total_penalty_applications = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .debug_penalty_application = false,
-    .verify_bitwise_identical = false,
+    /* total_penalty_applications */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* debug_penalty_application */ false,
+    /* verify_bitwise_identical */ false,
 };
 
 // Per-penalty-operation tracking: track which penalty types have been applied
@@ -246,6 +246,7 @@ int llama_penalty_gpu_assert_penalties_complete(void) {
 // ============================================================================
 
 int llama_penalty_gpu_allocate_history_buffer(uint32_t max_history_size) {
+    (void)max_history_size;
     g_penalty_validation_state.state_record.history_state = LLAMA_GPU_HISTORY_ALLOCATED;
     g_penalty_validation_state.config.history_on_gpu = true;
     g_penalty_validation_state.state_record.history_gpu_resident = true;
@@ -260,6 +261,7 @@ int llama_penalty_gpu_allocate_history_buffer(uint32_t max_history_size) {
 // ============================================================================
 
 int llama_penalty_gpu_update_history_on_gpu(uint32_t token_id) {
+    (void)token_id;
     if (g_penalty_validation_state.state_record.history_state == LLAMA_GPU_HISTORY_UNINITIALIZED) {
         if (g_penalty_validation_state.enforcement_strict) {
             return -1;
@@ -522,6 +524,7 @@ void llama_penalty_gpu_log_penalty_kernel_launched(void) {
 }
 
 void llama_penalty_gpu_log_logits_penalized(uint32_t num_tokens) {
+    (void)num_tokens;
     // Debug logging: tokens penalized by GPU
 }
 
@@ -545,6 +548,7 @@ void llama_penalty_gpu_report_violation(
     enum llama_penalty_violation violation_type,
     const char* details
 ) {
+    (void)details;
     g_penalty_validation_state.state_record.last_violation = violation_type;
     g_penalty_validation_state.total_violations++;
 }

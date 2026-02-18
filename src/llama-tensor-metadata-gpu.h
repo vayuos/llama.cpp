@@ -48,6 +48,7 @@ enum llama_metadata_phase {
 /**
  * Immutability state of tensor metadata
  */
+/*
 enum llama_gpu_tensor_metadata_state {
     LLAMA_GPU_TENSOR_METADATA_UNINITIALIZED = 0,
     LLAMA_GPU_TENSOR_METADATA_UNLOCKED = 1,        // Metadata mutable
@@ -56,6 +57,8 @@ enum llama_gpu_tensor_metadata_state {
     LLAMA_GPU_TENSOR_METADATA_COMPLETE = 4,        // Cleanup complete
     LLAMA_GPU_TENSOR_METADATA_ERROR = 5,
 };
+*/
+#include "llama-tensor-metadata-elimination.h"
 
 // ============================================================================
 // TENSOR METADATA VIOLATION ENUMERATION

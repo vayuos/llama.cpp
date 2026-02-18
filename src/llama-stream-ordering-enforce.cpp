@@ -18,31 +18,44 @@
 // ============================================================================
 
 static struct llama_gpu_stream_ordering_validation_state g_stream_ordering_validation = {
-    .config = {
-        .enforce_single_stream = false,
-        .forbid_default_stream = true,
-        .forbid_cross_stream_sync = true,
-        .validate_stream_binding = true,
-        .forbid_stream_switching = true,
-        .debug_stream_ordering = false,
+    /* config */ {
+        /* enforce_single_stream */ false,
+        /* forbid_default_stream */ true,
+        /* forbid_cross_stream_sync */ true,
+        /* validate_stream_binding */ true,
+        /* forbid_stream_switching */ true,
+        /* debug_stream_ordering */ false,
     },
-    .state_record = {
-        .state = LLAMA_GPU_STREAM_ORDERING_UNINITIALIZED,
-        .execution_mode = LLAMA_STREAM_EXECUTION_NONE,
-        .active_decode_stream_id = 0,
-        .num_streams_active = 0,
-        .num_kernels_in_decode_stream = 0,
-        .total_kernels_during_decode = 0,
-        .kernels_on_wrong_stream = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_STREAM_ORDERING_VIOLATION_NONE,
+    /* state_record */ {
+        /* state */ LLAMA_GPU_STREAM_ORDERING_UNINITIALIZED,
+        /* execution_mode */ LLAMA_STREAM_EXECUTION_NONE,
+        /* active_decode_stream_id */ 0,
+        /* num_streams_active */ 0,
+        /* num_kernels_in_decode_stream */ 0,
+        /* total_kernels_during_decode */ 0,
+        /* kernels_on_wrong_stream */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_STREAM_ORDERING_VIOLATION_NONE,
     },
-    .decode_stream_state = {0},
-    .last_kernel_execution = {0},
-    .total_kernel_launches = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .decode_phase_active = false,
+    /* decode_stream_state */ {
+        /* stream_id */ 0,
+        /* is_dedicated_decode_stream */ false,
+        /* is_active */ false,
+        /* num_kernels_launched */ 0,
+        /* num_async_memcpy_ops */ 0,
+        /* stream_ordered_guaranteed */ false,
+    },
+    /* last_kernel_execution */ {
+        /* kernel_id */ 0,
+        /* stream_id */ 0,
+        /* explicit_stream_binding */ false,
+        /* issue_order_timestamp */ 0,
+        /* reserved */ 0,
+    },
+    /* total_kernel_launches */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* decode_phase_active */ false,
 };
 
 // Per-stream kernel tracking
@@ -496,6 +509,7 @@ int llama_stream_ordering_gpu_detect_blocked_memcpy(void) {
 }
 
 int llama_stream_ordering_gpu_detect_stream_switch(uint32_t layer_id) {
+    (void)layer_id;
     g_stream_ordering_validation.state_record.last_violation = LLAMA_STREAM_ORDERING_VIOLATION_STREAM_SWITCH;
     g_stream_ordering_validation.total_violations++;
 

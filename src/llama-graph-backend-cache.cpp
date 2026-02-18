@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <map>
+#include <cinttypes>
 #include <vector>
 
 // ============================================================================
@@ -21,28 +22,28 @@
 // ============================================================================
 
 static struct llama_graph_backend_cache_validation_state g_backend_cache_state = {
-    .cache_record = {
-        .graph_id = 0,
-        .total_cached_decisions = 0,
-        .total_nodes_resolved = 0,
-        .total_runtime_queries = 0,
-        .cache_integrity = LLAMA_BACKEND_CACHE_VALID,
-        .last_resolution_failure = LLAMA_BACKEND_RESOLVE_OK,
-        .last_drift_reason = LLAMA_BACKEND_DRIFT_NONE,
-        .last_query_violation = LLAMA_BACKEND_QUERY_NONE,
-        .cache_frozen = false,
-        .virtual_dispatch_eliminated = false,
-        .cache_creation_time_ns = 0,
+    /* cache_record */ {
+        /* graph_id */ 0,
+        /* total_cached_decisions */ 0,
+        /* total_nodes_resolved */ 0,
+        /* total_runtime_queries */ 0,
+        /* cache_integrity */ LLAMA_BACKEND_CACHE_VALID,
+        /* last_resolution_failure */ LLAMA_BACKEND_RESOLVE_OK,
+        /* last_drift_reason */ LLAMA_BACKEND_DRIFT_NONE,
+        /* last_query_violation */ LLAMA_BACKEND_QUERY_NONE,
+        /* cache_frozen */ false,
+        /* virtual_dispatch_eliminated */ false,
+        /* cache_creation_time_ns */ 0
     },
-    .total_resolution_failures = 0,
-    .total_cache_misses = 0,
-    .total_drift_detections = 0,
-    .enforcement_strict = true,
-    .debug_verify_cache_consistency = false,
+    /* total_resolution_failures */ 0,
+    /* total_cache_misses */ 0,
+    /* total_drift_detections */ 0,
+    /* enforcement_strict */ true,
+    /* debug_verify_cache_consistency */ false
 };
 
 // Per-node backend decision cache: maps node_id -> backend_type
-static std::map<uint64_t, enum ggml_backend_type> g_node_backend_cache;
+static std::map<uint64_t, enum ggml_backend_dev_type> g_node_backend_cache;
 
 // Per-node attachment state: maps node_id -> attachment_state
 static std::map<uint64_t, enum llama_backend_attachment_state> g_node_attachment_state;
@@ -100,17 +101,17 @@ int llama_backend_cache_init(void) {
 int llama_backend_cache_resolve_at_graph_build(
     uint64_t graph_id,
     uint64_t node_id,
-    enum ggml_backend_type * out_backend
+    enum ggml_backend_dev_type * out_backend
 ) {
     if (out_backend == nullptr) {
-        fprintf(stderr, "[BACKEND_CACHE] ERROR EP1: out_backend pointer null at node %llu\n", node_id);
+        fprintf(stderr, "[BACKEND_CACHE] ERROR EP1: out_backend pointer null at node %" PRIu64 "\n", node_id);
         if (g_backend_cache_state.enforcement_strict) abort();
         return -1;
     }
 
     // Check if already cached (should not be - first resolution only)
     if (g_node_backend_cache.count(node_id)) {
-        fprintf(stderr, "[BACKEND_CACHE] ERROR EP1: node %llu already has cached backend decision\n", node_id);
+        fprintf(stderr, "[BACKEND_CACHE] ERROR EP1: node %" PRIu64 " already has cached backend decision\n", node_id);
         g_backend_cache_state.cache_record.last_resolution_failure = LLAMA_BACKEND_RESOLVE_DEFERRED;
         g_backend_cache_state.total_resolution_failures++;
         if (g_backend_cache_state.enforcement_strict) abort();
@@ -118,7 +119,7 @@ int llama_backend_cache_resolve_at_graph_build(
     }
 
     // For now, default to GPU backend (in real implementation, would query capabilities)
-    enum ggml_backend_type resolved_backend = GGML_BACKEND_GPU;
+    enum ggml_backend_dev_type resolved_backend = GGML_BACKEND_DEVICE_TYPE_GPU;
 
     // Cache the decision
     g_node_backend_cache[node_id] = resolved_backend;
@@ -143,7 +144,7 @@ int llama_backend_cache_resolve_all_nodes_upfront(uint64_t graph_id) {
     g_backend_cache_state.cache_record.total_nodes_resolved = g_node_backend_cache.size();
 
     if (g_backend_cache_state.cache_record.total_nodes_resolved == 0) {
-        fprintf(stderr, "[BACKEND_CACHE] ERROR EP2: no nodes resolved for graph %llu\n", graph_id);
+        fprintf(stderr, "[BACKEND_CACHE] ERROR EP2: no nodes resolved for graph %" PRIu64 "\n", graph_id);
         g_backend_cache_state.cache_record.last_resolution_failure = LLAMA_BACKEND_RESOLVE_NOT_AVAILABLE;
         g_backend_cache_state.total_resolution_failures++;
         if (g_backend_cache_state.enforcement_strict) abort();
@@ -162,7 +163,7 @@ int llama_backend_cache_forbid_deferred_resolution(void) {
     // Check if any nodes were resolved outside of graph build phase
     for (auto& entry : g_node_resolution_timing) {
         if (entry.second != LLAMA_BACKEND_RESOLUTION_GRAPH_BUILD) {
-            fprintf(stderr, "[BACKEND_CACHE] ERROR EP3: deferred resolution detected for node %llu at timing %d\n",
+            fprintf(stderr, "[BACKEND_CACHE] ERROR EP3: deferred resolution detected for node %" PRIu64 " at timing %d\n",
                     entry.first, entry.second);
             g_backend_cache_state.cache_record.last_resolution_failure = LLAMA_BACKEND_RESOLVE_DEFERRED;
             g_backend_cache_state.total_resolution_failures++;
@@ -180,13 +181,13 @@ int llama_backend_cache_forbid_deferred_resolution(void) {
  */
 int llama_backend_cache_attach_backend_to_node(
     uint64_t node_id,
-    enum ggml_backend_type backend
+    enum ggml_backend_dev_type backend
 ) {
     // Check if node already has attached backend
     if (g_node_attachment_state.count(node_id)) {
         enum llama_backend_attachment_state state = g_node_attachment_state[node_id];
         if (state == LLAMA_BACKEND_ATTACH_FROZEN) {
-            fprintf(stderr, "[BACKEND_CACHE] ERROR EP4: attempting to modify frozen backend attachment for node %llu\n", node_id);
+            fprintf(stderr, "[BACKEND_CACHE] ERROR EP4: attempting to modify frozen backend attachment for node %" PRIu64 "\n", node_id);
             g_backend_cache_state.cache_record.last_resolution_failure = LLAMA_BACKEND_RESOLVE_INCOMPATIBLE;
             g_backend_cache_state.total_resolution_failures++;
             if (g_backend_cache_state.enforcement_strict) abort();
@@ -275,7 +276,7 @@ int llama_backend_cache_verify_cache_before_freeze(void) {
     // Verify all nodes have cached decisions
     if (g_node_backend_cache.empty()) {
         fprintf(stderr, "[BACKEND_CACHE] ERROR EP9: cache empty, no backend decisions\n");
-        g_backend_cache_state.cache_record.cache_integrity = LLAMA_BACKEND_CACHE_INVALID;
+        g_backend_cache_state.cache_record.cache_integrity = LLAMA_BACKEND_CACHE_INVALIDATED;
         g_backend_cache_state.total_resolution_failures++;
         if (g_backend_cache_state.enforcement_strict) abort();
         return -1;
@@ -287,7 +288,7 @@ int llama_backend_cache_verify_cache_before_freeze(void) {
 
         // Check attachment state exists
         if (!g_node_attachment_state.count(node_id)) {
-            fprintf(stderr, "[BACKEND_CACHE] ERROR EP9: node %llu missing attachment state\n", node_id);
+            fprintf(stderr, "[BACKEND_CACHE] ERROR EP9: node %" PRIu64 " missing attachment state\n", node_id);
             g_backend_cache_state.cache_record.cache_integrity = LLAMA_BACKEND_CACHE_CORRUPTED;
             g_backend_cache_state.total_resolution_failures++;
             if (g_backend_cache_state.enforcement_strict) abort();
@@ -296,7 +297,7 @@ int llama_backend_cache_verify_cache_before_freeze(void) {
 
         // Check resolution timing exists
         if (!g_node_resolution_timing.count(node_id)) {
-            fprintf(stderr, "[BACKEND_CACHE] ERROR EP9: node %llu missing resolution timing\n", node_id);
+            fprintf(stderr, "[BACKEND_CACHE] ERROR EP9: node %" PRIu64 " missing resolution timing\n", node_id);
             g_backend_cache_state.cache_record.cache_integrity = LLAMA_BACKEND_CACHE_CORRUPTED;
             g_backend_cache_state.total_resolution_failures++;
             if (g_backend_cache_state.enforcement_strict) abort();
@@ -314,22 +315,22 @@ int llama_backend_cache_verify_cache_before_freeze(void) {
  */
 int llama_backend_cache_detect_backend_drift(
     uint64_t node_id,
-    enum ggml_backend_type actual_backend
+    enum ggml_backend_dev_type actual_backend
 ) {
     // Check if node has cached decision
     if (!g_node_backend_cache.count(node_id)) {
-        fprintf(stderr, "[BACKEND_CACHE] ERROR EP10: node %llu has no cached backend decision\n", node_id);
+        fprintf(stderr, "[BACKEND_CACHE] ERROR EP10: node %" PRIu64 " has no cached backend decision\n", node_id);
         g_backend_cache_state.cache_record.last_resolution_failure = LLAMA_BACKEND_RESOLVE_NOT_AVAILABLE;
         g_backend_cache_state.total_cache_misses++;
         if (g_backend_cache_state.enforcement_strict) abort();
         return -1;
     }
 
-    enum ggml_backend_type cached_backend = g_node_backend_cache[node_id];
+    enum ggml_backend_dev_type cached_backend = g_node_backend_cache[node_id];
 
     // Check for drift
     if (actual_backend != cached_backend) {
-        fprintf(stderr, "[BACKEND_CACHE] ERROR EP10: backend drift for node %llu: cached=%d actual=%d\n",
+        fprintf(stderr, "[BACKEND_CACHE] ERROR EP10: backend drift for node %" PRIu64 ": cached=%d actual=%d\n",
                 node_id, cached_backend, actual_backend);
         g_backend_cache_state.cache_record.last_drift_reason = LLAMA_BACKEND_DRIFT_IMPLICIT_FALLBACK;
         g_backend_cache_state.total_drift_detections++;
@@ -352,10 +353,10 @@ int llama_backend_cache_detect_backend_drift(
  * Lookup cached backend decision for node (used during execution)
  * This is the ONLY backend query function allowed during decode.
  */
-enum ggml_backend_type llama_backend_cache_lookup_cached(uint64_t node_id) {
+enum ggml_backend_dev_type llama_backend_cache_lookup_cached(uint64_t node_id) {
     // Check if cache is frozen (should be during decode)
     if (!g_backend_cache_state.cache_record.cache_frozen) {
-        fprintf(stderr, "[BACKEND_CACHE] WARNING: cache not frozen during lookup for node %llu\n", node_id);
+        fprintf(stderr, "[BACKEND_CACHE] WARNING: cache not frozen during lookup for node %" PRIu64 "\n", node_id);
     }
 
     // Look up in cache
@@ -365,10 +366,10 @@ enum ggml_backend_type llama_backend_cache_lookup_cached(uint64_t node_id) {
     }
 
     // Missing from cache
-    fprintf(stderr, "[BACKEND_CACHE] ERROR: node %llu not in cache\n", node_id);
+    fprintf(stderr, "[BACKEND_CACHE] ERROR: node %" PRIu64 " not in cache\n", node_id);
     g_backend_cache_state.total_cache_misses++;
     if (g_backend_cache_state.enforcement_strict) abort();
-    return GGML_BACKEND_CPU; // Fallback (should not happen)
+    return GGML_BACKEND_DEVICE_TYPE_CPU; // Fallback (should not happen)
 }
 
 /**
@@ -387,16 +388,15 @@ bool llama_backend_cache_has_cached_decision(uint64_t node_id) {
  */
 struct llama_backend_cache_entry llama_backend_cache_get_entry(uint64_t node_id) {
     struct llama_backend_cache_entry entry = {
-        .node_id = node_id,
-        .graph_id = g_backend_cache_state.cache_record.graph_id,
-        .cached_backend = g_node_backend_cache.count(node_id) ? g_node_backend_cache[node_id] : GGML_BACKEND_CPU,
-        .attachment_state = g_node_attachment_state.count(node_id) ? g_node_attachment_state[node_id] : LLAMA_BACKEND_ATTACH_UNATTACHED,
-        .resolution_time_ns = 0,
-        .backend_immutable = g_node_attachment_state.count(node_id) &&
-                            g_node_attachment_state[node_id] == LLAMA_BACKEND_ATTACH_FROZEN,
-        .query_count = g_node_query_count.count(node_id) ? g_node_query_count[node_id] : 0,
-        .cache_hits = g_node_query_count.count(node_id) ? g_node_query_count[node_id] : 0,
-        .dispatch_violations = g_node_query_violations.count(node_id) ? g_node_query_violations[node_id] : 0,
+        /* node_id */ node_id,
+        /* graph_id */ g_backend_cache_state.cache_record.graph_id,
+        /* cached_backend */ (g_node_backend_cache.count(node_id) ? g_node_backend_cache[node_id] : GGML_BACKEND_DEVICE_TYPE_CPU),
+        /* attachment_state */ (g_node_attachment_state.count(node_id) ? g_node_attachment_state[node_id] : LLAMA_BACKEND_ATTACH_UNATTACHED),
+        /* resolution_time_ns */ 0,
+        /* backend_immutable */ (g_node_attachment_state.count(node_id) && g_node_attachment_state[node_id] == LLAMA_BACKEND_ATTACH_FROZEN),
+        /* query_count */ (g_node_query_count.count(node_id) ? g_node_query_count[node_id] : 0),
+        /* cache_hits */ (g_node_query_count.count(node_id) ? g_node_query_count[node_id] : 0),
+        /* dispatch_violations */ (g_node_query_violations.count(node_id) ? g_node_query_violations[node_id] : 0)
     };
     return entry;
 }
@@ -445,7 +445,7 @@ int llama_backend_cache_detect_late_query(
     uint64_t node_id,
     enum llama_backend_query_violation violation_type
 ) {
-    fprintf(stderr, "[BACKEND_CACHE] VIOLATION: late query for node %llu: %s\n",
+    fprintf(stderr, "[BACKEND_CACHE] VIOLATION: late query for node %" PRIu64 ": %s\n",
             node_id, llama_backend_query_violation_name(violation_type));
 
     g_node_query_violations[node_id]++;
@@ -461,10 +461,10 @@ int llama_backend_cache_detect_late_query(
  */
 int llama_backend_cache_detect_backend_change(
     uint64_t node_id,
-    enum ggml_backend_type old_backend,
-    enum ggml_backend_type new_backend
+    enum ggml_backend_dev_type old_backend,
+    enum ggml_backend_dev_type new_backend
 ) {
-    fprintf(stderr, "[BACKEND_CACHE] VIOLATION: backend change for node %llu: %d -> %d\n",
+    fprintf(stderr, "[BACKEND_CACHE] VIOLATION: backend change for node %" PRIu64 ": %d -> %d\n",
             node_id, old_backend, new_backend);
 
     g_node_drift_detections[node_id]++;
@@ -483,7 +483,7 @@ int llama_backend_cache_detect_backend_change(
  * Log that backend resolution phase completed
  */
 void llama_backend_cache_log_resolution_complete(uint64_t graph_id) {
-    printf("[BACKEND_CACHE] ✓ Backend resolution complete for graph %llu\n", graph_id);
+    printf("[BACKEND_CACHE] ✓ Backend resolution complete for graph %" PRIu64 "\n", graph_id);
     printf("  - Total decisions cached: %d\n", g_backend_cache_state.cache_record.total_cached_decisions);
     printf("  - Total nodes resolved: %d\n", g_backend_cache_state.cache_record.total_nodes_resolved);
 }
@@ -523,13 +523,13 @@ void llama_backend_cache_print_backend_mapping(void) {
 
     for (auto& entry : g_node_backend_cache) {
         uint64_t node_id = entry.first;
-        enum ggml_backend_type backend = entry.second;
+        enum ggml_backend_dev_type backend = entry.second;
         const char* state = "UNKNOWN";
         if (g_node_attachment_state.count(node_id)) {
             state = llama_backend_attachment_state_name(g_node_attachment_state[node_id]);
         }
 
-        printf("%-27llu %-16d %s\n", node_id, backend, state);
+        printf("%-27" PRIu64 " %-16d %s\n", node_id, backend, state);
     }
     printf("=======================\n\n");
 }
@@ -546,7 +546,7 @@ void llama_backend_cache_report_runtime_query(
     enum llama_backend_query_violation violation_type,
     const char* reason
 ) {
-    fprintf(stderr, "[BACKEND_CACHE] REPORT: Runtime query violation for node %llu\n", node_id);
+    fprintf(stderr, "[BACKEND_CACHE] REPORT: Runtime query violation for node %" PRIu64 "\n", node_id);
     fprintf(stderr, "  - Violation type: %s\n", llama_backend_query_violation_name(violation_type));
     fprintf(stderr, "  - Reason: %s\n", reason ? reason : "unknown");
     fprintf(stderr, "  - Expected: Cache lookup only\n");
@@ -562,7 +562,7 @@ void llama_backend_cache_report_drift(
     uint64_t node_id,
     enum llama_backend_drift_reason drift_reason
 ) {
-    fprintf(stderr, "[BACKEND_CACHE] REPORT: Backend drift for node %llu\n", node_id);
+    fprintf(stderr, "[BACKEND_CACHE] REPORT: Backend drift for node %" PRIu64 "\n", node_id);
     fprintf(stderr, "  - Drift reason: %s\n", llama_backend_drift_reason_name(drift_reason));
     fprintf(stderr, "  - Expected: Cache decision immutable\n");
 
@@ -605,7 +605,7 @@ void llama_backend_cache_set_debug_verify_consistency(bool debug) {
  */
 int llama_backend_cache_verify_all_nodes_resolved(uint64_t graph_id) {
     if (g_node_backend_cache.empty()) {
-        fprintf(stderr, "[BACKEND_CACHE] ERROR: No nodes resolved for graph %llu\n", graph_id);
+        fprintf(stderr, "[BACKEND_CACHE] ERROR: No nodes resolved for graph %" PRIu64 "\n", graph_id);
         if (g_backend_cache_state.enforcement_strict) abort();
         return -1;
     }
@@ -620,7 +620,7 @@ int llama_backend_cache_verify_no_late_resolution(void) {
     // All resolutions should have timing = GRAPH_BUILD
     for (auto& entry : g_node_resolution_timing) {
         if (entry.second != LLAMA_BACKEND_RESOLUTION_GRAPH_BUILD) {
-            fprintf(stderr, "[BACKEND_CACHE] ERROR: Late resolution detected for node %llu\n", entry.first);
+            fprintf(stderr, "[BACKEND_CACHE] ERROR: Late resolution detected for node %" PRIu64 "\n", entry.first);
             if (g_backend_cache_state.enforcement_strict) abort();
             return -1;
         }
@@ -636,7 +636,7 @@ int llama_backend_cache_verify_immutability_invariant(void) {
     // All nodes should be frozen
     for (auto& entry : g_node_attachment_state) {
         if (entry.second != LLAMA_BACKEND_ATTACH_FROZEN) {
-            fprintf(stderr, "[BACKEND_CACHE] ERROR: Node %llu not frozen\n", entry.first);
+            fprintf(stderr, "[BACKEND_CACHE] ERROR: Node %" PRIu64 " not frozen\n", entry.first);
             if (g_backend_cache_state.enforcement_strict) abort();
             return -1;
         }
@@ -655,9 +655,9 @@ int llama_backend_cache_verify_immutability_invariant(void) {
 static int test_backend_resolution_at_build_time(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     int ret = llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
-    if (ret != 0 || backend != GGML_BACKEND_GPU) {
+    if (ret != 0 || backend != GGML_BACKEND_DEVICE_TYPE_GPU) {
         fprintf(stderr, "[TEST] FAIL: Backend resolution at build time\n");
         return -1;
     }
@@ -676,12 +676,12 @@ static int test_backend_resolution_at_build_time(void) {
 static int test_cache_immutability_after_freeze(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
     llama_backend_cache_freeze_backend_assignment();
 
     // Try to modify frozen cache (should fail)
-    int ret = llama_backend_cache_attach_backend_to_node(100, GGML_BACKEND_CPU);
+    int ret = llama_backend_cache_attach_backend_to_node(100, GGML_BACKEND_DEVICE_TYPE_CPU);
     if (ret != -1) {
         // In strict mode would abort, in permissive returns -1
         fprintf(stderr, "[TEST] FAIL: Frozen cache was modified\n");
@@ -697,11 +697,11 @@ static int test_cache_immutability_after_freeze(void) {
 static int test_cached_lookup_without_dispatch(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
 
-    enum ggml_backend_type looked_up = llama_backend_cache_lookup_cached(100);
-    if (looked_up != GGML_BACKEND_GPU) {
+    enum ggml_backend_dev_type looked_up = llama_backend_cache_lookup_cached(100);
+    if (looked_up != GGML_BACKEND_DEVICE_TYPE_GPU) {
         fprintf(stderr, "[TEST] FAIL: Cached lookup returned wrong backend\n");
         return -1;
     }
@@ -715,7 +715,7 @@ static int test_cached_lookup_without_dispatch(void) {
 static int test_virtual_dispatch_elimination(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
     llama_backend_cache_freeze_backend_assignment();
     llama_backend_cache_eliminate_virtual_dispatch();
@@ -734,12 +734,12 @@ static int test_virtual_dispatch_elimination(void) {
 static int test_backend_drift_detection(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
     llama_backend_cache_freeze_backend_assignment();
 
     // Simulate drift (different backend at runtime)
-    int ret = llama_backend_cache_detect_backend_drift(100, GGML_BACKEND_CPU);
+    int ret = llama_backend_cache_detect_backend_drift(100, GGML_BACKEND_DEVICE_TYPE_CPU);
     if (ret == 0) {
         fprintf(stderr, "[TEST] FAIL: Drift detection failed\n");
         return -1;
@@ -774,7 +774,7 @@ static int test_late_query_violation(void) {
 static int test_cache_verification(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
     llama_backend_cache_resolve_at_graph_build(1, 101, &backend);
 
@@ -793,7 +793,7 @@ static int test_cache_verification(void) {
 static int test_cache_hit_rate(void) {
     llama_backend_cache_init();
 
-    enum ggml_backend_type backend;
+    enum ggml_backend_dev_type backend;
     llama_backend_cache_resolve_at_graph_build(1, 100, &backend);
     llama_backend_cache_freeze_backend_assignment();
 

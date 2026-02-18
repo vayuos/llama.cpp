@@ -20,23 +20,23 @@
 // ============================================================================
 
 static struct llama_token_step_gating_validation_state g_token_step_gating_state = {
-    .gating_record = {
-        .total_gating_decisions_detected = 0,
-        .total_synchronization_barriers = 0,
-        .total_readiness_checks = 0,
-        .last_decision = LLAMA_GATING_NONE,
-        .last_sync_type = LLAMA_SYNC_NONE,
-        .step_owner = LLAMA_STEP_OWNER_UNKNOWN,
-        .cpu_gating_eliminated = false,
-        .gpu_implicit_completion = false,
+    {
+        0,                        // total_gating_decisions_detected
+        0,                        // total_synchronization_barriers
+        0,                        // total_readiness_checks
+        LLAMA_GATING_NONE,        // last_decision
+        LLAMA_SYNC_NONE,          // last_sync_type
+        LLAMA_STEP_OWNER_UNKNOWN, // step_owner
+        false,                    // cpu_gating_eliminated
+        false                     // gpu_implicit_completion
     },
-    .violation_state = LLAMA_GATING_STATE_CLEAN,
-    .total_gating_violations = 0,
-    .total_sync_violations = 0,
-    .total_unauthorized_checks = 0,
-    .enforcement_strict = true,
-    .debug_detect_cpu_conditionals = false,
-    .debug_detect_cpu_barriers = false,
+    LLAMA_GATING_STATE_CLEAN, // violation_state
+    0,      // total_gating_violations
+    0,      // total_sync_violations
+    0,      // total_unauthorized_checks
+    true,   // enforcement_strict
+    false,  // debug_detect_cpu_conditionals
+    false   // debug_detect_cpu_barriers
 };
 
 // Per-gating-decision tracking: maps decision_type -> count

@@ -19,32 +19,40 @@
 // ============================================================================
 
 static struct llama_gpu_tensor_metadata_validation_state g_tensor_metadata_validation = {
-    .config = {
-        .forbid_cpu_shape_read = true,
-        .forbid_cpu_stride_read = true,
-        .forbid_cpu_type_read = true,
-        .forbid_cpu_buffer_query = true,
-        .enforce_metadata_immutability = true,
-        .debug_metadata_tracking = false,
+    /* config */ {
+        /* forbid_cpu_shape_read */ true,
+        /* forbid_cpu_stride_read */ true,
+        /* forbid_cpu_type_read */ true,
+        /* forbid_cpu_buffer_query */ true,
+        /* enforce_metadata_immutability */ true,
+        /* debug_metadata_tracking */ false,
     },
-    .state_record = {
-        .state = LLAMA_GPU_TENSOR_METADATA_UNINITIALIZED,
-        .current_phase = LLAMA_METADATA_PHASE_NONE,
-        .total_tensors_tracked = 0,
-        .total_tensors_locked = 0,
-        .cpu_shape_queries_blocked = 0,
-        .cpu_stride_queries_blocked = 0,
-        .cpu_type_queries_blocked = 0,
-        .cpu_buffer_queries_blocked = 0,
-        .metadata_modifications_blocked = 0,
-        .total_violations = 0,
-        .last_violation = LLAMA_TENSOR_METADATA_VIOLATION_NONE,
+    /* state_record */ {
+        /* state */ LLAMA_GPU_TENSOR_META_UNINITIALIZED,
+        /* current_phase */ LLAMA_METADATA_PHASE_NONE,
+        /* total_tensors_tracked */ 0,
+        /* total_tensors_locked */ 0,
+        /* cpu_shape_queries_blocked */ 0,
+        /* cpu_stride_queries_blocked */ 0,
+        /* cpu_type_queries_blocked */ 0,
+        /* cpu_buffer_queries_blocked */ 0,
+        /* metadata_modifications_blocked */ 0,
+        /* total_violations */ 0,
+        /* last_violation */ LLAMA_TENSOR_METADATA_VIOLATION_NONE,
     },
-    .last_query_record = {0},
-    .total_queries = 0,
-    .total_violations = 0,
-    .enforcement_strict = true,
-    .metadata_locked = false,
+    /* tensor_metadata_map */ nullptr,
+    /* tensor_locks_map */ nullptr,
+    /* query_history_vector */ nullptr,
+    /* last_query_record */ {
+        /* tensor_id */ 0,
+        /* query_type */ LLAMA_TENSOR_METADATA_QUERY_NONE,
+        /* phase */ LLAMA_METADATA_PHASE_NONE,
+        /* timestamp_ns */ 0,
+    },
+    /* total_queries */ 0,
+    /* total_violations */ 0,
+    /* enforcement_strict */ true,
+    /* metadata_locked */ false,
 };
 
 // Per-tensor metadata tracking: map<tensor_id, metadata_record>
@@ -61,7 +69,7 @@ static std::vector<struct llama_tensor_metadata_query_record> g_query_history;
 // ============================================================================
 
 int llama_tensor_metadata_gpu_init(void) {
-    if (g_tensor_metadata_validation.state_record.state != LLAMA_GPU_TENSOR_METADATA_UNINITIALIZED) {
+    if (g_tensor_metadata_validation.state_record.state != LLAMA_GPU_TENSOR_META_UNINITIALIZED) {
         return -1; // Already initialized
     }
 
@@ -69,7 +77,7 @@ int llama_tensor_metadata_gpu_init(void) {
     g_tensor_locks.clear();
     g_query_history.clear();
 
-    g_tensor_metadata_validation.state_record.state = LLAMA_GPU_TENSOR_METADATA_UNLOCKED;
+    g_tensor_metadata_validation.state_record.state = LLAMA_GPU_TENSOR_META_PREPARED;
     g_tensor_metadata_validation.state_record.current_phase = LLAMA_METADATA_PHASE_NONE;
     g_tensor_metadata_validation.total_queries = 0;
     g_tensor_metadata_validation.total_violations = 0;
@@ -109,7 +117,7 @@ int llama_tensor_metadata_gpu_begin_decode_phase(void) {
     }
 
     g_tensor_metadata_validation.state_record.current_phase = LLAMA_METADATA_PHASE_DECODE;
-    g_tensor_metadata_validation.state_record.state = LLAMA_GPU_TENSOR_METADATA_DECODE_ENFORCED;
+    g_tensor_metadata_validation.state_record.state = LLAMA_GPU_TENSOR_META_ACTIVE;
 
     // Lock all metadata for decode
     int result = llama_tensor_metadata_gpu_lock_all_tensor_metadata();
@@ -121,7 +129,7 @@ int llama_tensor_metadata_gpu_begin_decode_phase(void) {
 
 int llama_tensor_metadata_gpu_end_decode_phase(void) {
     g_tensor_metadata_validation.state_record.current_phase = LLAMA_METADATA_PHASE_COMPLETE;
-    g_tensor_metadata_validation.state_record.state = LLAMA_GPU_TENSOR_METADATA_COMPLETE;
+    g_tensor_metadata_validation.state_record.state = LLAMA_GPU_TENSOR_META_ACTIVE;
     g_tensor_metadata_validation.metadata_locked = false;
     return 0;
 }
@@ -400,13 +408,15 @@ int llama_tensor_metadata_gpu_track_tensor(
     uint64_t buffer_address
 ) {
     struct llama_tensor_metadata_record record = {
-        .tensor_id = tensor_id,
-        .ndims = ndims,
-        .data_type = data_type,
-        .buffer_address = buffer_address,
-        .total_size_bytes = 0,
-        .is_on_gpu = true,
-        .is_locked = false,
+        tensor_id,        // tensor_id
+        ndims,            // ndims
+        {0,0,0,0,0,0,0,0},// ne
+        {0,0,0,0,0,0,0,0},// nb
+        data_type,        // data_type
+        buffer_address,   // buffer_address
+        0,                // total_size_bytes
+        true,             // is_on_gpu
+        false             // is_locked
     };
 
     if (ne && ndims > 0) {
@@ -419,13 +429,13 @@ int llama_tensor_metadata_gpu_track_tensor(
     g_tensor_metadata_validation.state_record.total_tensors_tracked++;
 
     struct llama_tensor_metadata_immutability_record lock_record = {
-        .tensor_id = tensor_id,
-        .lock_status = LLAMA_TENSOR_METADATA_LOCK_NONE,
-        .shape_locked = false,
-        .type_locked = false,
-        .stride_locked = false,
-        .buffer_locked = false,
-        .lock_timestamp_ns = 0,
+        tensor_id,                         // tensor_id
+        LLAMA_TENSOR_METADATA_LOCK_NONE,  // lock_status
+        false,                            // shape_locked
+        false,                            // type_locked
+        false,                            // stride_locked
+        false,                            // buffer_locked
+        0                                 // lock_timestamp_ns
     };
     g_tensor_locks[tensor_id] = lock_record;
 
@@ -559,7 +569,7 @@ struct llama_tensor_metadata_record llama_tensor_metadata_gpu_get_tensor_metadat
     if (it != g_tensor_metadata.end()) {
         return it->second;
     }
-    return struct llama_tensor_metadata_record{};
+    return llama_tensor_metadata_record{};
 }
 
 uint64_t llama_tensor_metadata_gpu_get_total_tensors_locked(void) {
@@ -597,7 +607,7 @@ void llama_tensor_metadata_gpu_log_all_metadata_immutable(void) {
 
 void llama_tensor_metadata_gpu_print_state(void) {
     printf("\n=== TENSOR METADATA STATE (SECTION 36) ===\n");
-    printf("State: %s\n", (g_tensor_metadata_validation.state_record.state == LLAMA_GPU_TENSOR_METADATA_DECODE_ENFORCED) ? "DECODE_ENFORCED" : "OTHER");
+    printf("State: %s\n", (g_tensor_metadata_validation.state_record.state == LLAMA_GPU_TENSOR_META_ACTIVE) ? "ACTIVE" : "OTHER");
     printf("Phase: %s\n", llama_metadata_phase_name(g_tensor_metadata_validation.state_record.current_phase));
     printf("Metadata Locked: %s\n", g_tensor_metadata_validation.metadata_locked ? "YES" : "NO");
     printf("Total Tensors: %lu\n", g_tensor_metadata_validation.state_record.total_tensors_tracked);
@@ -683,7 +693,7 @@ int llama_tensor_metadata_gpu_selftest(void) {
 
     // Test 1: Initialization
     if (llama_tensor_metadata_gpu_init() == 0 &&
-        g_tensor_metadata_validation.state_record.state == LLAMA_GPU_TENSOR_METADATA_UNLOCKED) {
+        g_tensor_metadata_validation.state_record.state == LLAMA_GPU_TENSOR_META_PREPARED) {
         num_passed++;
     } else {
         fprintf(stderr, "[SECTION 36] Test 1 FAILED: Initialization\n");

@@ -34,16 +34,17 @@ static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type) 
 }
 
 
-static __device__ __forceinline__ float ggml_cuda_apply_activation(float x, ggml_unary_op op) {
-    switch (op) {
-        case GGML_UNARY_OP_SILU:    return ggml_cuda_op_silu_single(x);
-        case GGML_UNARY_OP_GELU:    return ggml_cuda_op_gelu_single(x);
-        case GGML_UNARY_OP_RELU:    return fmaxf(0.0f, x);
-        case GGML_UNARY_OP_SIGMOID: return 1.0f / (1.0f + expf(-x));
-        case GGML_UNARY_OP_TANH:    return tanhf(x);
-        default: return x;
-    }
-}
+// static __device__ __forceinline__ float ggml_cuda_apply_activation(float x, ggml_unary_op op) {
+//     GGML_UNUSED(op);
+//     switch (op) {
+//         case GGML_UNARY_OP_SILU:    return ggml_cuda_op_silu_single(x);
+//         case GGML_UNARY_OP_GELU:    return ggml_cuda_op_gelu_single(x);
+//         case GGML_UNARY_OP_RELU:    return fmaxf(0.0f, x);
+//         case GGML_UNARY_OP_SIGMOID: return 1.0f / (1.0f + expf(-x));
+//         case GGML_UNARY_OP_TANH:    return tanhf(x);
+//         default: return x;
+//     }
+// }
 
 static constexpr __device__ int get_vdr_mmvq(ggml_type type) {
     switch (type) {

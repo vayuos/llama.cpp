@@ -324,4 +324,3 @@ bool llama_token_chain_in_decode_phase(void);
  */
 int llama_token_dependency_assert_selftest(void);
 
-#endif // LLAMA_TOKEN_DEPENDENCY_ASSERT_H

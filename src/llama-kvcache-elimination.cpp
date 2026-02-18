@@ -19,26 +19,26 @@
 // ============================================================================
 
 static struct llama_kvcache_elimination_validation_state g_kvcache_validation = {
-    .state_record = {
-        .current_owner = LLAMA_KVCACHE_OWNER_UNKNOWN,
-        .gpu_state = LLAMA_GPU_KVCACHE_UNINITIALIZED,
-        .cpu_mutations_eliminated = false,
-        .gpu_cache_autonomous = false,
-        .cache_layout_immutable = false,
-        .cpu_mutation_violations = 0,
-        .last_violation = LLAMA_KVCACHE_VIOLATION_NONE,
-        .gpu_cache_updates = 0,
-        .gpu_cache_start_time_ns = 0,
-        .current_cache_size = 0,
-        .current_offset = 0,
+    /* state_record */ {
+        /* current_owner */ LLAMA_KVCACHE_OWNER_UNKNOWN,
+        /* gpu_state */ LLAMA_GPU_KVCACHE_UNINITIALIZED,
+        /* cpu_mutations_eliminated */ false,
+        /* gpu_cache_autonomous */ false,
+        /* cache_layout_immutable */ false,
+        /* cpu_mutation_violations */ 0,
+        /* last_violation */ LLAMA_KVCACHE_VIOLATION_NONE,
+        /* gpu_cache_updates */ 0,
+        /* gpu_cache_start_time_ns */ 0,
+        /* current_cache_size */ 0,
+        /* current_offset */ 0,
     },
-    .initial_snapshot = {0},
-    .current_snapshot = {0},
-    .total_mutation_attempts = 0,
-    .total_violations = 0,
-    .cache_structure_frozen = false,
-    .enforcement_strict = true,
-    .debug_detect_cpu_mutations = false,
+    /* initial_snapshot */ {0, 0, 0, 0, false},
+    /* current_snapshot */ {0, 0, 0, 0, false},
+    /* total_mutation_attempts */ 0,
+    /* total_violations */ 0,
+    /* cache_structure_frozen */ false,
+    /* enforcement_strict */ true,
+    /* debug_detect_cpu_mutations */ false,
 };
 
 // Per-mutation tracking: map mutation ID to violation count
@@ -80,7 +80,7 @@ int llama_kvcache_elimination_eliminate_cpu_mutations(void) {
         }
     }
 
-    g_kvcache_validation.cpu_mutations_eliminated = true;
+    g_kvcache_validation.state_record.cpu_mutations_eliminated = true;
     return 0;
 }
 
@@ -123,7 +123,7 @@ int llama_kvcache_elimination_assert_gpu_cache_owns_mutations(void) {
     // Enforcement Point 5: Assert GPU owns all KV cache mutations
 
     if (g_kvcache_validation.state_record.current_owner != LLAMA_KVCACHE_OWNER_GPU ||
-        !g_kvcache_validation.gpu_cache_autonomous) {
+        !g_kvcache_validation.state_record.gpu_cache_autonomous) {
 
         g_kvcache_validation.state_record.cpu_mutation_violations++;
 
@@ -181,7 +181,7 @@ int llama_kvcache_elimination_forbid_cpu_cache_allocation(void) {
 int llama_kvcache_elimination_assert_gpu_controls_allocation(void) {
     // Enforcement Point 10: Assert GPU controls all cache allocation
 
-    if (!g_kvcache_validation.gpu_cache_autonomous) {
+    if (!g_kvcache_validation.state_record.gpu_cache_autonomous) {
         if (g_kvcache_validation.enforcement_strict) {
             return -1;
         }
@@ -384,11 +384,11 @@ enum llama_gpu_kvcache_state llama_kvcache_elimination_get_gpu_cache_state(void)
 // ============================================================================
 
 int llama_kvcache_elimination_verify_cpu_mutations_eliminated(void) {
-    return g_kvcache_validation.cpu_mutations_eliminated ? 0 : -1;
+    return g_kvcache_validation.state_record.cpu_mutations_eliminated ? 0 : -1;
 }
 
 int llama_kvcache_elimination_verify_gpu_cache_autonomous(void) {
-    return g_kvcache_validation.gpu_cache_autonomous ? 0 : -1;
+    return g_kvcache_validation.state_record.gpu_cache_autonomous ? 0 : -1;
 }
 
 int llama_kvcache_elimination_verify_cache_structure_frozen(void) {
@@ -427,8 +427,8 @@ void llama_kvcache_elimination_print_cache_state(void) {
     fprintf(stderr, "\n=== KV-CACHE STATE ===\n");
     fprintf(stderr, "Owner: %s\n", llama_kvcache_owner_name(g_kvcache_validation.state_record.current_owner));
     fprintf(stderr, "GPU State: %s\n", llama_gpu_kvcache_state_name(g_kvcache_validation.state_record.gpu_state));
-    fprintf(stderr, "CPU Mutations Eliminated: %s\n", g_kvcache_validation.cpu_mutations_eliminated ? "YES" : "NO");
-    fprintf(stderr, "GPU Cache Autonomous: %s\n", g_kvcache_validation.gpu_cache_autonomous ? "YES" : "NO");
+    fprintf(stderr, "CPU Mutations Eliminated: %s\n", g_kvcache_validation.state_record.cpu_mutations_eliminated ? "YES" : "NO");
+    fprintf(stderr, "GPU Cache Autonomous: %s\n", g_kvcache_validation.state_record.gpu_cache_autonomous ? "YES" : "NO");
     fprintf(stderr, "Cache Layout Immutable: %s\n", g_kvcache_validation.state_record.cache_layout_immutable ? "YES" : "NO");
     fprintf(stderr, "Total Violations: %d\n", g_kvcache_validation.state_record.cpu_mutation_violations);
     fprintf(stderr, "GPU Cache Updates: %llu\n", (unsigned long long)g_kvcache_validation.state_record.gpu_cache_updates);

@@ -69,7 +69,7 @@ __global__ void argmax_selection_kernel(const float *d_logits,
     }
 }
 
-int cuda_select_token_argmax(const float *d_logits,
+static int cuda_select_token_argmax(const float *d_logits,
                              int32_t *    d_selected_token,
                              int32_t      vocab_size,
                              void *       cuda_stream) {
@@ -126,7 +126,7 @@ __global__ void categorical_selection_kernel(const float *d_cumsum_probs,
     }
 }
 
-int cuda_select_token_categorical(const float *    d_cumsum_probs,
+static int cuda_select_token_categorical(const float *    d_cumsum_probs,
                                   const int32_t *  d_sorted_indices,
                                   int32_t *        d_selected_token,
                                   int32_t          vocab_size,
