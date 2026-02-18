@@ -264,7 +264,20 @@ int llama_debug_stripping_get_metrics(llama_debug_stripping_metrics * metrics) {
 
     std::lock_guard<std::mutex> lock(g_debug_stripping_mutex);
 
-    *metrics = g_llama_debug_stripping.metrics;
+    // Member-wise atomic field copy using .load() for each atomic
+    metrics->decode_loop_entries = g_llama_debug_stripping.metrics.decode_loop_entries.load();
+    metrics->graph_execute_entries = g_llama_debug_stripping.metrics.graph_execute_entries.load();
+    metrics->cuda_kernel_launches = g_llama_debug_stripping.metrics.cuda_kernel_launches.load();
+    metrics->sampling_entries = g_llama_debug_stripping.metrics.sampling_entries.load();
+    metrics->debug_logs_suppressed = g_llama_debug_stripping.metrics.debug_logs_suppressed.load();
+    metrics->timing_operations_skipped = g_llama_debug_stripping.metrics.timing_operations_skipped.load();
+    metrics->assertions_skipped = g_llama_debug_stripping.metrics.assertions_skipped.load();
+    metrics->feature_probes_skipped = g_llama_debug_stripping.metrics.feature_probes_skipped.load();
+    metrics->decode_loop_total_ns = g_llama_debug_stripping.metrics.decode_loop_total_ns.load();
+    metrics->graph_execute_total_ns = g_llama_debug_stripping.metrics.graph_execute_total_ns.load();
+    metrics->sampling_total_ns = g_llama_debug_stripping.metrics.sampling_total_ns.load();
+    metrics->compile_time_guard_bypasses = g_llama_debug_stripping.metrics.compile_time_guard_bypasses.load();
+    metrics->runtime_guard_invocations = g_llama_debug_stripping.metrics.runtime_guard_invocations.load();
 
     return 0;
 }

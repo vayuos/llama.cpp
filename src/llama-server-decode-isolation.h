@@ -48,6 +48,8 @@ extern "C" {
  */
 #define DECODE_ISOLATION_MAX_CORES 256
 #define DECODE_ISOLATION_MAX_THREADS 64
+#define DECODE_ISOLATION_MAX_DECODE_THREADS 64
+#define DECODE_ISOLATION_MAX_SERVER_THREADS 256
 #define DECODE_STREAMING_QUEUE_SIZE 1024
 
 /**
@@ -89,6 +91,52 @@ struct decode_token_event {
     int32_t seq_id;
     bool is_eos;
     int64_t timestamp_ns;
+};
+
+/**
+ * Isolation metrics - monitoring and diagnostics
+ */
+struct isolation_metrics {
+    uint64_t thread_migrations;
+    uint64_t scheduling_preemptions;
+    uint64_t lock_waits_detected;
+    uint64_t violations_detected;
+    uint64_t threads_on_decode_cores;
+    uint64_t admission_rejections;
+    float server_load_percent;
+    float decode_throughput_tokens_per_sec;
+    float decode_latency_variance_us;
+};
+
+/**
+ * Decode domain - decode thread configuration and state
+ */
+struct decode_domain {
+    bool is_enabled;
+    decode_core_set core_set;
+    int32_t thread_count;
+    int32_t scheduling_priority;
+    std::atomic<uint64_t> violations_detected;
+    uint64_t thread_migrations;
+    uint64_t scheduling_preemptions;
+    uint64_t lock_waits_detected;
+
+    decode_domain();
+};
+
+/**
+ * Server domain - server thread configuration and state
+ */
+struct server_domain {
+    bool is_enabled;
+    decode_core_set core_set;
+    int32_t thread_count;
+    int32_t scheduling_priority;
+    std::atomic<uint64_t> violations_detected;
+    uint64_t threads_on_decode_cores;
+    uint64_t admission_rejections;
+
+    server_domain();
 };
 
 #ifdef __cplusplus
@@ -184,8 +232,12 @@ class decode_isolation_engine {
 private:
     decode_core_set decode_cores;
     decode_core_set server_cores;
+    decode_domain decode_dom;
+    server_domain server_dom;
 
     std::vector<isolation_violation> violations;
+    std::vector<std::string> violation_log;
+    mutable std::mutex metrics_mutex;
     std::atomic<bool> strict_mode;
     std::atomic<bool> is_initialized;
 
@@ -218,6 +270,9 @@ public:
     bool is_thread_on_decode_cores(std::thread::id tid) const;
     decode_core_set get_decode_cores() const { return decode_cores; }
     decode_core_set get_server_cores() const { return server_cores; }
+    decode_core_set get_thread_affinity(std::thread::id tid) const;
+    const decode_domain & get_decode_domain() const;
+    const server_domain & get_server_domain() const;
 
     // Violation tracking
     void record_violation(const std::string & violation_type, const std::string & details);
@@ -225,6 +280,9 @@ public:
 
     size_t get_violation_count() const { return violations.size(); }
     std::vector<isolation_violation> get_violations() const { return violations; }
+
+    // Metrics and diagnostics
+    isolation_metrics get_metrics() const;
 
     // Enforcement mode
     void set_strict_mode(bool strict) { strict_mode.store(strict); }
