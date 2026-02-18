@@ -15,6 +15,7 @@
 #include <stdatomic.h>
 #include <time.h>
 #include <math.h>
+#include <inttypes.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -294,7 +295,7 @@ bool llama_decode_path_isolation_end_decode(
     uint64_t decode_duration_ns = state->decode_end_ns - state->decode_start_ns;
 
     LLAMA_LOG_INFO(
-        "DECODE ISOLATION: Decode phase ended (tokens=%d, duration=%.2fms, violations=%llu)\n",
+        "DECODE ISOLATION: Decode phase ended (tokens=%d, duration=%.2fms, violations=%lu)\n",
         state->n_tokens_processed,
         (double)decode_duration_ns / 1000000.0,
         state->guard_state.violations_detected);
@@ -612,7 +613,7 @@ bool llama_decode_path_isolation_assert_no_submissions(
         state->guard_state.assertions_failed++;
 
         LLAMA_LOG_ERROR(
-            "DECODE ISOLATION: Assertion failed - submissions detected (%llu submissions, context: %s)\n",
+            "DECODE ISOLATION: Assertion failed - submissions detected (%lu submissions, context: %s)\n",
             state->threadpool_submissions,
             context_msg ? context_msg : "unknown");
 
@@ -682,7 +683,7 @@ bool llama_decode_path_isolation_assert_zero_per_token_submissions(
             all_zero = false;
 
             LLAMA_LOG_ERROR(
-                "DECODE ISOLATION: Per-token submissions detected (token=%llu, submissions=%u)\n",
+                "DECODE ISOLATION: Per-token submissions detected (token=%lu, submissions=%u)\n",
                 state->token_metrics[i].token_index,
                 state->token_metrics[i].submission_count);
 
@@ -773,7 +774,7 @@ char * llama_decode_path_isolation_get_summary(
     snprintf(buffer, 2048,
         "DECODE ISOLATION SUMMARY\n"
         "========================\n"
-        "Total Decode Cycles: %llu\n"
+        "Total Decode Cycles: %lu\n"
         "Total Tokens Processed: %d\n"
         "Total Decode Time: %.2f ms\n"
         "Average Time Per Token: %.2f ms\n"
@@ -784,24 +785,24 @@ char * llama_decode_path_isolation_get_summary(
         "  Final Size: %d\n"
         "\n"
         "Submissions and Violations:\n"
-        "  Total Submissions: %llu\n"
+        "  Total Submissions: %lu\n"
         "  Max Per-Token: %u\n"
-        "  Queue Enqueue Ops: %llu\n"
-        "  Queue Dequeue Ops: %llu\n"
-        "  Violations Detected: %llu\n"
+        "  Queue Enqueue Ops: %lu\n"
+        "  Queue Dequeue Ops: %lu\n"
+        "  Violations Detected: %lu\n"
         "\n"
         "Lock Contention:\n"
         "  Total Locks Registered: %d\n"
         "  Max Per-Token Acquisitions: %u\n"
         "\n"
         "Direct Invocation:\n"
-        "  Total Invocations: %llu\n"
+        "  Total Invocations: %lu\n"
         "  All Tokens Direct: %s\n"
         "  Total Time: %.2f ms\n"
         "\n"
         "Guard Status:\n"
-        "  Assertions Passed: %llu\n"
-        "  Assertions Failed: %llu\n"
+        "  Assertions Passed: %lu\n"
+        "  Assertions Failed: %lu\n"
         "  Abort on Violation: %s\n",
         state->total_decode_cycles,
         state->n_tokens_processed,
@@ -856,7 +857,7 @@ char * llama_decode_path_isolation_get_diagnostics(
     for (int i = 0; i < tokens_to_show; i++) {
         const llama_per_token_metrics * m = &state->token_metrics[i];
         offset += snprintf(buffer + offset, 4096 - offset,
-            "  Token %llu:\n"
+            "  Token %lu:\n"
             "    Submissions: %u\n"
             "    Parallel Regions: %u\n"
             "    Lock Acquisitions: %u\n"
@@ -876,7 +877,7 @@ char * llama_decode_path_isolation_get_diagnostics(
         offset += snprintf(buffer + offset, 4096 - offset,
             "\nLast Violation:\n"
             "  Message: %s\n"
-            "  Time: %llu ns ago\n",
+            "  Time: %lu ns ago\n",
             state->guard_state.last_violation_msg,
             (get_time_ns() - state->guard_state.last_violation_ns) / 1000);
     }
@@ -909,7 +910,7 @@ bool llama_decode_path_isolation_check_integrity(
     // Check 1: No submissions
     if (state->threadpool_submissions > 0) {
         LLAMA_LOG_ERROR(
-            "DECODE ISOLATION: Integrity check failed - submissions detected (%llu)\n",
+            "DECODE ISOLATION: Integrity check failed - submissions detected (%lu)\n",
             state->threadpool_submissions);
         return false;
     }
@@ -991,7 +992,7 @@ char * llama_decode_path_isolation_audit_decode_path(
         "CHECKS PERFORMED:\n\n"
         "1. Threadpool Submission Check:\n"
         "   Status: %s\n"
-        "   Submissions Found: %llu\n"
+        "   Submissions Found: %lu\n"
         "   Expected: 0\n"
         "   Result: %s\n\n",
         state->threadpool_submissions == 0 ? "PASS" : "FAIL",
@@ -1011,7 +1012,7 @@ char * llama_decode_path_isolation_audit_decode_path(
     offset += snprintf(report + offset, 8192 - offset,
         "3. Direct Invocation Check:\n"
         "   All Tokens Direct: %s\n"
-        "   Total Invocations: %llu\n"
+        "   Total Invocations: %lu\n"
         "   Result: %s\n\n",
         state->direct_invoke.all_tokens_direct ? "yes" : "no",
         state->direct_invoke.invocations_count,
@@ -1020,7 +1021,7 @@ char * llama_decode_path_isolation_audit_decode_path(
     offset += snprintf(report + offset, 8192 - offset,
         "4. Work-Stealing Check:\n"
         "   Steals Detected: %s\n"
-        "   Total Steal Attempts: %llu\n"
+        "   Total Steal Attempts: %lu\n"
         "   Result: %s\n\n",
         state->work_stealing.steals_detected_in_decode ? "yes" : "no",
         state->work_stealing.steal_attempts_count,
@@ -1029,8 +1030,8 @@ char * llama_decode_path_isolation_audit_decode_path(
 
     offset += snprintf(report + offset, 8192 - offset,
         "5. Queue Operations Check:\n"
-        "   Enqueues: %llu\n"
-        "   Dequeues: %llu\n"
+        "   Enqueues: %lu\n"
+        "   Dequeues: %lu\n"
         "   Queue Ops Detected: %s\n"
         "   Result: %s\n\n",
         state->threadpool_enqueue_operations,
@@ -1041,7 +1042,7 @@ char * llama_decode_path_isolation_audit_decode_path(
 
     offset += snprintf(report + offset, 8192 - offset,
         "OVERALL ISOLATION STATUS: %s\n"
-        "Total Violations: %llu\n",
+        "Total Violations: %lu\n",
         state->guard_state.violations_detected == 0 ? "ISOLATED" : "VIOLATED",
         state->guard_state.violations_detected);
 
