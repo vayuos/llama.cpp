@@ -888,8 +888,6 @@ int llama_graph_backend_binding_selftest(void) {
 
     // Test 5: Finalize
     fprintf(stderr, "[TEST 5] Finalize graph\n");
-    const char* nodes[] = { "node1" };
-    enum llama_backend_type backends[] = { LLAMA_BACKEND_CUDA };
     if (llama_enforce_graph_finalization_and_lock(1001) != 0) {
         fprintf(stderr, "  FAILED: Finalize\n");
         return -1;

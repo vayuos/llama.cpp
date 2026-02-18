@@ -35,6 +35,8 @@ std::atomic<uint64_t> g_llama_debug_timing_cuda_kernel(0);
 std::atomic<uint64_t> g_llama_debug_timing_sampling(0);
 
 /**
+ * Initialize debug stripping state with default configuration
+ */
 void init_debug_stripping_state(llama_debug_stripping_state & state) {
     state.config.enable_debug_logging = LLAMA_ENABLE_DEBUG;
     state.config.enable_timing_instrumentation = LLAMA_ENABLE_TIMING_INSTRUMENTATION;
