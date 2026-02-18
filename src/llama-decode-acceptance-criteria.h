@@ -260,6 +260,10 @@ bool llama_record_backend_mutation();
 bool llama_record_determinism_failure();
 bool llama_record_throughput_improvement(double improvement);
 
+// Acceptance-specific PCIE and allocation recording (used by acceptance validator)
+bool llama_acceptance_record_pcie_transfer(bool is_h2d, uint64_t size);
+bool llama_acceptance_record_allocation();
+
 const acceptance_validation_result * llama_get_acceptance_result();
 bool llama_is_system_accepted();
 uint32_t llama_get_gates_passed();
