@@ -228,7 +228,7 @@ void llama_kv_cache::clear(bool data) {
     // ====================================================================
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: hybrid CPU KV paths forbidden"));
     }
 
     for (uint32_t s = 0; s < n_stream; ++s) {
@@ -262,7 +262,7 @@ bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
     if (kv_gpu_only_locked) {
         // During GPU-only decode: additional hybrid mode check
         // All KV operations must be GPU-native (no CPU paths)
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: ensure no CPU KV paths executed");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: ensure no CPU KV paths executed"));
     }
 
     GGML_ASSERT(seq_id == -1 || (seq_id >= 0 && (size_t) seq_id < seq_to_stream.size()));
@@ -340,7 +340,7 @@ void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, ll
     // ====================================================================
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: hybrid CPU KV paths forbidden"));
     }
 
     GGML_ASSERT(seq_id_src >= 0 && (size_t) seq_id_src < seq_to_stream.size());
@@ -435,7 +435,7 @@ void llama_kv_cache::seq_keep(llama_seq_id seq_id) {
 
     // GPU-only KV residency enforcement
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: hybrid CPU KV paths forbidden"));
     }
 
     GGML_ASSERT(seq_id >= 0 && (size_t) seq_id < seq_to_stream.size());
@@ -477,7 +477,7 @@ void llama_kv_cache::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, ll
     // ====================================================================
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: hybrid CPU KV paths forbidden"));
     }
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
@@ -539,7 +539,7 @@ void llama_kv_cache::seq_div(llama_seq_id seq_id, llama_pos p0, llama_pos p1, in
     // ====================================================================
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: hybrid CPU KV paths forbidden"));
     }
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
@@ -839,7 +839,7 @@ bool llama_kv_cache::update(llama_context * lctx, bool do_shift, const stream_co
     // ====================================================================
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked || true && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        GGML_ASSERT(!kv_gpu_only_locked || (true && "GPU-only KV mode active: hybrid CPU KV paths forbidden"));
     }
 
     bool updated = false;
