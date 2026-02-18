@@ -132,13 +132,14 @@ if (CUDAToolkit_FOUND)
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
     endif()
 
+    # CRITICAL: Explicitly mark all .cu files as CUDA language BEFORE adding to library
+    # This tells CMake to compile these files with nvcc, not with C++ compiler
+    set_source_files_properties(${GGML_SOURCES_CUDA} PROPERTIES LANGUAGE CUDA)
+
     ggml_add_backend_library(ggml-cuda
                              ${GGML_HEADERS_CUDA}
                              ${GGML_SOURCES_CUDA}
                             )
-
-    # Explicitly mark all .cu files as CUDA language for proper compilation
-    set_source_files_properties(${GGML_SOURCES_CUDA} PROPERTIES LANGUAGE CUDA)
 
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
