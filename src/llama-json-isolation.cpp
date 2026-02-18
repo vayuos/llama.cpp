@@ -350,7 +350,7 @@ static void * llama_server_worker_thread_fn(void * args_void) {
         // Serialize to JSON (expensive, not in decode!)
         // This is where JSON serialization happens - on server worker
         worker->json_objects_created++;
-        uint64_t json_start_ns = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+        auto json_start_ns = std::chrono::high_resolution_clock::now();
 
         // Simulate JSON serialization (in real code, would call JSON library)
         // char * json_buffer = llama_formatting_buffer_pool_acquire(ctx->buffer_pool, &buf_size);
@@ -362,7 +362,8 @@ static void * llama_server_worker_thread_fn(void * args_void) {
         // }
 
         auto json_end_ns = std::chrono::high_resolution_clock::now();
-        uint64_t json_time_ns = (json_end_ns - json_start_ns).count();
+        auto json_duration = json_end_ns - json_start_ns;
+        uint64_t json_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(json_duration).count();
         worker->total_serialization_time_ns += json_time_ns;
         if (json_time_ns > worker->max_serialization_time_ns) {
             worker->max_serialization_time_ns = json_time_ns;
