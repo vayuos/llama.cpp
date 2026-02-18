@@ -7,12 +7,14 @@
  * execute entirely on GPU with no mixed CPU/GPU execution paths.
  */
 
-#include "../ggml/include/ggml.h"
-#include "../ggml/include/ggml-backend.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// Forward declarations - actual includes are in implementation
+struct ggml_tensor;
+struct ggml_cgraph;
+typedef struct ggml_backend * ggml_backend_t;
 
     /**
      * Enforces single-backend (GPU) ownership for composite operations.
