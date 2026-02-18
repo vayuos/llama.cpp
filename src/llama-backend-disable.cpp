@@ -378,25 +378,6 @@ bool llama_validate_single_backend() {
     return false;
 }
 
-void llama_print_backend_audit_report() {
-    if (!g_backend_disable_engine) {
-        std::cout << "Backend disable engine not initialized." << std::endl;
-        return;
-    }
-
-    std::cout << "\n=== BACKEND DISPATCH AUDIT REPORT ===" << std::endl;
-    auto audit = g_backend_disable_engine->get_audit_log();
-    std::cout << "Total dispatches found: " << audit.size() << std::endl;
-    std::cout << "Runtime checks: " << g_backend_disable_engine->get_audit_log_count() << std::endl;
-
-    for (const auto & entry : audit) {
-        std::cout << "\nDispatch at: " << entry.file_path << ":" << entry.line_number << std::endl;
-        std::cout << "Backend: " << entry.backend_name << std::endl;
-        std::cout << "Dispatch type: " << entry.dispatch_type << std::endl;
-        std::cout << "During decode: " << (entry.is_during_decode ? "YES" : "NO") << std::endl;
-    }
-}
-
 void llama_print_backend_disable_validation() {
     if (!g_backend_disable_engine) {
         std::cout << "Backend disable engine not initialized." << std::endl;
