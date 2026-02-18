@@ -40,12 +40,26 @@ cleanup_build() {
     fi
 
     log_info "Cleaning $build_type build directory: $build_dir"
+    log_info "This may take a moment..."
 
-    if rm -rf "$build_dir"; then
+    # Force remove with retries for stubborn processes
+    local retry_count=0
+    while [ -d "$build_dir" ] && [ $retry_count -lt 3 ]; do
+        if rm -rf "$build_dir" 2>/dev/null; then
+            break
+        fi
+        retry_count=$((retry_count + 1))
+        log_warning "Retry $retry_count: Removing files..."
+        sleep 1
+    done
+
+    if [ ! -d "$build_dir" ]; then
         log_success "Cleaned $build_type build directory"
         return 0
     else
         log_error "Failed to clean $build_type build directory"
+        log_error "Directory still exists: $build_dir"
+        log_info "Try manually: rm -rf $build_dir"
         return 1
     fi
 }
