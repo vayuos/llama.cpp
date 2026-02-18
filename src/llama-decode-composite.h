@@ -7,8 +7,8 @@
  * execute entirely on GPU with no mixed CPU/GPU execution paths.
  */
 
-#include "ggml.h"
-#include "ggml-backend.h"
+#include "../ggml/include/ggml.h"
+#include "../ggml/include/ggml-backend.h"
 
 #ifdef __cplusplus
 extern "C" {
