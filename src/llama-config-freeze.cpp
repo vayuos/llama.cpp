@@ -375,14 +375,14 @@ int llama_config_freeze_bind_backend(
     switch (config->backend_mode) {
         case BACKEND_CUDA:
             config->backend_dispatch.selected_backend = BACKEND_CUDA;
-            config->backend_dispatch.compute_fn = (llama_backend_compute_fn)llama_backend_dispatch_cuda;
+            config->backend_dispatch.compute_fn = (llama_backend_compute_fn)(void*)llama_backend_dispatch_cuda;
             config->backend_dispatch.backend_name = "CUDA";
             break;
 
         default:
         case BACKEND_CPU:
             config->backend_dispatch.selected_backend = BACKEND_CPU;
-            config->backend_dispatch.compute_fn = (llama_backend_compute_fn)llama_backend_dispatch_cpu;
+            config->backend_dispatch.compute_fn = (llama_backend_compute_fn)(void*)llama_backend_dispatch_cpu;
             config->backend_dispatch.backend_name = "CPU";
             break;
     }
