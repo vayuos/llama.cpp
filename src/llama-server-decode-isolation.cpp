@@ -106,13 +106,17 @@ void * decode_core_set::get_native_mask() const {
 // ============================================================================
 
 decode_domain::decode_domain()
-    : thread_count(0), scheduling_priority(2), is_enabled(false),
+    : is_enabled(false),
+      thread_count(0), scheduling_priority(2),
+      violations_detected(0),
       thread_migrations(0), scheduling_preemptions(0), lock_waits_detected(0) {
 }
 
 server_domain::server_domain()
-    : thread_count(0), scheduling_priority(0), is_enabled(false),
-      violations_detected(0), threads_on_decode_cores(0), admission_rejections(0) {
+    : is_enabled(false),
+      thread_count(0), scheduling_priority(0),
+      violations_detected(0),
+      threads_on_decode_cores(0), admission_rejections(0) {
 }
 
 // ============================================================================
@@ -126,12 +130,12 @@ bool decode_isolation_engine::initialize(
     const std::vector<int32_t> & decode_core_list,
     const std::vector<int32_t> & server_core_list) {
 
-    LOG_ISOLATION("Initializing decode isolation engine", "");
+    LOG_ISOLATION("Initializing decode isolation engine");
 
     // Build decode core set
     for (int32_t core_id : decode_core_list) {
         if (!decode_dom.core_set.add_core(core_id)) {
-            LOG_VIOLATION("Failed to add decode core", "");
+            LOG_VIOLATION("Failed to add decode core");
             return false;
         }
     }
@@ -142,7 +146,7 @@ bool decode_isolation_engine::initialize(
     // Build server core set
     for (int32_t core_id : server_core_list) {
         if (!server_dom.core_set.add_core(core_id)) {
-            LOG_VIOLATION("Failed to add server core", "");
+            LOG_VIOLATION("Failed to add server core");
             return false;
         }
     }
@@ -151,11 +155,11 @@ bool decode_isolation_engine::initialize(
 
     // Validate no overlap
     if (!decode_dom.core_set.is_disjoint_from(server_dom.core_set)) {
-        LOG_VIOLATION("Decode and server core sets overlap - isolation cannot be enforced", "");
+        LOG_VIOLATION("Decode and server core sets overlap - isolation cannot be enforced");
         return false;
     }
 
-    LOG_ISOLATION("Decode isolation initialized successfully", "");
+    LOG_ISOLATION("Decode isolation initialized successfully");
 
     return true;
 }
@@ -202,22 +206,22 @@ bool decode_isolation_engine::set_decode_priority(std::thread::id tid, int32_t p
 
 bool decode_isolation_engine::validate_configuration() const {
     if (!decode_dom.is_enabled || !server_dom.is_enabled) {
-        LOG_VIOLATION("Domains not properly initialized", "");
+        LOG_VIOLATION("Domains not properly initialized");
         return false;
     }
 
     if (decode_dom.core_set.core_count <= 0) {
-        LOG_VIOLATION("Decode core set is empty", "");
+        LOG_VIOLATION("Decode core set is empty");
         return false;
     }
 
     if (server_dom.core_set.core_count <= 0) {
-        LOG_VIOLATION("Server core set is empty", "");
+        LOG_VIOLATION("Server core set is empty");
         return false;
     }
 
     if (!decode_dom.core_set.is_disjoint_from(server_dom.core_set)) {
-        LOG_VIOLATION("Decode and server core sets overlap", "");
+        LOG_VIOLATION("Decode and server core sets overlap");
         return false;
     }
 
@@ -231,7 +235,7 @@ bool decode_isolation_engine::validate_configuration() const {
         return false;
     }
 
-    LOG_ISOLATION("Configuration validation passed", "");
+    LOG_ISOLATION("Configuration validation passed");
     return true;
 }
 
@@ -267,12 +271,12 @@ void decode_isolation_engine::record_violation(const std::string & violation_typ
 isolation_metrics decode_isolation_engine::get_metrics() const {
     std::unique_lock<std::mutex> lock(metrics_mutex);
     isolation_metrics metrics = {
-        decode_dom.thread_migrations,
-        decode_dom.scheduling_preemptions,
-        decode_dom.lock_waits_detected,
-        decode_dom.violations_detected.load(),
-        0,
-        0,
+        decode_dom.thread_migrations,                // non-atomic uint64_t
+        decode_dom.scheduling_preemptions,           // non-atomic uint64_t
+        decode_dom.lock_waits_detected,              // non-atomic uint64_t
+        decode_dom.violations_detected.load(),       // atomic<uint64_t>
+        server_dom.threads_on_decode_cores,          // non-atomic uint64_t
+        server_dom.admission_rejections,             // non-atomic uint64_t
         0.0f,  // server_load_percent
         0.0f,  // decode_throughput_tokens_per_sec
         0.0f   // decode_latency_variance_us
@@ -332,7 +336,7 @@ bool decode_isolation_engine::platform_set_affinity(std::thread::id tid, const d
 #else
     (void)tid;
     (void)cores;
-    LOG_VIOLATION("pthread_setaffinity_np not available on this platform", "");
+    LOG_VIOLATION("pthread_setaffinity_np not available on this platform");
     return false;
 #endif
 }
@@ -690,23 +694,22 @@ bool initialize_decode_isolation(
     }
 
     // Initialize components
-    if (!engine.initialize(decode_core_ids, server_core_ids, decode_priority,
-                          decode_thread_count, server_thread_count)) {
-        LOG_VIOLATION("Failed to initialize isolation engine", "");
+    if (!engine.initialize(decode_core_ids, server_core_ids)) {
+        LOG_VIOLATION("Failed to initialize isolation engine");
         return false;
     }
 
     if (!streaming.initialize(DECODE_STREAMING_QUEUE_SIZE)) {
-        LOG_VIOLATION("Failed to initialize streaming manager", "");
+        LOG_VIOLATION("Failed to initialize streaming manager");
         return false;
     }
 
     if (!admission.initialize(10000, 1000)) {
-        LOG_VIOLATION("Failed to initialize admission control", "");
+        LOG_VIOLATION("Failed to initialize admission control");
         return false;
     }
 
-    LOG_ISOLATION("Full decode isolation initialized successfully", "");
+    LOG_ISOLATION("Full decode isolation initialized successfully");
     return true;
 }
 
@@ -751,6 +754,7 @@ void dump_isolation_state() {
     std::cout << "    Migrations: " << decode_dom.thread_migrations << "\n";
     std::cout << "    Preemptions: " << decode_dom.scheduling_preemptions << "\n";
     std::cout << "    Lock Waits: " << decode_dom.lock_waits_detected << "\n";
+    std::cout << "    Violations: " << decode_dom.violations_detected.load() << "\n";
 
     std::cout << "\nSERVER DOMAIN:\n";
     std::cout << "  Cores: ";
@@ -762,8 +766,8 @@ void dump_isolation_state() {
     std::cout << "  Enabled: " << (server_dom.is_enabled ? "yes" : "no") << "\n";
     std::cout << "  Metrics:\n";
     std::cout << "    Violations: " << server_dom.violations_detected.load() << "\n";
-    std::cout << "    Threads on Decode Cores: " << server_dom.threads_on_decode_cores.load() << "\n";
-    std::cout << "    Admission Rejections: " << server_dom.admission_rejections.load() << "\n";
+    std::cout << "    Threads on Decode Cores: " << server_dom.threads_on_decode_cores << "\n";
+    std::cout << "    Admission Rejections: " << server_dom.admission_rejections << "\n";
 
     auto stream_metrics = streaming.get_metrics();
     std::cout << "\nSTREAMING METRICS:\n";

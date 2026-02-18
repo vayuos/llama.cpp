@@ -21,13 +21,13 @@ static pthread_mutex_t g_violation_message_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define LOG_ISOLATION(fmt, ...) \
     do { \
         if (g_isolation_verbose) { \
-            LOG_INF("[JSON_ISOLATION] " fmt, __VA_ARGS__); \
+            LOG_INF("[JSON_ISOLATION] " fmt __VA_OPT__(,) __VA_ARGS__); \
         } \
     } while(0)
 
 #define LOG_VIOLATION(fmt, ...) \
     do { \
-        LOG_ERR("[JSON_ISOLATION_VIOLATION] " fmt, __VA_ARGS__); \
+        LOG_ERR("[JSON_ISOLATION_VIOLATION] " fmt __VA_OPT__(,) __VA_ARGS__); \
         pthread_mutex_lock(&g_violation_message_mutex); \
         g_last_violation_message = std::string(fmt); \
         pthread_mutex_unlock(&g_violation_message_mutex); \
@@ -515,7 +515,7 @@ int llama_json_isolation_assert_no_json_in_decode(
     // Verify decode thread is current thread
     uint32_t current_thread = (uint32_t)pthread_self();
     if (ctx->decode_thread_id != current_thread) {
-        LOG_VIOLATION("JSON guard called from non-decode thread", "");
+        LOG_VIOLATION("JSON guard called from non-decode thread");
         ctx->last_violation = LLAMA_JSON_VIOLATION_JSON_IN_DECODE;
         ctx->total_violations++;
         return -2;
@@ -758,7 +758,7 @@ void llama_json_isolation_enter_critical_section(
 
     pthread_mutex_unlock(&ctx->state_lock);
 
-    LOG_ISOLATION("Entered decode critical section", "");
+    LOG_ISOLATION("Entered decode critical section");
 }
 
 void llama_json_isolation_exit_critical_section(
@@ -814,7 +814,7 @@ int llama_json_isolation_shutdown(
 
     pthread_mutex_destroy(&ctx->state_lock);
 
-    LOG_ISOLATION("JSON isolation shutdown complete", "");
+    LOG_ISOLATION("JSON isolation shutdown complete");
     return 0;
 }
 
@@ -991,7 +991,7 @@ int llama_json_isolation_validate_architecture(
         return -4;
     }
 
-    LOG_ISOLATION("Architecture validation passed", "");
+    LOG_ISOLATION("Architecture validation passed");
     return 0;
 }
 
