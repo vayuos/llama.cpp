@@ -503,7 +503,6 @@ int llama_decode_cpu_hard_failure_selftest(void) {
 
     // Test 6: Mixed backend graph detection
     const char* ops[] = {"attention", "mlp", "logging"};
-    bool is_critical[] = {true, true, false};
     const char* backends[] = {"CUDA", "CPU", "CPU"};
     if (llama_enforce_uniform_gpu_decode_graph((const char**)ops, (const char**)backends, 3) == 0) {
         fprintf(stderr, "SELFTEST FAIL: Mixed backend should be detected\n");

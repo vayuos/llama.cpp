@@ -404,6 +404,25 @@ int llama_enforce_backend_immutability_per_token(
     auto key = std::string(operation_name) + "_" + std::to_string(token_id);
     auto it = g_operation_backend_map.find(key);
 
+    // Validate expected backend matches current backend
+    if (expected_backend != current_backend) {
+        fprintf(stderr, "[BACKEND_IMMUTABILITY] FATAL: Backend mismatch for %s at token %lu\n"
+                "  Expected: %s, Current: %s\n",
+                operation_name, token_id,
+                llama_backend_type_name(expected_backend),
+                llama_backend_type_name(current_backend));
+        g_backend_immutability.violation_count++;
+        g_total_violation_count++;
+        llama_record_backend_immutability_violation(
+            LLAMA_BACKEND_VIOLATION_MISMATCH,
+            operation_name,
+            "Operation backend does not match expected backend"
+        );
+        if (g_enforce_strict) {
+            return -1;
+        }
+    }
+
     if (it != g_operation_backend_map.end()) {
         if (it->second != current_backend) {
             fprintf(stderr, "[BACKEND_IMMUTABILITY] FATAL: Backend changed per-token for %s at token %lu\n"

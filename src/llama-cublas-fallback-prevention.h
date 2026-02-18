@@ -28,16 +28,16 @@ typedef enum {
 } fallback_prevent_phase;
 
 typedef enum {
-    BACKEND_NONE = 0,
-    BACKEND_MMQ = 1,
-    BACKEND_CUTLASS = 2,
-    BACKEND_CUBLAS = 3,
-    BACKEND_DENSE_CUDA = 4,
-    BACKEND_CPU = 5
-} backend_selection;
+    CUBLAS_BACKEND_NONE = 0,
+    CUBLAS_BACKEND_MMQ = 1,
+    CUBLAS_BACKEND_CUTLASS = 2,
+    CUBLAS_BACKEND_CUBLAS = 3,
+    CUBLAS_BACKEND_DENSE_CUDA = 4,
+    CUBLAS_BACKEND_CPU = 5
+} cublas_backend_selection;
 
 typedef struct {
-    backend_selection decode_backend;
+    cublas_backend_selection decode_backend;
     bool backend_locked;
     bool cublas_blocked;
     bool dense_cuda_blocked;
@@ -86,7 +86,7 @@ public:
     bool initialize();
     bool enable_strict_mode(bool enable);
 
-    bool bind_decode_backend(backend_selection backend);
+    bool bind_decode_backend(cublas_backend_selection backend);
     bool lock_decode_backend();
     bool validate_no_mid_decode_switch();
 
@@ -123,15 +123,15 @@ public:
 
 class decode_backend_guard {
 private:
-    backend_selection bound_backend;
+    cublas_backend_selection bound_backend;
     bool is_locked;
 
 public:
-    decode_backend_guard(backend_selection backend);
+    decode_backend_guard(cublas_backend_selection backend);
     ~decode_backend_guard();
 
     bool is_backend_bound() const;
-    bool attempt_switch(backend_selection new_backend);
+    bool attempt_switch(cublas_backend_selection new_backend);
 };
 
 extern fallback_prevention_engine * g_fallback_prevention_engine;
@@ -139,7 +139,7 @@ extern fallback_prevention_engine * g_fallback_prevention_engine;
 bool llama_init_fallback_prevention();
 bool llama_enable_fallback_prevention_strict_mode(bool enable);
 
-bool llama_bind_decode_backend(backend_selection backend);
+bool llama_bind_decode_backend(cublas_backend_selection backend);
 bool llama_lock_decode_backend();
 bool llama_validate_no_mid_decode_switch();
 
@@ -149,7 +149,7 @@ bool llama_attempt_cublas_fallback(const char * reason);
 bool llama_attempt_dense_cuda_fallback(const char * reason);
 bool llama_attempt_cpu_fallback(const char * reason);
 
-backend_selection llama_get_decode_backend();
+cublas_backend_selection llama_get_decode_backend();
 bool llama_is_decode_backend_locked();
 bool llama_is_cublas_fallback_blocked();
 bool llama_is_dense_cuda_fallback_blocked();

@@ -14,6 +14,9 @@
 #include <stdio.h>
 #include <time.h>
 
+// Forward declarations
+int llama_sampling_elimination_signal_gpu_sampling_complete(void);
+
 // ============================================================================
 // GLOBAL STATE
 // ============================================================================
@@ -326,8 +329,14 @@ int llama_sampling_elimination_set_gpu_sampling_autonomous(void) {
 }
 
 int llama_sampling_elimination_signal_gpu_token_ready(int32_t token) {
+    if (token < 0) {
+        fprintf(stderr, "[SAMPLING_ELIM] ERROR: Invalid token id %d\n", token);
+        return -1;
+    }
+
     g_sampling_validation.state_record.gpu_state = LLAMA_GPU_SAMPLING_TOKEN_READY;
     g_sampling_validation.state_record.gpu_samples_produced++;
+    g_sampling_validation.state_record.last_token_sampled = token;
     return 0;
 }
 

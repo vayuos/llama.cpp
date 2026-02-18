@@ -48,6 +48,8 @@ static struct llama_gpu_tensor_metadata_validation_state g_tensor_metadata_valid
         /* query_type */ LLAMA_TENSOR_METADATA_QUERY_NONE,
         /* phase */ LLAMA_METADATA_PHASE_NONE,
         /* timestamp_ns */ 0,
+        /* was_blocked */ false,
+        /* violation */ 0,
     },
     /* total_queries */ 0,
     /* total_violations */ 0,
