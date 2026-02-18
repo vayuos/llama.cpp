@@ -1,10 +1,11 @@
 /**
  * Decode Composite Op Enforcement
- * 
+ *
  * This file enforces that composite decode operations (attention, matmul, etc.)
  * execute entirely on GPU with no mixed CPU/GPU execution paths.
  */
 
+#include "llama-decode-composite.h"
 #include "../ggml/src/ggml-impl.h"
 #include "../ggml/include/ggml-backend.h"
 
