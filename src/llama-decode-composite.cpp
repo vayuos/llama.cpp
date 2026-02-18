@@ -6,6 +6,7 @@
  */
 
 #include "llama-decode-composite.h"
+#include "llama-impl.h"
 #include "../ggml/src/ggml-impl.h"
 #include "../ggml/include/ggml-backend.h"
 
@@ -148,8 +149,8 @@ extern "C" bool ggml_audit_no_cpu_fallbacks_in_decode(struct ggml_cgraph * graph
                 
                 // Since we can't directly query the current backend assignment here,
                 // we at least warn in debug builds
-                GGML_LOG_WARN("DECODE AUDIT: Op '%s' (%s) marked as potential fallback risk.\n",
-                              op_name, FALLBACK_RISKS[j].description);
+                LLAMA_LOG_WARN("DECODE AUDIT: Op '%s' (%s) marked as potential fallback risk.\n",
+                               op_name, FALLBACK_RISKS[j].description);
                 break;
             }
         }
