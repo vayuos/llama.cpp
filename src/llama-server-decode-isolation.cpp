@@ -789,6 +789,26 @@ void dump_isolation_state() {
     std::cout << "\n=== END ISOLATION STATE DUMP ===\n\n";
 }
 
+// ============================================================================
+// streaming_manager IMPLEMENTATION
+// ============================================================================
+
+streaming_manager::streaming_manager(size_t queue_capacity)
+    : streaming_active(false), tokens_produced(0), tokens_consumed(0), backpressure_events(0) {
+    initialize(queue_capacity);
+}
+
+// ============================================================================
+// admission_control IMPLEMENTATION
+// ============================================================================
+
+admission_control::admission_control()
+    : decode_latency_threshold_us(0), max_queue_depth(0),
+      current_queue_depth(0), pending_queue_depth(0),
+      recent_decode_latency_us(0), last_decode_latency_us(0),
+      admissions_rejected(0) {
+}
+
 const char * get_last_violation_message() {
     std::unique_lock<std::mutex> lock(g_violation_message_mutex);
     static std::string message;

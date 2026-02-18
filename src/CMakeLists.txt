@@ -69,6 +69,7 @@ add_library(llama
             llama-config-freeze.cpp
             llama-feature-freeze.cpp
             llama-decode-probing-removal.cpp
+            llama-decode-composite.cpp
             llama-backend-disable.cpp
             llama-debug-stripping.cpp
             llama-mmq-backend-enforcement.cpp
