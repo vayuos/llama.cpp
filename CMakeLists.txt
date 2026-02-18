@@ -1,6 +1,16 @@
-cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
-project("llama.cpp" C CXX)
+cmake_minimum_required(VERSION 3.18) # for add_link_options, implicit target directories, and CUDA support
+project("llama.cpp" C CXX CUDA)
 include(CheckIncludeFileCXX)
+
+# Enable CUDA language for GPU compilation if GGML_CUDA is enabled
+if (NOT DEFINED GGML_CUDA)
+    set(GGML_CUDA ON)
+endif()
+
+if (GGML_CUDA)
+    enable_language(CUDA OPTIONAL)
+    message(STATUS "CUDA language enabled for GPU support")
+endif()
 
 #set(CMAKE_WARN_DEPRECATED YES)
 set(CMAKE_WARN_UNUSED_CLI YES)
