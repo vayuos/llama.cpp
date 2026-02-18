@@ -16,6 +16,14 @@
 #include <cstdlib>
 #include <cstdio>
 
+// Define LLAMA_ABORT macro if not already defined
+#ifndef LLAMA_ABORT
+#define LLAMA_ABORT(msg) do { \
+    fprintf(stderr, "[KERNEL_FUSION] ABORT: %s\n", msg); \
+    abort(); \
+} while(0)
+#endif
+
 /**
  * Initialize kernel fusion enforcement
  */
