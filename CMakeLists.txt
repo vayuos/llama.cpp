@@ -53,6 +53,18 @@ if (NOT CMAKE_CUDA_ARCHITECTURES)
     set(CMAKE_CUDA_ARCHITECTURES 89 CACHE STRING "CUDA architectures to compile for" FORCE)
 endif()
 
+# CRITICAL: Ensure CUDA compiler is found and properly configured
+if (GGML_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    message(STATUS "CUDA Toolkit found at: ${CUDAToolkit_INSTALL_PREFIX}")
+    message(STATUS "CUDA nvcc compiler: ${CMAKE_CUDA_COMPILER}")
+
+    # Force CUDA to be compiled with maximum compatibility
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -fPIC")
+    set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3")
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+endif()
+
 # Add path to modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 

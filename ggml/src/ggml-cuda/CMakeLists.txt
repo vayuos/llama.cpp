@@ -164,10 +164,21 @@ if (CUDAToolkit_FOUND)
         endforeach()
     endif()
 
+    # CRITICAL FIX: Explicitly add CUDA language to ensure compilation
+    enable_language(CUDA)
+    set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_C_COMPILER})
+
     ggml_add_backend_library(ggml-cuda
                              ${GGML_HEADERS_CUDA}
                              ${GGML_SOURCES_CUDA}
                             )
+
+    # Force CUDA compilation on all source files
+    set_target_properties(ggml-cuda PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+        POSITION_INDEPENDENT_CODE ON
+    )
 
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
