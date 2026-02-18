@@ -118,8 +118,13 @@ check_requirements() {
     # Check for CUDA if requested
     if [ "$BUILD_BACKEND" = "cuda" ]; then
         if ! command -v nvcc &> /dev/null; then
-            log_warning "CUDA toolkit not found (nvcc). CUDA build may fail."
-            log_info "Install CUDA toolkit or use CPU build instead"
+            log_error "CUDA toolkit not found (nvcc)."
+            log_info "Options:"
+            log_info "  1. Install CUDA Toolkit from https://developer.nvidia.com/cuda-toolkit"
+            log_info "  2. Use CPU-only build instead: ./scripts/build-gpu-exclusive.sh cpu"
+            log_info ""
+            log_error "CUDA build cannot proceed without CUDA toolkit"
+            exit 1
         fi
     fi
 
