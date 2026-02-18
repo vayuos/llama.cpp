@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories
-project("llama.cpp" C CXX)
+cmake_minimum_required(VERSION 3.18) # for add_link_options, implicit target directories, and CUDA support
+project("llama.cpp" C CXX CUDA)
 include(CheckIncludeFileCXX)
 
 #set(CMAKE_WARN_DEPRECATED YES)
