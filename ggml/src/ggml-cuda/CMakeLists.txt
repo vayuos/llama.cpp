@@ -57,9 +57,8 @@ if (CUDAToolkit_FOUND)
 
     enable_language(CUDA)
 
-    # Force CUDA language support
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -std=c++17")
-    set_property(GLOBAL PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+    # CRITICAL: Compile CUDA directly into object files (no deferred device linking)
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
 
     # TODO: Remove once CCCL 3.2 has been released and bundled with CUDA Toolkit
     if (GGML_CUDA_CUB_3DOT2)
@@ -132,12 +131,6 @@ if (CUDAToolkit_FOUND)
                              ${GGML_HEADERS_CUDA}
                              ${GGML_SOURCES_CUDA}
                             )
-
-    # CRITICAL: Compile CUDA directly into object files (no deferred device linking)
-    set_target_properties(ggml-cuda PROPERTIES
-        CUDA_SEPARABLE_COMPILATION OFF
-        POSITION_INDEPENDENT_CODE ON
-    )
 
     add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 

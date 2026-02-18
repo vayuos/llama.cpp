@@ -38,12 +38,6 @@ if (NOT MSVC)
     endif()
 endif()
 
-# CUDA configuration - let original auto-detection work
-if (GGML_CUDA)
-    # CRITICAL: Ensure CUDA_SEPARABLE_COMPILATION is OFF for direct compilation
-    set(CMAKE_CUDA_SEPARABLE_COMPILATION OFF)
-endif()
-
 # Add path to modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
