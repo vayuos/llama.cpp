@@ -424,19 +424,18 @@ int llama_bias_act_fusion_gpu_record_fusion_operation(
     uint64_t final_output_id,
     uint64_t element_count
 ) {
-    struct llama_bias_act_fusion_operation_record record = {
-        .operation_id = operation_id,
-        .fusion_type = fusion_type,
-        .activation = activation,
-        .layer_idx = layer_idx,
-        .matmul_output_id = matmul_output_id,
-        .bias_tensor_id = bias_id,
-        .final_output_id = final_output_id,
-        .element_count = element_count,
-        .kernel_launch_timestamp_ns = 0,
-        .was_fused = false,
-        .is_decode_phase = (g_bias_act_fusion_validation.state_record.current_phase == LLAMA_BIAS_ACT_FUSION_PHASE_DECODE),
-    };
+    struct llama_bias_act_fusion_operation_record record;
+    record.operation_id = operation_id;
+    record.fusion_type = fusion_type;
+    record.activation = activation;
+    record.layer_idx = layer_idx;
+    record.matmul_output_id = matmul_output_id;
+    record.bias_tensor_id = bias_id;
+    record.final_output_id = final_output_id;
+    record.element_count = element_count;
+    record.kernel_launch_timestamp_ns = 0;
+    record.was_fused = false;
+    record.is_decode_phase = (g_bias_act_fusion_validation.state_record.current_phase == LLAMA_BIAS_ACT_FUSION_PHASE_DECODE);
 
     g_bias_act_fusion_operations[operation_id] = record;
     g_bias_act_operation_history.push_back(record);
@@ -453,17 +452,16 @@ int llama_bias_act_fusion_gpu_record_kernel_compilation(
     uint32_t output_channels,
     const char* kernel_name
 ) {
-    struct llama_bias_act_kernel_record record = {
-        .kernel_id = kernel_id,
-        .fusion_type = fusion_type,
-        .activation = activation,
-        .status = LLAMA_BIAS_ACT_KERNEL_DETECTED,
-        .output_channels = output_channels,
-        .batch_size = 1,
-        .total_launches = 0,
-        .decode_launches = 0,
-        .is_cuda_kernel = g_bias_act_fusion_validation.config.cuda_backend_only,
-    };
+    struct llama_bias_act_kernel_record record;
+    record.kernel_id = kernel_id;
+    record.fusion_type = fusion_type;
+    record.activation = activation;
+    record.status = LLAMA_BIAS_ACT_KERNEL_DETECTED;
+    record.output_channels = output_channels;
+    record.batch_size = 1;
+    record.total_launches = 0;
+    record.decode_launches = 0;
+    record.is_cuda_kernel = g_bias_act_fusion_validation.config.cuda_backend_only;
 
     if (kernel_name) {
         strncpy(record.kernel_name, kernel_name, 255);

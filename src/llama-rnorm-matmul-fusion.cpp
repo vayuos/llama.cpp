@@ -437,18 +437,17 @@ int llama_fusion_gpu_record_fusion_operation(
     uint32_t norm_dim,
     uint32_t proj_dim
 ) {
-    struct llama_fusion_operation_record record = {
-        .operation_id = operation_id,
-        .fusion_type = fusion_type,
-        .layer_idx = layer_idx,
-        .input_tensor_id = input_id,
-        .output_tensor_id = output_id,
-        .normalized_dim = norm_dim,
-        .projected_dim = proj_dim,
-        .kernel_launch_timestamp_ns = 0,
-        .was_fused = false,
-        .is_decode_phase = (g_fusion_validation.state_record.current_phase == LLAMA_FUSION_PHASE_DECODE),
-    };
+    struct llama_fusion_operation_record record;
+    record.operation_id = operation_id;
+    record.fusion_type = fusion_type;
+    record.layer_idx = layer_idx;
+    record.input_tensor_id = input_id;
+    record.output_tensor_id = output_id;
+    record.normalized_dim = norm_dim;
+    record.projected_dim = proj_dim;
+    record.kernel_launch_timestamp_ns = 0;
+    record.was_fused = false;
+    record.is_decode_phase = (g_fusion_validation.state_record.current_phase == LLAMA_FUSION_PHASE_DECODE);
 
     g_fusion_operations[operation_id] = record;
     g_operation_history.push_back(record);
@@ -465,17 +464,16 @@ int llama_fusion_gpu_record_kernel_compilation(
     uint32_t out_channels,
     const char* kernel_name
 ) {
-    struct llama_fusion_kernel_record record = {
-        .kernel_id = kernel_id,
-        .fusion_type = fusion_type,
-        .status = LLAMA_FUSION_KERNEL_DETECTED,
-        .in_channels = in_channels,
-        .out_channels = out_channels,
-        .batch_size = 1,
-        .total_launches = 0,
-        .decode_launches = 0,
-        .is_cuda_kernel = g_fusion_validation.config.cuda_backend_only,
-    };
+    struct llama_fusion_kernel_record record;
+    record.kernel_id = kernel_id;
+    record.fusion_type = fusion_type;
+    record.status = LLAMA_FUSION_KERNEL_DETECTED;
+    record.in_channels = in_channels;
+    record.out_channels = out_channels;
+    record.batch_size = 1;
+    record.total_launches = 0;
+    record.decode_launches = 0;
+    record.is_cuda_kernel = g_fusion_validation.config.cuda_backend_only;
 
     if (kernel_name) {
         strncpy(record.kernel_name, kernel_name, 255);

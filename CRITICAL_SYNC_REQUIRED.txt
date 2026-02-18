@@ -1,0 +1,86 @@
+================================================================================
+⚠️  CRITICAL: FILES NOT SYNCED TO BUILD DIRECTORY
+================================================================================
+
+SITUATION:
+  • Fixes were applied to: /home/viren/source/llama.cpp/llama.cpp/src/
+  • Build is running from: /home/viren/llama/llama_x86/llama.cpp/src/
+  • Build directory still has OLD files with C++20 warnings
+  • Fixes were NOT synced to build directory
+
+EVIDENCE:
+  Build output showing warnings at lines 457, 755, 790, 884, 915
+  These are the ORIGINAL designated initializer lines, not the fixed ones
+  This proves the build is using OLD files, not our fixed versions
+
+SOLUTION: FORCE SYNC & REBUILD
+
+================================================================================
+DO THIS NOW
+================================================================================
+
+Run the automated force sync & rebuild script:
+
+  bash /home/viren/source/llama.cpp/llama.cpp/FORCE_SYNC_AND_REBUILD.sh
+
+What it does:
+  1. Copies all 8 fixed files to build directory (force overwrite)
+  2. Cleans old build objects
+  3. Starts fresh rebuild
+  4. Shows final status
+
+Expected time: 10-20 minutes
+
+Expected result:
+  ✅ Build progresses without warnings
+  ✅ Designated initializers converted to C++17
+  ✅ Build continues past 41%
+
+================================================================================
+ALTERNATIVE: MANUAL SYNC
+================================================================================
+
+If script doesn't work, do this manually:
+
+Step 1: Copy files
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-debug-stripping.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-json-isolation.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-server-decode-isolation.h \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-config-freeze.h \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-graph-schedule-elimination.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-tensor-allocation-gpu.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-rnorm-matmul-fusion.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+  cp /home/viren/source/llama.cpp/llama.cpp/src/llama-bias-activation-fusion.cpp \
+     /home/viren/llama/llama_x86/llama.cpp/src/
+
+Step 2: Clean and rebuild
+  cd /home/viren/llama/llama_x86/llama.cpp/build
+  make clean
+  make -j$(nproc)
+
+================================================================================
+WHY THIS HAPPENED
+================================================================================
+
+Two separate directories exist:
+  1. Source: /home/viren/source/llama.cpp/llama.cpp/ (where fixes were applied)
+  2. Build: /home/viren/llama/llama_x86/llama.cpp/ (where build runs)
+
+These are NOT symlinked, so changes don't automatically propagate.
+Files must be manually copied/synced for build to use them.
+
+================================================================================

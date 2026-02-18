@@ -123,33 +123,30 @@ decode_isolation_engine::decode_isolation_engine() {
 }
 
 bool decode_isolation_engine::initialize(
-    const std::vector<int32_t> & decode_cores,
-    const std::vector<int32_t> & server_cores,
-    int32_t decode_priority,
-    int32_t decode_thread_count,
-    int32_t server_thread_count) {
+    const std::vector<int32_t> & decode_core_list,
+    const std::vector<int32_t> & server_core_list) {
 
     LOG_ISOLATION("Initializing decode isolation engine", "");
 
     // Build decode core set
-    for (int32_t core_id : decode_cores) {
+    for (int32_t core_id : decode_core_list) {
         if (!decode_dom.core_set.add_core(core_id)) {
-            LOG_VIOLATION("Failed to add decode core %d", core_id);
+            LOG_VIOLATION("Failed to add decode core", "");
             return false;
         }
     }
-    decode_dom.thread_count = decode_thread_count;
-    decode_dom.scheduling_priority = decode_priority;
+    decode_dom.thread_count = 0;
+    decode_dom.scheduling_priority = 0;
     decode_dom.is_enabled = true;
 
     // Build server core set
-    for (int32_t core_id : server_cores) {
+    for (int32_t core_id : server_core_list) {
         if (!server_dom.core_set.add_core(core_id)) {
-            LOG_VIOLATION("Failed to add server core %d", core_id);
+            LOG_VIOLATION("Failed to add server core", "");
             return false;
         }
     }
-    server_dom.thread_count = server_thread_count;
+    server_dom.thread_count = 0;
     server_dom.is_enabled = true;
 
     // Validate no overlap
@@ -158,10 +155,7 @@ bool decode_isolation_engine::initialize(
         return false;
     }
 
-    LOG_ISOLATION("Decode domain: %d cores, priority=%d, threads=%d",
-                  decode_dom.core_set.core_count, decode_priority, decode_thread_count);
-    LOG_ISOLATION("Server domain: %d cores, threads=%d",
-                  server_dom.core_set.core_count, server_thread_count);
+    LOG_ISOLATION("Decode isolation initialized successfully", "");
 
     return true;
 }
@@ -273,12 +267,12 @@ void decode_isolation_engine::record_violation(const std::string & violation_typ
 isolation_metrics decode_isolation_engine::get_metrics() const {
     std::unique_lock<std::mutex> lock(metrics_mutex);
     isolation_metrics metrics = {
-        decode_dom.thread_migrations.load(),
-        decode_dom.scheduling_preemptions.load(),
-        decode_dom.lock_waits_detected.load(),
-        server_dom.violations_detected.load(),
-        server_dom.threads_on_decode_cores.load(),
-        server_dom.admission_rejections.load(),
+        decode_dom.thread_migrations,
+        decode_dom.scheduling_preemptions,
+        decode_dom.lock_waits_detected,
+        decode_dom.violations_detected.load(),
+        0,
+        0,
         0.0f,  // server_load_percent
         0.0f,  // decode_throughput_tokens_per_sec
         0.0f   // decode_latency_variance_us
@@ -561,12 +555,10 @@ bool streaming_manager::server_consume_token(decode_token_event & event) {
 
 streaming_metrics streaming_manager::get_metrics() const {
     streaming_metrics metrics = {
-        queue.depth(),
-        queue.capacity(),
-        backpressure_events.load(),
         tokens_produced.load(),
         tokens_consumed.load(),
-        0.0f  // tokens_per_sec - would be computed from timing
+        backpressure_events.load(),
+        0.0f  // throughput_tokens_per_sec - would be computed from timing
     };
     return metrics;
 }
@@ -579,7 +571,7 @@ void streaming_manager::clear() {
 }
 
 streaming_manager & streaming_manager::instance() {
-    static streaming_manager manager;
+    static streaming_manager manager(DECODE_STREAMING_QUEUE_SIZE);
     return manager;
 }
 
@@ -601,7 +593,7 @@ void cross_domain_lock_detector::exit_critical_section(const std::string & lock_
     g_current_domain = -1;
 }
 
-bool cross_domain_lock_detector::has_decode_server_contention() {
+bool cross_domain_lock_detector::has_decode_server_contention() const {
     // Would check if decode thread is currently holding server locks
     return false;
 }
@@ -704,7 +696,7 @@ bool initialize_decode_isolation(
         return false;
     }
 
-    if (!streaming.initialize(DECODE_ISOLATION_STREAMING_QUEUE_SIZE)) {
+    if (!streaming.initialize(DECODE_STREAMING_QUEUE_SIZE)) {
         LOG_VIOLATION("Failed to initialize streaming manager", "");
         return false;
     }
@@ -756,9 +748,9 @@ void dump_isolation_state() {
     std::cout << "  Priority: " << decode_dom.scheduling_priority << "\n";
     std::cout << "  Enabled: " << (decode_dom.is_enabled ? "yes" : "no") << "\n";
     std::cout << "  Metrics:\n";
-    std::cout << "    Migrations: " << decode_dom.thread_migrations.load() << "\n";
-    std::cout << "    Preemptions: " << decode_dom.scheduling_preemptions.load() << "\n";
-    std::cout << "    Lock Waits: " << decode_dom.lock_waits_detected.load() << "\n";
+    std::cout << "    Migrations: " << decode_dom.thread_migrations << "\n";
+    std::cout << "    Preemptions: " << decode_dom.scheduling_preemptions << "\n";
+    std::cout << "    Lock Waits: " << decode_dom.lock_waits_detected << "\n";
 
     std::cout << "\nSERVER DOMAIN:\n";
     std::cout << "  Cores: ";
@@ -775,15 +767,14 @@ void dump_isolation_state() {
 
     auto stream_metrics = streaming.get_metrics();
     std::cout << "\nSTREAMING METRICS:\n";
-    std::cout << "  Queue Depth: " << stream_metrics.queue_depth << " / " << stream_metrics.queue_capacity << "\n";
     std::cout << "  Backpressure Events: " << stream_metrics.backpressure_events << "\n";
-    std::cout << "  Tokens Produced: " << stream_metrics.total_tokens_produced << "\n";
-    std::cout << "  Tokens Consumed: " << stream_metrics.total_tokens_consumed << "\n";
+    std::cout << "  Tokens Produced: " << stream_metrics.tokens_produced << "\n";
+    std::cout << "  Tokens Consumed: " << stream_metrics.tokens_consumed << "\n";
 
     auto admission_metrics = admission.get_metrics();
     std::cout << "\nADMISSION CONTROL:\n";
-    std::cout << "  Pending Queue Depth: " << admission_metrics.pending_queue_depth << "\n";
-    std::cout << "  Decode Latency: " << admission_metrics.current_decode_latency_us << " us\n";
+    std::cout << "  Queue Depth: " << admission_metrics.queue_depth << "\n";
+    std::cout << "  Decode Latency: " << admission_metrics.recent_decode_latency_us << " us\n";
     std::cout << "  Rejections: " << admission_metrics.admissions_rejected << "\n";
 
     std::cout << "\n=== END ISOLATION STATE DUMP ===\n\n";

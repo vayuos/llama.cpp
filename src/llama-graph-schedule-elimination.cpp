@@ -448,17 +448,16 @@ struct llama_execution_plan_record llama_schedule_elimination_get_plan(uint64_t 
     }
 
     // Return empty/invalid record
-    struct llama_execution_plan_record empty = {
-        .graph_id = 0,
-        .graph_version = 0,
-        .total_segments = 0,
-        .segments = nullptr,
-        .plan_state = LLAMA_PLAN_UNCOMPUTED,
-        .exec_mode = LLAMA_EXEC_MODE_INVALID,
-        .plan_immutable = false,
-        .plan_creation_time_ns = 0,
-        .num_execution_steps = 0,
-    };
+    struct llama_execution_plan_record empty;
+    empty.graph_id = 0;
+    empty.graph_version = 0;
+    empty.total_segments = 0;
+    empty.segments = nullptr;
+    empty.plan_state = LLAMA_PLAN_UNCOMPUTED;
+    empty.exec_mode = LLAMA_EXEC_MODE_INVALID;
+    empty.plan_immutable = false;
+    empty.plan_creation_time_ns = 0;
+    empty.num_execution_steps = 0;
     return empty;
 }
 
@@ -751,17 +750,16 @@ static int test_plan_immutability(void) {
 
     llama_schedule_elimination_precompute_execution_order(1, 1);
 
-    struct llama_execution_plan_record plan = {
-        .graph_id = 1,
-        .graph_version = 1,
-        .total_segments = 10,
-        .segments = nullptr,
-        .plan_state = LLAMA_PLAN_COMPUTED,
-        .exec_mode = LLAMA_EXEC_MODE_STATIC,
-        .plan_immutable = false,
-        .plan_creation_time_ns = 0,
-        .num_execution_steps = 0,
-    };
+    struct llama_execution_plan_record plan;
+    plan.graph_id = 1;
+    plan.graph_version = 1;
+    plan.total_segments = 10;
+    plan.segments = nullptr;
+    plan.plan_state = LLAMA_PLAN_COMPUTED;
+    plan.exec_mode = LLAMA_EXEC_MODE_STATIC;
+    plan.plan_immutable = false;
+    plan.plan_creation_time_ns = 0;
+    plan.num_execution_steps = 0;
 
     int ret = llama_schedule_elimination_store_execution_plan(1, &plan);
     if (ret != 0) {
@@ -786,17 +784,16 @@ static int test_static_execution_mode(void) {
 
     llama_schedule_elimination_precompute_execution_order(1, 1);
 
-    struct llama_execution_plan_record plan = {
-        .graph_id = 1,
-        .graph_version = 1,
-        .total_segments = 10,
-        .segments = nullptr,
-        .plan_state = LLAMA_PLAN_COMPUTED,
-        .exec_mode = LLAMA_EXEC_MODE_STATIC,
-        .plan_immutable = true,
-        .plan_creation_time_ns = 0,
-        .num_execution_steps = 0,
-    };
+    struct llama_execution_plan_record plan;
+    plan.graph_id = 1;
+    plan.graph_version = 1;
+    plan.total_segments = 10;
+    plan.segments = nullptr;
+    plan.plan_state = LLAMA_PLAN_COMPUTED;
+    plan.exec_mode = LLAMA_EXEC_MODE_STATIC;
+    plan.plan_immutable = true;
+    plan.plan_creation_time_ns = 0;
+    plan.num_execution_steps = 0;
 
     llama_schedule_elimination_store_execution_plan(1, &plan);
     llama_schedule_elimination_lock_execution_plan(1);
@@ -880,17 +877,16 @@ static int test_plan_verification(void) {
 
     llama_schedule_elimination_precompute_execution_order(1, 1);
 
-    struct llama_execution_plan_record plan = {
-        .graph_id = 1,
-        .graph_version = 1,
-        .total_segments = 10,
-        .segments = nullptr,
-        .plan_state = LLAMA_PLAN_COMPUTED,
-        .exec_mode = LLAMA_EXEC_MODE_STATIC,
-        .plan_immutable = true,
-        .plan_creation_time_ns = 0,
-        .num_execution_steps = 0,
-    };
+    struct llama_execution_plan_record plan;
+    plan.graph_id = 1;
+    plan.graph_version = 1;
+    plan.total_segments = 10;
+    plan.segments = nullptr;
+    plan.plan_state = LLAMA_PLAN_COMPUTED;
+    plan.exec_mode = LLAMA_EXEC_MODE_STATIC;
+    plan.plan_immutable = true;
+    plan.plan_creation_time_ns = 0;
+    plan.num_execution_steps = 0;
 
     llama_schedule_elimination_store_execution_plan(1, &plan);
 
@@ -911,17 +907,16 @@ static int test_mode_assertion(void) {
 
     llama_schedule_elimination_precompute_execution_order(1, 1);
 
-    struct llama_execution_plan_record plan = {
-        .graph_id = 1,
-        .graph_version = 1,
-        .total_segments = 10,
-        .segments = nullptr,
-        .plan_state = LLAMA_PLAN_COMPUTED,
-        .exec_mode = LLAMA_EXEC_MODE_STATIC,
-        .plan_immutable = true,
-        .plan_creation_time_ns = 0,
-        .num_execution_steps = 0,
-    };
+    struct llama_execution_plan_record plan;
+    plan.graph_id = 1;
+    plan.graph_version = 1;
+    plan.total_segments = 10;
+    plan.segments = nullptr;
+    plan.plan_state = LLAMA_PLAN_COMPUTED;
+    plan.exec_mode = LLAMA_EXEC_MODE_STATIC;
+    plan.plan_immutable = true;
+    plan.plan_creation_time_ns = 0;
+    plan.num_execution_steps = 0;
 
     llama_schedule_elimination_store_execution_plan(1, &plan);
     llama_schedule_elimination_lock_execution_plan(1);
