@@ -266,5 +266,17 @@ get_filename_component(TEST_TARGET test-c.c NAME_WE)
 add_executable(${TEST_TARGET} test-c.c)
 target_link_libraries(${TEST_TARGET} PRIVATE llama)
 
+# CI Regression Test: CPU Must Not Gate Decode (Section 73)
+llama_build_and_test(decode_cpu_gating_test.cpp LABEL "ci")
+
+# CI Regression Test: No CPU Backend Ops in Decode (Section 74)
+llama_build_and_test(decode_cpu_backend_test.cpp LABEL "ci")
+
+# CI Regression Test: Deterministic Output Preserved (Section 75)
+llama_build_and_test(decode_determinism_test.cpp LABEL "ci")
+
+# CI Regression Test: GPU Utilization Does Not Dip Per Token (Section 76)
+llama_build_and_test(decode_gpu_continuity_test.cpp LABEL "ci")
+
 llama_build_and_test(test-alloc.cpp)
 target_include_directories(test-alloc PRIVATE ${PROJECT_SOURCE_DIR}/ggml/src)
