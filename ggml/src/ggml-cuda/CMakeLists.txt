@@ -173,10 +173,11 @@ if (CUDAToolkit_FOUND)
                              ${GGML_SOURCES_CUDA}
                             )
 
-    # Force CUDA compilation on all source files
+    # CRITICAL: Compile CUDA directly into object files (no deferred device linking)
+    # This ensures kernels are available immediately and linked into each .o file
     set_target_properties(ggml-cuda PROPERTIES
-        CUDA_SEPARABLE_COMPILATION ON
-        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+        CUDA_SEPARABLE_COMPILATION OFF
+        CUDA_STANDARD 17
         POSITION_INDEPENDENT_CODE ON
     )
 
