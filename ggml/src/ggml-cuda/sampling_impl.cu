@@ -538,10 +538,10 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
         }
 
         if (ctx->in_decode_phase) {
-            // ================================================================
             // DECODE PATH: GPU-resident categorical sampling + map (0 intermediate syncs)
             // ================================================================
-            if (cuda_sample_categorical_kernel(d_topk_vals, ctx->d_sampled_token, k_effective, seed, (void*)s) != 0) {
+            // We cast away const here because cuda_sample_categorical_kernel now performs in-place cumsum
+            if (cuda_sample_categorical_kernel((float*)d_topk_vals, ctx->d_sampled_token, k_effective, seed, (void*)s) != 0) {
                 cudaFree(d_topk_vals); cudaFree(d_topk_inds);
                 return -1;
             }
@@ -604,7 +604,8 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
 
         if (ctx->in_decode_phase) {
             // DECODE PATH: GPU-resident categorical sampling (0 intermediate syncs)
-            if (cuda_sample_categorical_kernel(ctx->d_probs, ctx->d_sampled_token, ctx->vocab_size, seed, (void*)s) != 0) {
+            // We cast away const here because cuda_sample_categorical_kernel now performs in-place cumsum
+            if (cuda_sample_categorical_kernel((float*)ctx->d_probs, ctx->d_sampled_token, ctx->vocab_size, seed, (void*)s) != 0) {
                 return -1;
             }
         } else {
@@ -725,10 +726,10 @@ int cuda_sampling_sample_topk_topp(cuda_sampling_context_t * ctx,
             // DECODE PATH: GPU-resident nucleus sampling + map (0 intermediate syncs)
             // ================================================================
             // Note: d_probs contains cumulative sum after cuda_topp_kernel.
-            // If categorical kernel expects probabilities, we might need a diff-reduction,
+            // if categorical kernel expects probabilities, we might need a diff-reduction,
             // but usually GPU-based nucleus sampling handles the scan internally.
             // For now, we use d_probs and the categorical kernel.
-            if (cuda_sample_categorical_kernel(ctx->d_probs, ctx->d_sampled_token, ctx->vocab_size, seed, (void*)s) != 0) {
+            if (cuda_sample_categorical_kernel((float*)ctx->d_probs, ctx->d_sampled_token, ctx->vocab_size, seed, (void*)s) != 0) {
                 return -1;
             }
             // Map sorted index back to original vocabulary ID

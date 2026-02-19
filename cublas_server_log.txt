@@ -3,7 +3,7 @@ ggml_cuda_init: found 1 CUDA devices:
 build: 97 (1acc1b3) with GNU 13.3.0 for Linux x86_64
 system info: n_threads = 12, n_threads_batch = 12, total_threads = 12
 
-system_info: n_threads = 12 (n_threads_batch = 12) / 12 | CUDA : ARCHS = 890 | FORCE_MMQ = 1 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | REPACK = 1 | 
+system_info: n_threads = 12 (n_threads_batch = 12) / 12 | CUDA : ARCHS = 890 | FORCE_CUBLAS = 1 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | REPACK = 1 | 
 
 Running without SSL
 init: using 11 threads for HTTP server
@@ -180,25 +180,25 @@ srv    load_model: initializing slots, n_slots = 1
 [DECODE CPU ENFORCEMENT] Mode: STRICT (abort on violation)
 [TOKEN CHAIN ASSERT] ENABLED (CPU on chain causes abort)
 llama_decode: GPU-exclusive decode invariant enforced. All operations gating next-token emission MUST be GPU-executed. CPU fallbacks are disabled for the decode-critical path.
-/home/viren/llama/llama.cpp/src/llama-context.cpp:3869: Decode Admission Failed: Partial GPU offload detected. GPU-exclusive decode requires all layers on GPU.
 decode_admission_check: FATAL: Not all layers offloaded to GPU (n_gpu_layers=20, n_layer=48)
-[New LWP 131039]
-[New LWP 131038]
-[New LWP 131037]
-[New LWP 131036]
-[New LWP 131035]
-[New LWP 131034]
-[New LWP 131033]
-[New LWP 131032]
-[New LWP 131031]
-[New LWP 131030]
-[New LWP 131029]
-[New LWP 131028]
-[New LWP 131027]
-[New LWP 131026]
-[New LWP 131025]
-[New LWP 131024]
-[New LWP 131019]
+/home/viren/llama/llama.cpp/src/llama-context.cpp:3869: Decode Admission Failed: Partial GPU offload detected. GPU-exclusive decode requires all layers on GPU.
+[New LWP 132852]
+[New LWP 132851]
+[New LWP 132850]
+[New LWP 132849]
+[New LWP 132848]
+[New LWP 132847]
+[New LWP 132846]
+[New LWP 132845]
+[New LWP 132844]
+[New LWP 132843]
+[New LWP 132842]
+[New LWP 132841]
+[New LWP 132840]
+[New LWP 132839]
+[New LWP 132838]
+[New LWP 132837]
+[New LWP 132832]
 
 This GDB supports auto-downloading debuginfo from the following URLs:
   <https://debuginfod.ubuntu.com>
@@ -207,19 +207,19 @@ Debuginfod has been disabled.
 To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-0x00007e1befb10813 in __GI___wait4 (pid=131096, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+0x00007dad48910813 in __GI___wait4 (pid=132910, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
 warning: 30	../sysdeps/unix/sysv/linux/wait4.c: No such file or directory
-#0  0x00007e1befb10813 in __GI___wait4 (pid=131096, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+#0  0x00007dad48910813 in __GI___wait4 (pid=132910, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
 30	in ../sysdeps/unix/sysv/linux/wait4.c
-#1  0x00007e1bf015b69c in ggml_print_backtrace () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libggml-base.so.0
-#2  0x00007e1bf015b843 in ggml_abort () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libggml-base.so.0
-#3  0x00007e1bf0319411 in ?? () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libllama.so.0
-#4  0x00007e1bf0319441 in llama_decode () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libllama.so.0
-#5  0x0000561929160896 in ?? ()
-#6  0x00005619291008ff in ?? ()
-#7  0x00007e1befa2a1ca in __libc_start_call_main (main=main@entry=0x5619290fdd00, argc=argc@entry=22, argv=argv@entry=0x7ffd42f95eb8) at ../sysdeps/nptl/libc_start_call_main.h:58
+#1  0x00007dad48f5b69c in ggml_print_backtrace () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libggml-base.so.0
+#2  0x00007dad48f5b843 in ggml_abort () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libggml-base.so.0
+#3  0x00007dad49119411 in ?? () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libllama.so.0
+#4  0x00007dad49119441 in llama_decode () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libllama.so.0
+#5  0x00005d9864b88896 in ?? ()
+#6  0x00005d9864b288ff in ?? ()
+#7  0x00007dad4882a1ca in __libc_start_call_main (main=main@entry=0x5d9864b25d00, argc=argc@entry=22, argv=argv@entry=0x7ffd50393fd8) at ../sysdeps/nptl/libc_start_call_main.h:58
 warning: 58	../sysdeps/nptl/libc_start_call_main.h: No such file or directory
-#8  0x00007e1befa2a28b in __libc_start_main_impl (main=0x5619290fdd00, argc=22, argv=0x7ffd42f95eb8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffd42f95ea8) at ../csu/libc-start.c:360
+#8  0x00007dad4882a28b in __libc_start_main_impl (main=0x5d9864b25d00, argc=22, argv=0x7ffd50393fd8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffd50393fc8) at ../csu/libc-start.c:360
 warning: 360	../csu/libc-start.c: No such file or directory
-#9  0x0000561929106595 in ?? ()
-[Inferior 1 (process 131018) detached]
+#9  0x00005d9864b2e595 in ?? ()
+[Inferior 1 (process 132831) detached]

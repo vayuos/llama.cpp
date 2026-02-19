@@ -1250,7 +1250,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
 
         // For decode graphs, we strictly enforce that the first backend (GPU) is the single owner.
         // This prevents any mixed-backend allocation or fallback.
-        ggml_backend_sched_set_single_backend(sched.get(), 0); 
+        // ggml_backend_sched_set_single_backend(sched.get(), 0); 
     } else {
         // Unlock before reconfiguration for non-decode graphs
         ggml_backend_sched_lock_backends(sched.get(), false);
@@ -1305,12 +1305,15 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
         if (gtype == LLM_GRAPH_TYPE_DECODER) {
             // Audit composite operations to ensure all GPU implementations are available
             if (!ggml_audit_no_cpu_fallbacks_in_decode(gf)) {
-                GGML_ABORT("FATAL: Decode graph contains CPU fallback risks after allocation.\n");
+                // GGML_ABORT("FATAL: Decode graph contains CPU fallback risks after allocation.\n");
+                LLAMA_LOG_WARN("WARNING: Decode graph contains CPU fallback risks after allocation (check disabled).\n");
             }
             
             // Verify all decode tensors are GPU-resident before entering decode mode
             if (gf->n_nodes > 0 /* && !llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1]) */) {
-                GGML_ABORT("FATAL: Decode graph contains CPU-resident tensors.\n");
+                // [PATCH] Disable strict GPU residency check for partial offload
+                // GGML_ABORT("FATAL: Decode graph contains CPU-resident tensors.\n");
+                LLAMA_LOG_WARN("WARNING: Decode graph contains CPU-resident tensors (check disabled).\n");
             }
         }
 
@@ -1318,8 +1321,8 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
         // After successful allocation, the decode graph must be immutable.
         if (gtype == LLM_GRAPH_TYPE_DECODER) {
              active_decode_graph = gf; // [STRICT] Pin the persistent graph pointer
-             ggml_backend_sched_lock_backends(sched.get(), true);
-             ggml_backend_set_decode_mode(true); // [STRICT] Enter GPU-exclusive decode mode
+             // ggml_backend_sched_lock_backends(sched.get(), true);
+             // ggml_backend_set_decode_mode(true); // [STRICT] Enter GPU-exclusive decode mode
         }
     }
         // [STRICT] Decode Reuse: Validate that reused decode graph remains in GPU-exclusive mode
@@ -3863,10 +3866,10 @@ static void decode_admission_check(const llama_context * ctx) {
     const auto & hparams = model.hparams;
 
     // 1. Layer Offload Check
+    // 1. Layer Offload Check
     if (model.n_gpu_layers() < hparams.n_layer) {
-        LLAMA_LOG_ERROR("%s: FATAL: Not all layers offloaded to GPU (n_gpu_layers=%d, n_layer=%d)\n",
+        LLAMA_LOG_WARN("%s: WARNING: Not all layers offloaded to GPU (n_gpu_layers=%d, n_layer=%d). Performance may degrade.\n",
                         __func__, model.n_gpu_layers(), hparams.n_layer);
-        GGML_ABORT("Decode Admission Failed: Partial GPU offload detected. GPU-exclusive decode requires all layers on GPU.");
     }
 
     // 2. KV Cache Residency Check
@@ -3876,8 +3879,7 @@ static void decode_admission_check(const llama_context * ctx) {
 
     if (kv) {
         if (!kv->is_offloaded()) {
-            LLAMA_LOG_ERROR("%s: FATAL: KV cache is not fully offloaded to GPU.\n", __func__);
-            GGML_ABORT("Decode Admission Failed: KV Cache residing on CPU. GPU-exclusive decode requires full KV cache offload.");
+            LLAMA_LOG_WARN("%s: WARNING: KV cache is not fully offloaded to GPU. Performance may degrade.\n", __func__);
         }
     } else if (mem) {
         // Warning: Unknown memory type, cannot verify residency.

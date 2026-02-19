@@ -177,7 +177,7 @@ int cuda_softmax_kernel(const float * d_logits,
  *
  * Performance: ~300-500 us
  */
-int cuda_sample_categorical_kernel(const float * d_probs,
+int cuda_sample_categorical_kernel(float *       d_probs,
                                    int32_t *     d_out_token,
                                    int32_t       vocab_size,
                                    uint64_t      seed,

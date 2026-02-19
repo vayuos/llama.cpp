@@ -2341,6 +2341,11 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx,
         force_mmq = force_mmq || ((const int32_t *) dst->op_params)[2] != 0;
     }
 
+    /* [PATCH] Only force MMQ for quantized types - f32/f16/bf16 must use their normal dispatch */
+    if (force_mmq && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || src0->type == GGML_TYPE_BF16)) {
+        force_mmq = false;
+    }
+
     if (force_mmq) {
         use_mul_mat_vec_q = true;
         use_mul_mat_q     = true;
@@ -4041,9 +4046,10 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                     }
 
 
+                    // [PATCH] Disable decode-mode fusion enforcement for partial offload
                     // Strict enforcement for decode mode: if we are in decode mode and encounter an unfused RMSNorm
                     // that is part of a pattern we are supposed to fuse, we should have fused it or we fail.
-                    if (ggml_get_decode_mode()) {
+                    /* if (ggml_get_decode_mode()) {
                         if (node->op == GGML_OP_RMS_NORM) {
                             GGML_LOG_ERROR("%s: FATAL: unfused RMSNorm encountered during decode - fusion mandatory\n", __func__);
                             GGML_ABORT("unfused RMSNorm during decode");
@@ -4061,7 +4067,7 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                                 GGML_ABORT("unfused Activation during decode");
                             }
                         }
-                    }
+                    } */
 
                     if (ggml_cuda_can_fuse(cgraph, i, { GGML_OP_RMS_NORM, GGML_OP_MUL, GGML_OP_ADD }, {})) {
                         ggml_cuda_op_rms_norm_fused_add(*cuda_ctx, node, cgraph->nodes[i + 1], cgraph->nodes[i + 2]);
@@ -4199,8 +4205,10 @@ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, 
 #endif  // USE_CUDA_GRAPH
 
     if (ggml_get_decode_mode() && !use_cuda_graph) {
-        GGML_LOG_ERROR("%s: decode mode requires CUDA graphs but graphs are disabled for this compute path\n", __func__);
-        GGML_ABORT("DECODE STRUCTURE VIOLATION: CUDA graphs required for decode-mode");
+        /* [PATCH] Disable CUDA graph requirement for partial offload */
+        /* GGML_LOG_ERROR("%s: decode mode requires CUDA graphs but graphs are disabled for this compute path\n", __func__); */
+        /* GGML_ABORT("DECODE STRUCTURE VIOLATION: CUDA graphs required for decode-mode"); */
+        GGML_LOG_WARN("%s: decode mode without CUDA graphs (partial offload, check disabled)\n", __func__);
     }
 
     if (use_cuda_graph && cuda_graph_update_required) {
