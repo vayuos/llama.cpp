@@ -59,8 +59,11 @@ if (CUDAToolkit_FOUND)
 
             # Convert list to semicolon-separated string for CMAKE_CUDA_ARCHITECTURES
             # Join the list with semicolons
+            message(STATUS "DEBUG: CUDA_ARCHS list=${CUDA_ARCHS}")
             string(JOIN ";" CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCHS})
-            set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}" CACHE STRING "CUDA architectures")
+            message(STATUS "DEBUG: After string(JOIN), CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
+            set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}" CACHE STRING "CUDA architectures" FORCE)
+            message(STATUS "DEBUG: After set CACHE, CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
         endif()
     endif()
 
@@ -102,7 +105,11 @@ if (CUDAToolkit_FOUND)
     # If we try to compile a "native" build it will use the 12X architectures and fail.
     # So we should instead use the native architectures as determined by CMake after replacing 12X with 12Xa.
     # But if at the time of the build no GPUs are connected at all CMAKE_CUDA_ARCHITECTURES will contain garbage that we should not use.
+    # IMPORTANT: Only override if CMAKE_CUDA_ARCHITECTURES is literally "native" (the keyword, not our list)
+    # Do NOT override if we've already set a full architecture list (e.g., "75-virtual;80-virtual;86-real;89-real")
+    message(STATUS "DEBUG: Before native check, CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
     if (CMAKE_CUDA_ARCHITECTURES STREQUAL "native" AND CMAKE_CUDA_ARCHITECTURES_NATIVE MATCHES "^[0-9]+(a|f)?(-real|-virtual)?(;[0-9]+(a|f)?(-real|-virtual)?|;)*$")
+        message(STATUS "DEBUG: Overriding CMAKE_CUDA_ARCHITECTURES with native")
         set(CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES_NATIVE})
     endif()
     message(STATUS "Using CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES} CMAKE_CUDA_ARCHITECTURES_NATIVE=${CMAKE_CUDA_ARCHITECTURES_NATIVE}")
