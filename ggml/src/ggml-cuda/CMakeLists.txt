@@ -57,17 +57,23 @@ if (CUDAToolkit_FOUND)
                 list(APPEND CUDA_ARCHS 121a-real)
             endif()
 
-            # Convert list to semicolon-separated string for CMAKE_CUDA_ARCHITECTURES
-            # Join the list with semicolons
-            message(STATUS "DEBUG: CUDA_ARCHS list=${CUDA_ARCHS}")
-            string(JOIN ";" CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCHS})
-            message(STATUS "DEBUG: After string(JOIN), CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
-            set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}" CACHE STRING "CUDA architectures" FORCE)
-            message(STATUS "DEBUG: After set CACHE, CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
+            # Store the architecture list for later setting after enable_language(CUDA)
+            # enable_language(CUDA) resets CMAKE_CUDA_ARCHITECTURES, so we must set it AFTER
+            string(JOIN ";" GGML_CUDA_ARCHITECTURES_LIST ${CUDA_ARCHS})
+            message(STATUS "DEBUG: GGML_CUDA_ARCHITECTURES_LIST=${GGML_CUDA_ARCHITECTURES_LIST}")
         endif()
     endif()
 
     enable_language(CUDA)
+
+    # CRITICAL FIX: Set CMAKE_CUDA_ARCHITECTURES AFTER enable_language(CUDA)
+    # The enable_language(CUDA) call resets/overrides CMAKE_CUDA_ARCHITECTURES to native
+    # So we MUST set our custom architecture list AFTER enable_language, not before!
+    if (DEFINED GGML_CUDA_ARCHITECTURES_LIST)
+        message(STATUS "DEBUG: Setting CMAKE_CUDA_ARCHITECTURES AFTER enable_language(CUDA)")
+        set(CMAKE_CUDA_ARCHITECTURES "${GGML_CUDA_ARCHITECTURES_LIST}" CACHE STRING "CUDA architectures" FORCE)
+        message(STATUS "DEBUG: CMAKE_CUDA_ARCHITECTURES now=${CMAKE_CUDA_ARCHITECTURES}")
+    endif()
 
     # TODO: Remove once CCCL 3.2 has been released and bundled with CUDA Toolkit
     if (GGML_CUDA_CUB_3DOT2)
