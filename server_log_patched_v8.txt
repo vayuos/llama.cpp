@@ -3,7 +3,7 @@ ggml_cuda_init: found 1 CUDA devices:
 build: 97 (1acc1b3) with GNU 13.3.0 for Linux x86_64
 system info: n_threads = 12, n_threads_batch = 12, total_threads = 12
 
-system_info: n_threads = 12 (n_threads_batch = 12) / 12 | CUDA : ARCHS = 890 | FORCE_MMQ = 1 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | REPACK = 1 | 
+system_info: n_threads = 12 (n_threads_batch = 12) / 12 | CUDA : ARCHS = 890 | FORCE_CUBLAS = 1 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | REPACK = 1 | 
 
 Running without SSL
 init: using 11 threads for HTTP server
@@ -14,7 +14,7 @@ common_init_result: fitting params to device memory, for bugs during this step t
 llama_params_fit_impl: projected to use 7052 MiB of device memory vs. 16062 MiB of free device memory
 llama_params_fit_impl: will leave 9010 >= 1024 MiB of free device memory, no changes needed
 llama_params_fit: successfully fit params to free device memory
-llama_params_fit: fitting params to free memory took 0.32 seconds
+llama_params_fit: fitting params to free memory took 0.31 seconds
 llama_model_load_from_file_impl: using device CUDA0 (NVIDIA GeForce RTX 4060 Ti) (0000:04:00.0) - 16062 MiB free
 llama_model_loader: loaded meta data with 44 key-value pairs and 579 tensors from /home/viren/.lmstudio/models/lmstudio-community/qwen/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf (version GGUF V3 (latest))
 llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
@@ -173,32 +173,55 @@ llama_context: Decode admission control initialized (GPU-exclusive gating)
 llama_context: Hard failure on decode-critical CPU execution enabled (strict enforcement)
 llama_context: Token dependency chain runtime assertion enabled
 srv    load_model: initializing slots, n_slots = 1
-[DECODE ADMISSION] Initialized
-[DECODE CPU ENFORCEMENT] Mode: STRICT (abort on violation)
-[TOKEN CHAIN ASSERT] ENABLED (CPU on chain causes abort)
-[DECODE ADMISSION] Initialized
-[DECODE CPU ENFORCEMENT] Mode: STRICT (abort on violation)
-[TOKEN CHAIN ASSERT] ENABLED (CPU on chain causes abort)
 llama_decode: GPU-exclusive decode invariant enforced. All operations gating next-token emission MUST be GPU-executed. CPU fallbacks are disabled for the decode-critical path.
-/home/viren/llama/llama.cpp/src/llama-context.cpp:3869: Decode Admission Failed: Partial GPU offload detected. GPU-exclusive decode requires all layers on GPU.
-decode_admission_check: FATAL: Not all layers offloaded to GPU (n_gpu_layers=20, n_layer=48)
-[New LWP 131039]
-[New LWP 131038]
-[New LWP 131037]
-[New LWP 131036]
-[New LWP 131035]
-[New LWP 131034]
-[New LWP 131033]
-[New LWP 131032]
-[New LWP 131031]
-[New LWP 131030]
-[New LWP 131029]
-[New LWP 131028]
-[New LWP 131027]
-[New LWP 131026]
-[New LWP 131025]
-[New LWP 131024]
-[New LWP 131019]
+decode_admission_check: WARNING: Not all layers offloaded to GPU (n_gpu_layers=20, n_layer=48). Performance may degrade.
+decode_admission_check: WARNING: KV cache is not fully offloaded to GPU. Performance may degrade.
+decode: Decode admission PASSED. GPU-exclusive path confirmed. Proceeding.
+decode: Token dependency chain assertions active (decode phase)
+decode: GPU-exclusive decode invariant enforced. Hybrid execution/CPU fallback disabled.
+decode: Task taxonomy active. All tasks classified as DECODE_CRITICAL or NON_CRITICAL.
+decode: Decode admission control active. Decode proceeds in GPU-exclusive mode.
+decode: Hard failure on decode-critical CPU execution active. CPU execution is forbidden.
+decode: Token dependency chain assertions active. CPU presence on token chain is fatal.
+WARNING: Decode-critical node embd (op: GET_ROWS) running on CPU.
+ggml_backend_sched_alloc_graph: Backend decisions frozen for decode-critical graph.
+WARNING: Decode graph contains CPU-resident tensors (check disabled).
+process_ubatch: Decode mode was not active during reuse. Re-activating.
+WARNING: Decode-critical node embd (op: GET_ROWS) scheduled on CPU at runtime.
+[DECODE ADMISSION] Initialized
+[DECODE CPU ENFORCEMENT] Mode: STRICT (abort on violation)
+[TOKEN CHAIN ASSERT] ENABLED (CPU on chain causes abort)
+[DECODE ADMISSION] Initialized
+[DECODE CPU ENFORCEMENT] Mode: STRICT (abort on violation)
+[TOKEN CHAIN ASSERT] ENABLED (CPU on chain causes abort)
+[DECODE ADMISSION GATE] Performing GPU-exclusive eligibility check...
+[ADMISSION ELIGIBILITY] ALL CRITERIA SATISFIED - GPU-exclusive execution guaranteed
+[DECODE ADMISSION GATE] PASSED - Decode is eligible for GPU-exclusive execution
+[DECODE ADMISSION] Locked - Backend selection frozen, decode proceeding GPU-only
+[TOKEN CHAIN ASSERT] Entering decode phase - assertions active
+ggml_backend_cuda_synchronize: WARNING: multiple sync points during decode (2) at /home/viren/llama/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3005 (check disabled)
+/home/viren/llama/llama.cpp/ggml/src/ggml-backend.cpp:426: DECODE STRUCTURE VIOLATION: Implicit device transfer of tensor 'embd' during decode mode.
+  Source buffer: CUDA_Host
+  Destination buffer: CUDA0
+  Mid-operation device crossing is forbidden.
+
+[New LWP 168436]
+[New LWP 168435]
+[New LWP 168434]
+[New LWP 168433]
+[New LWP 168432]
+[New LWP 168431]
+[New LWP 168430]
+[New LWP 168429]
+[New LWP 168428]
+[New LWP 168427]
+[New LWP 168426]
+[New LWP 168425]
+[New LWP 168424]
+[New LWP 168423]
+[New LWP 168422]
+[New LWP 168421]
+[New LWP 168416]
 
 This GDB supports auto-downloading debuginfo from the following URLs:
   <https://debuginfod.ubuntu.com>
@@ -207,19 +230,23 @@ Debuginfod has been disabled.
 To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-0x00007e1befb10813 in __GI___wait4 (pid=131096, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+0x00007be221910813 in __GI___wait4 (pid=168496, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
 warning: 30	../sysdeps/unix/sysv/linux/wait4.c: No such file or directory
-#0  0x00007e1befb10813 in __GI___wait4 (pid=131096, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
+#0  0x00007be221910813 in __GI___wait4 (pid=168496, stat_loc=0x0, options=0, usage=0x0) at ../sysdeps/unix/sysv/linux/wait4.c:30
 30	in ../sysdeps/unix/sysv/linux/wait4.c
-#1  0x00007e1bf015b69c in ggml_print_backtrace () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libggml-base.so.0
-#2  0x00007e1bf015b843 in ggml_abort () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libggml-base.so.0
-#3  0x00007e1bf0319411 in ?? () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libllama.so.0
-#4  0x00007e1bf0319441 in llama_decode () from /home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/libllama.so.0
-#5  0x0000561929160896 in ?? ()
-#6  0x00005619291008ff in ?? ()
-#7  0x00007e1befa2a1ca in __libc_start_call_main (main=main@entry=0x5619290fdd00, argc=argc@entry=22, argv=argv@entry=0x7ffd42f95eb8) at ../sysdeps/nptl/libc_start_call_main.h:58
+#1  0x00007be222b8c69c in ggml_print_backtrace () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libggml-base.so.0
+#2  0x00007be222b8c843 in ggml_abort () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libggml-base.so.0
+#3  0x00007be222ba3814 in ggml_backend_tensor_copy () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libggml-base.so.0
+#4  0x00007be222ba9f52 in ?? () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libggml-base.so.0
+#5  0x00007be222110d4d in llama_context::graph_compute(ggml_cgraph*, bool) () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libllama.so.0
+#6  0x00007be2221070af in llama_context::process_ubatch(llama_ubatch const&, llm_graph_type, llama_memory_context_i*, ggml_status&) () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libllama.so.0
+#7  0x00007be22210909d in llama_context::decode(llama_batch const&) () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libllama.so.0
+#8  0x00007be22211949e in llama_decode () from /home/viren/llama/llama.cpp/build_cuda_cublas_dense/bin/libllama.so.0
+#9  0x000064e378a1a896 in ?? ()
+#10 0x000064e3789ba8ff in ?? ()
+#11 0x00007be22182a1ca in __libc_start_call_main (main=main@entry=0x64e3789b7d00, argc=argc@entry=22, argv=argv@entry=0x7ffe4b54a6d8) at ../sysdeps/nptl/libc_start_call_main.h:58
 warning: 58	../sysdeps/nptl/libc_start_call_main.h: No such file or directory
-#8  0x00007e1befa2a28b in __libc_start_main_impl (main=0x5619290fdd00, argc=22, argv=0x7ffd42f95eb8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffd42f95ea8) at ../csu/libc-start.c:360
+#12 0x00007be22182a28b in __libc_start_main_impl (main=0x64e3789b7d00, argc=22, argv=0x7ffe4b54a6d8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7ffe4b54a6c8) at ../csu/libc-start.c:360
 warning: 360	../csu/libc-start.c: No such file or directory
-#9  0x0000561929106595 in ?? ()
-[Inferior 1 (process 131018) detached]
+#13 0x000064e3789c0595 in ?? ()
+[Inferior 1 (process 168415) detached]

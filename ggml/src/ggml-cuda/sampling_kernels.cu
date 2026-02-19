@@ -5,6 +5,7 @@
  *  - cuda_argmax_kernel
  *  - cuda_apply_penalties_kernel
  *  - cuda_softmax_kernel
+ *  - cuda_sample_categorical_kernel
  *
  * These are conservative, correct implementations intended as working
  * replacements until highly-optimized device-only kernels are added.
@@ -17,6 +18,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <curand_kernel.h>
 
 #include <algorithm>
 
@@ -425,6 +427,68 @@ int cuda_temperature_scale_kernel(float * d_logits,
     int blocks  = (vocab_size + threads - 1) / threads;
     blocks      = std::max(1, std::min(blocks, 1024));
     temperature_scale_kernel<<<blocks, threads, 0, stream>>>(d_logits, temperature, vocab_size);
+
+    return cudaGetLastError() == cudaSuccess ? 0 : -1;
+}
+
+// ----------------------------------------------------------------------------
+// Categorical Sampling (with in-place cumsum)
+// ----------------------------------------------------------------------------
+
+__global__ void categorical_sample_from_cumsum_kernel(const float *d_cumsum_probs,
+                                                      int32_t *    d_out_token,
+                                                      int32_t      vocab_size,
+                                                      uint64_t     seed) {
+    if (threadIdx.x == 0) {
+        // Deterministic random value from seed [0.0, 1.0)
+        curandState state;
+        curand_init(seed, 0, 0, &state);
+        float rnd = curand_uniform(&state);
+
+        // Binary search to find cutoff (where cumsum >= rnd)
+        int32_t left = 0, right = vocab_size;
+        
+        // Handling edge case where sum might not be exactly 1.0 due to precision,
+        // or rnd is very close to 1.0
+        // We assume last element is sum, which should be approx 1.0.
+        // If rnd > total_sum, we select last token.
+        
+        while (left < right) {
+            int32_t mid = (left + right) / 2;
+            if (d_cumsum_probs[mid] < rnd) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        int32_t selected_idx = left < vocab_size ? left : vocab_size - 1;
+        *d_out_token = selected_idx;
+    }
+}
+
+int cuda_sample_categorical_kernel(float *       d_probs,
+                                   int32_t *     d_out_token,
+                                   int32_t       vocab_size,
+                                   uint64_t      seed,
+                                   void *        cuda_stream) {
+    if (!d_probs || !d_out_token || vocab_size <= 0) {
+        return -1;
+    }
+
+    cudaStream_t stream = (cudaStream_t) cuda_stream;
+    if (stream == NULL) {
+        stream = 0;
+    }
+
+    // 1. In-place parallel prefix sum (Blelloch scan)
+    // d_probs is modified to become cumulative probabilities
+    if (cuda_prefix_sum(d_probs, vocab_size, stream) != 0) {
+        return -1;
+    }
+
+    // 2. Sample from cumulative distribution
+    categorical_sample_from_cumsum_kernel<<<1, 1, 0, stream>>>(d_probs, d_out_token, vocab_size, seed);
 
     return cudaGetLastError() == cudaSuccess ? 0 : -1;
 }

@@ -57,9 +57,9 @@ __global__ void cuda_topk_warp_kernel(
     int32_t       vocab_stride) {
     
     // One warp per logit vector (single token)
-    int lane = threadIdx.x % warpSize;
-    int warp_id = threadIdx.x / warpSize;
-    int block_warps = blockDim.x / warpSize;
+    int lane = threadIdx.x % 32;
+    int warp_id = threadIdx.x / 32;
+    int block_warps = blockDim.x / 32;
     // int total_warps = gridDim.x * block_warps;
     int warp_idx = blockIdx.x * block_warps + warp_id;
 
@@ -84,7 +84,7 @@ __global__ void cuda_topk_warp_kernel(
     
     // Scan vocabulary with grid-stride
     // int grid_size = blockDim.x * gridDim.x;
-    for (int32_t i = lane; i < n_vocab; i += warpSize) {
+    for (int32_t i = lane; i < n_vocab; i += 32) {
         float val = logits[i];
         
         // Insert into local top-k if larger than smallest current
@@ -134,7 +134,7 @@ __global__ void cuda_topk_warp_kernel(
     
     // ---- Stage 3: Shuffle merge across warp ----
     // Use ballot to synchronize
-    for (int stride = warpSize / 2; stride > 0; stride >>= 1) {
+    for (int stride = 32 / 2; stride > 0; stride >>= 1) {
         if (lane < k) {
             float other_val = __shfl_down_sync(0xFFFFFFFF, s_vals[lane], stride);
             int32_t other_ind = __shfl_down_sync(0xFFFFFFFF, s_inds[lane], stride);
@@ -264,7 +264,7 @@ int cuda_topk_kernel(const float * d_logits,
 
     if (k <= 32 && n_vocab <= 1024) {
         // Use warp-level kernel for small k
-        int block_size = warpSize;  // One warp per token
+        int block_size = 32;  // One warp per token
         cuda_topk_warp_kernel<<<1, block_size, shared_mem, stream>>>(
             d_logits, d_topk_vals, d_topk_inds, n_vocab, k, n_vocab);
     } else {
