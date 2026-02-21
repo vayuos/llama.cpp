@@ -2778,7 +2778,6 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         } else {
                             buft = overrides->buft;
                         }
-
                         LLAMA_LOG_DEBUG("tensor %s (%zu MiB %s) buffer type overridden to %s\n",
                                 tensor_name.c_str(),
                                 ggml_nbytes(t_meta) / 1024 / 1024, ggml_type_name(t_meta->type),

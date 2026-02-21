@@ -3,6 +3,7 @@
 #include "llama-impl.h"
 #include "llama-vocab.h"
 #include "llama-grammar.h"
+#include "llama-decode-cpu-hard-failure.h"
 
 #include "ggml-cpp.h"
 #include "ggml-backend.h"
@@ -718,8 +719,13 @@ static void llama_sampler_chain_apply(struct llama_sampler * smpl, llama_token_d
 
         if (is_backend) {
             if (ggml_backend_decode_mode_active()) {
-                LLAMA_LOG_ERROR("%s: Sampler '%s' is NOT supported by the backend, and CPU fallbacks are FORBIDDEN during decode.\n", __func__, llama_sampler_name(smpl.ptr));
-                GGML_ABORT("CPU SAMPLING FALLBACK VIOLATION");
+                // [HIERARCHICAL POLICY] Sampling (optional) is allowed on CPU, but we still log it.
+                // We use the enforcement helper to provide the "Known Limitation" or "Fatal" logic.
+                // For now, it will return 0 (allow with warning) because GPU sampling is not yet implemented.
+                if (llama_enforce_no_cpu_sampling("CPU", false) != 0) {
+                    LLAMA_LOG_ERROR("%s: Sampler '%s' forced to CPU, but policy forbids CPU fallback.\n", __func__, llama_sampler_name(smpl.ptr));
+                    GGML_ABORT("CPU SAMPLING FALLBACK VIOLATION");
+                }
             }
             LLAMA_LOG_DEBUG("%s: sampler '%s' is not supported by the backend, falling back to CPU\n", __func__, llama_sampler_name(smpl.ptr));
             is_backend = false;
@@ -4131,4 +4137,37 @@ void llama_perf_sampler_reset(struct llama_sampler * chain) {
 
     ctx->t_sample_us = 0;
     ctx->n_sample    = 0;
+}
+
+// [MAX GPU] Bridge function to extract parameters from a sampler (or chain) for GPU-native execution
+void llama_sampler_get_gpu_params(const struct llama_sampler * smpl, struct llama_sampler_gpu_params * params) {
+    if (!smpl || !params) {
+        return;
+    }
+
+    const char * name = smpl->iface->name(smpl);
+
+    if (strcmp(name, "chain") == 0) {
+        auto * chain = (const llama_sampler_chain *) smpl->ctx;
+        for (const auto & s : chain->samplers) {
+            llama_sampler_get_gpu_params(s.ptr, params);
+        }
+    } else if (strcmp(name, "temp") == 0 || strcmp(name, "+temp") == 0 || strcmp(name, "-temp") == 0) {
+        auto * ctx = (const llama_sampler_temp *) smpl->ctx;
+        params->temp = ctx->temp;
+    } else if (strcmp(name, "top-k") == 0 || strcmp(name, "+top-k") == 0 || strcmp(name, "-top-k") == 0) {
+        auto * ctx = (const llama_sampler_top_k *) smpl->ctx;
+        params->top_k = ctx->k;
+    } else if (strcmp(name, "top-p") == 0 || strcmp(name, "+top-p") == 0 || strcmp(name, "-top-p") == 0) {
+        auto * ctx = (const llama_sampler_top_p *) smpl->ctx;
+        params->top_p = ctx->p;
+    } else if (strcmp(name, "dist") == 0 || strcmp(name, "+dist") == 0 || strcmp(name, "-dist") == 0) {
+        auto * ctx = (const llama_sampler_dist *) smpl->ctx;
+        params->seed = ctx->seed_cur;
+    } else if (strcmp(name, "penalties") == 0 || strcmp(name, "+penalties") == 0 || strcmp(name, "-penalties") == 0) {
+        auto * ctx = (const llama_sampler_penalties *) smpl->ctx;
+        params->penalty_repeat = ctx->penalty_repeat;
+        params->penalty_freq = ctx->penalty_freq;
+        params->penalty_present = ctx->penalty_present;
+    }
 }

@@ -158,6 +158,12 @@ extern "C" {
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
+ 
+    enum llama_kv_precision {
+        LLAMA_KV_PRECISION_FP16 = 0,
+        LLAMA_KV_PRECISION_FP8  = 1,
+        LLAMA_KV_PRECISION_Q8   = 2,
+    };
 
     enum llama_rope_scaling_type {
         LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1,
@@ -355,6 +361,8 @@ extern "C" {
 
         enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
         enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
+ 
+        enum llama_kv_precision kv_precision; // KV cache precision
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted

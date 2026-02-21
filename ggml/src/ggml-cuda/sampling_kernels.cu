@@ -211,6 +211,70 @@ int cuda_apply_penalties_kernel(float *       d_logits,
     return cudaGetLastError() == cudaSuccess ? 0 : -1;
 }
 
+__global__ static void apply_penalties_optimized_internal(float *         logits,
+                                                          const int32_t * last_tokens,
+                                                          int32_t         n_vocab,
+                                                          int32_t         n_last,
+                                                          float           repeat_penalty,
+                                                          float           alpha_frequency,
+                                                          float           alpha_presence) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= n_last) {
+        return;
+    }
+
+    int32_t token = last_tokens[tid];
+    if (token < 0 || token >= n_vocab) {
+        return;
+    }
+
+    // Only the first occurrence maps to an update
+    for (int i = 0; i < tid; ++i) {
+        if (last_tokens[i] == token) {
+            return;
+        }
+    }
+
+    int count = 0;
+    for (int i = 0; i < n_last; ++i) {
+        if (last_tokens[i] == token) {
+            count++;
+        }
+    }
+
+    float logit = logits[token];
+    if (logit <= 0.0f) {
+        logit *= repeat_penalty;
+    } else {
+        logit /= repeat_penalty;
+    }
+
+    logit -= (float) count * alpha_frequency + (float) (count > 0) * alpha_presence;
+    logits[token] = logit;
+}
+
+int cuda_apply_penalties_optimized_kernel(float *         d_logits,
+                                          const int32_t * d_last_tokens,
+                                          int32_t         vocab_size,
+                                          int32_t         n_last,
+                                          float           repeat_penalty,
+                                          float           alpha_frequency,
+                                          float           alpha_presence,
+                                          void *          cuda_stream) {
+    if (!d_logits || !d_last_tokens || vocab_size <= 0 || n_last <= 0) {
+        return -1;
+    }
+    cudaStream_t stream = (cudaStream_t) cuda_stream;
+    
+    int threads = 128;
+    int blocks  = (n_last + threads - 1) / threads;
+    
+    apply_penalties_optimized_internal<<<blocks, threads, 0, stream>>>(
+        d_logits, d_last_tokens, vocab_size, n_last, repeat_penalty, alpha_frequency, alpha_presence);
+        
+    return cudaGetLastError() == cudaSuccess ? 0 : -1;
+}
+
 // ----------------------------------------------------------------------------
 // Softmax Implementation
 // ----------------------------------------------------------------------------

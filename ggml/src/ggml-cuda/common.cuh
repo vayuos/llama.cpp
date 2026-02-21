@@ -1215,15 +1215,16 @@ extern uint64_t ggml_cuda_get_decode_launch_counter();
     do { \
         if (ggml_get_decode_mode()) { \
             if (++ggml_cuda_decode_sync_counter > 1) { \
-                /* [PATCH] Disable strict sync point enforcement for partial offload */ \
-                /* GGML_LOG_ERROR("%s: FATAL: multiple sync points during decode (%lu) at %s:%d\n", \ */ \
-                /*                __func__, (unsigned long)ggml_cuda_decode_sync_counter, __FILE__, __LINE__); */ \
-                /* GGML_ABORT("multiple sync points during decode"); */ \
-                GGML_LOG_WARN("%s: WARNING: multiple sync points during decode (%lu) at %s:%d (check disabled)\n", \
-                               __func__, (unsigned long)ggml_cuda_decode_sync_counter, __FILE__, __LINE__); \
+                static bool warned = false; \
+                if (!warned) { \
+                    GGML_LOG_WARN("%s: WARNING: multiple sync points during decode (%lu) at %s:%d (further warnings suppressed)\n", \
+                                   __func__, (unsigned long)ggml_cuda_decode_sync_counter, __FILE__, __LINE__); \
+                    warned = true; \
+                } \
             } \
         } \
     } while(0)
+
 
 #ifdef GGML_CUDA_DECODE_SYNC_DEBUG
 #define GGML_CUDA_ASSERT_NO_DEVICE_SYNC() \

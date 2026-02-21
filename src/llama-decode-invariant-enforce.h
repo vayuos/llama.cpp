@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "../ggml/include/ggml.h"
+#include "../ggml/include/ggml-backend.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +23,7 @@ void llama_decode_invariant_init(void);
  * Enforce GPU exclusive invariant on the graph.
  * Returns 0 on success, non-zero on failure.
  */
-int llama_enforce_gpu_exclusive_invariant(struct ggml_cgraph * graph, struct llama_decode_invariant * invariant);
+int llama_enforce_gpu_exclusive_invariant(struct ggml_cgraph * graph, ggml_backend_sched_t sched, struct llama_decode_invariant * invariant);
 
 #ifdef __cplusplus
 }

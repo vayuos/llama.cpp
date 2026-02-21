@@ -79,6 +79,10 @@ struct llama_gpu_eligibility_criteria {
     bool backend_selection_frozen;              // Backend choices cannot change
     const char* backend_freeze_reason;          // Why backend is or isn't frozen
 
+    // Hierarchical Priority Info (for Advice)
+    int32_t current_n_ctx;                      // Current context size
+    int32_t current_n_batch;                    // Current batch size
+
     // Overall: All criteria met?
     bool all_criteria_satisfied;                // True only if all above are true
 };

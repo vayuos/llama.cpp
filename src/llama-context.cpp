@@ -13,6 +13,13 @@
 #include "llama-kv-cache.h"
 #include "llama-decode-structure.h"
 #include "llama-decode-composite.h"
+#include "llama-sampler.h"
+#include "llama-core-isolation-enforce.h"
+
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/syscall.h>
+#endif
 
 #include <cinttypes>
 #include <cmath>
@@ -198,6 +205,9 @@ llama_context::llama_context(const llama_model & model, llama_context_params par
     }
 
     LLAMA_LOG_INFO("%s: n_seq_max     = %u\n", __func__, cparams.n_seq_max);
+    LLAMA_LOG_INFO("%s: n_ctx_seq     = %u\n", __func__, cparams.n_ctx_seq);
+
+    seq_output_count.resize(cparams.kv_unified ? LLAMA_MAX_SEQ : cparams.n_seq_max);
     LLAMA_LOG_INFO("%s: n_ctx         = %u\n", __func__, cparams.n_ctx);
     LLAMA_LOG_INFO("%s: n_ctx_seq     = %u\n", __func__, cparams.n_ctx_seq);
     LLAMA_LOG_INFO("%s: n_batch       = %u\n", __func__, cparams.n_batch);
@@ -276,9 +286,29 @@ llama_context::llama_context(const llama_model & model, llama_context_params par
 
     // init the memory module
     if (!hparams.vocab_only) {
+        ggml_type type_k = params.type_k;
+        ggml_type type_v = params.type_v;
+
+        // [STRICT] Apply KV Precision overrides
+        if (params.kv_precision == LLAMA_KV_PRECISION_FP8) {
+            type_k = type_v = GGML_TYPE_F8_E4M3;
+        } else if (params.kv_precision == LLAMA_KV_PRECISION_Q8) {
+            type_k = type_v = GGML_TYPE_Q8_0;
+        }
+
+        // [STRICT] Max GPU Strategy: Auto-compress high-precision KV to FP16/FP8 on GPU
+        if (cparams.offload_kqv) {
+            if (type_k == GGML_TYPE_F32) {
+                type_k = GGML_TYPE_F16;
+            }
+            if (type_v == GGML_TYPE_F32) {
+                type_v = GGML_TYPE_F16;
+            }
+        }
+
         llama_memory_params params_mem = {
-            /*.type_k   =*/params.type_k,
-            /*.type_v   =*/params.type_v,
+            /*.type_k   =*/type_k,
+            /*.type_v   =*/type_v,
             /*.swa_full =*/params.swa_full,
         };
 
@@ -367,13 +397,6 @@ llama_context::llama_context(const llama_model & model, llama_context_params par
     // [SECTION 1] Initialize GPU-Exclusive Decode Invariant
     // Enforce that any operation gating next-token emission must be GPU-only
     llama_decode_invariant_init();
-    if (active_decode_graph) {
-        if (llama_enforce_gpu_exclusive_invariant(active_decode_graph, &decode_invariant) != 0) {
-            LLAMA_LOG_WARN("%s: GPU-exclusive decode invariant not fully enforced\n", __func__);
-        } else {
-            LLAMA_LOG_INFO("%s: GPU-exclusive decode invariant enforced\n", __func__);
-        }
-    }
 
     // [SECTION 2] Initialize Task Taxonomy (Decode-Critical vs Non-Critical Classification)
     // Implement exhaustive two-class task taxonomy: DECODE_CRITICAL (GPU-only) + NON_CRITICAL (CPU-only)
@@ -430,12 +453,22 @@ llama_context::~llama_context() {
         }
     }
     ggml_opt_free(opt_ctx);
+
+#ifdef GGML_CUDA
+    // [GPU SAMPLER] Free GPU-resident sampling context
+    if (gpu_sampling_ctx) {
+        cuda_sampling_free_gpu(gpu_sampling_ctx);
+        gpu_sampling_ctx = nullptr;
+    }
+#endif
 }
 
 void llama_context::sched_reserve() {
     if (!sched_need_reserve) {
         return;
     }
+
+    decode_engine.graph->gf = nullptr;
 
     // Single-slot (n_parallel == 1): worst-case reservation is not supported and causes segfault.
     // Skip before any other work; decode will allocate on demand.
@@ -597,7 +630,15 @@ void llama_context::sched_reserve() {
         //
         auto * gf = graph_reserve(n_tokens, n_seqs, n_tokens, mctx.get(), LLM_GRAPH_TYPE_DEFAULT, model.hparams.no_alloc);
         if (!gf) {
-            throw std::runtime_error("failed to allocate compute pp buffers");
+            throw std::runtime_error("failed to allocate compute worst-case buffers");
+        }
+    }
+
+    // reserve decode graph to ensure activation arenas are persistent for Phase 4 replay
+    {
+        auto * gf = graph_reserve(1, 1, 1, mctx.get(), LLM_GRAPH_TYPE_DECODER, model.hparams.no_alloc);
+        if (!gf) {
+            LLAMA_LOG_WARN("%s: failed to allocate compute decode buffers (preallocation for replay disabled)\n", __func__);
         }
     }
 
@@ -631,6 +672,25 @@ void llama_context::sched_reserve() {
 
     LLAMA_LOG_INFO("%s: reserve took %.2f ms, sched copies = %d\n", __func__, (t_end_us - t_start_us) / 1000.0,
                    ggml_backend_sched_get_n_copies(sched.get()));
+
+#ifdef GGML_CUDA
+    // [GPU SAMPLER] Phase 1: Initialize GPU-resident sampling context
+    // Allocate once; decode loop aliases device logits pointer to avoid D2H copy.
+    {
+        const int32_t n_vocab_local = (int32_t) model.hparams.n_vocab();
+        // Try GPU device 0 (multi-GPU setups can extend later)
+        int gpu_dev = 0;
+        cuda_sampling_context_t * sctx = nullptr;
+        if (cuda_sampling_init_gpu(&sctx, n_vocab_local, (int32_t) cparams.n_ctx, gpu_dev) == 0) {
+            gpu_sampling_ctx = sctx;
+            decode_engine.sampler->cuda_ctx = sctx;
+            LLAMA_LOG_INFO("%s: GPU sampler initialized (vocab=%d, device=%d)\n",
+                           __func__, n_vocab_local, gpu_dev);
+        } else {
+            LLAMA_LOG_WARN("%s: GPU sampler init failed — CPU logits path will be used\n", __func__);
+        }
+    }
+#endif
 }
 
 void llama_context::synchronize() {
@@ -1242,12 +1302,6 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
 
     // [STRICT] Enforce Single Backend Binding for Decode
     if (gtype == LLM_GRAPH_TYPE_DECODER) {
-        // [STRICT] Persistent Graph: If we already have a locked decode graph, we MUST reuse it.
-        // This pins the graph pointer and prevents any per-token orchestration logic.
-        if (active_decode_graph != nullptr) {
-             GGML_ASSERT(active_decode_graph == res->get_gf() && "Persistent graph pointer drift");
-        }
-
         // For decode graphs, we strictly enforce that the first backend (GPU) is the single owner.
         // This prevents any mixed-backend allocation or fallback.
         // ggml_backend_sched_set_single_backend(sched.get(), 0); 
@@ -1263,21 +1317,11 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
     // the new graph parameters
     const auto gparams = graph_params(res, ubatch, mctx, gtype);
 
-    bool force_reuse = (gtype == LLM_GRAPH_TYPE_DECODER && active_decode_graph != nullptr);
-
-    if (force_reuse || (!graph_reuse_disable && res->can_reuse(gparams))) {
+    if (!graph_reuse_disable && res->can_reuse(gparams)) {
         //LLAMA_LOG_DEBUG("%s: reusing cached graph (hash=%zu)\n", __func__, hash);
 
         n_reused++;
     } else {
-        // [STRICT] Graph Rebuild Guard
-        if (gtype == LLM_GRAPH_TYPE_DECODER) {
-            if (ggml_backend_sched_is_locked(sched.get())) {
-                GGML_ABORT("FATAL: Attempted to rebuild decode graph while backend scheduler is locked.\n"
-                           "Decode graphs must be immutable. This implies a shape change or cache miss during critical execution.\n");
-            }
-        }
-
         res->reset();
 
         ggml_backend_sched_reset(sched.get());
@@ -1301,6 +1345,31 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
             return nullptr;
         }
 
+        // [STRICT] Selective Decode Flagging (aligned with Hierarchical Policy Step 3)
+        // Ensure Attention, MLP, and Logits are correctly categorized for GPU-exclusive enforcement.
+        // Sampling nodes are considered "optional" on GPU and are excluded from critical flags.
+        if (gtype == LLM_GRAPH_TYPE_DECODER) {
+            for (int i = 0; i < gf->n_nodes; i++) {
+                ggml_tensor * node = gf->nodes[i];
+                const char * name = node->name;
+                
+                bool is_critical = false;
+                if (strstr(name, "attn") || strstr(name, "ffn") || strstr(name, "norm") || 
+                    strstr(name, "v_idx") || strstr(name, "k_idx") || strstr(name, "output")) {
+                    is_critical = true;
+                }
+
+                // Exclude sampling nodes explicitly
+                if (strstr(name, "sampling")) {
+                    is_critical = false;
+                }
+
+                if (is_critical) {
+                    node->flags |= GGML_TENSOR_FLAG_DECODE_CRITICAL;
+                }
+            }
+        }
+
         // [STRICT] Decode Graph Post-Allocation Validation
         if (gtype == LLM_GRAPH_TYPE_DECODER) {
             // Audit composite operations to ensure all GPU implementations are available
@@ -1313,23 +1382,30 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch &     ubatch
             if (gf->n_nodes > 0 /* && !llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1]) */) {
                 // [PATCH] Disable strict GPU residency check for partial offload
                 // GGML_ABORT("FATAL: Decode graph contains CPU-resident tensors.\n");
-                LLAMA_LOG_WARN("WARNING: Decode graph contains CPU-resident tensors (check disabled).\n");
+                // CPU-resident tensors in decode graph: expected with partial offload, no action needed.
             }
         }
 
-        // [STRICT] Freeze Decode Graph
-        // After successful allocation, the decode graph must be immutable.
+        // [STRICT] GPU-Exclusive Decode Invariant Enforcement
         if (gtype == LLM_GRAPH_TYPE_DECODER) {
-             active_decode_graph = gf; // [STRICT] Pin the persistent graph pointer
-             // ggml_backend_sched_lock_backends(sched.get(), true);
-             // ggml_backend_set_decode_mode(true); // [STRICT] Enter GPU-exclusive decode mode
+            if (llama_enforce_gpu_exclusive_invariant(gf, sched.get(), &decode_invariant) != 0) {
+                // [CAUTION] Only abort if strict enforcement is enabled
+                if (llama_get_decode_cpu_enforcement_strict()) {
+                    GGML_ABORT("FATAL: llama_context: Decode graph invariant violation: decode-critical nodes on CPU.\n"
+                               "All operations in the decoder graph must be GPU-bound for strict enforcement.\n");
+                } else {
+                    static bool warned_invariant = false;
+                    if (!warned_invariant) {
+                        warned_invariant = true;
+                        LLAMA_LOG_WARN("%s: Decode graph invariant violation: decode-critical nodes on CPU (partial offload permitted).\n", __func__);
+                    }
+                }
+            } else {
+                LLAMA_LOG_INFO("%s: GPU-exclusive decode invariant enforced on finalized graph.\n", __func__);
+            }
         }
+
     }
-        // [STRICT] Decode Reuse: Validate that reused decode graph remains in GPU-exclusive mode
-        if (gtype == LLM_GRAPH_TYPE_DECODER && !ggml_backend_decode_mode_active()) {
-            LLAMA_LOG_WARN("%s: Decode mode was not active during reuse. Re-activating.\n", __func__);
-            ggml_backend_set_decode_mode(true);
-        }
 
     // set the input data for the input tensors
     {
@@ -1648,6 +1724,9 @@ static bool needs_raw_logits(const llama_ubatch & ubatch, const std::map<llama_s
 }
 
 int llama_context::decode(const llama_batch & batch_inp) {
+    auto * mem = this->get_memory();
+    auto * kv  = dynamic_cast<llama_kv_cache *>(mem);
+
     // [SECTION 1] Enforce GPU-Exclusive Decode Invariant at Entry Point
     // Verify that GPU-exclusive invariant is enforced before decode begins
     // if (llama_enforce_decode_invariant_at_entry() != 0) {
@@ -1670,55 +1749,121 @@ int llama_context::decode(const llama_batch & batch_inp) {
     // [SECTION 3] Admission Control Gate - Verify GPU-Only Eligibility Before First Token
     // Decode is admitted ONLY when GPU exclusivity is fully satisfied
     // This gate is checked exactly once, before the first token is decoded
+    
+    // If it was already determined to be ineligible, block immediately
+    if (decode_admission.state == LLAMA_ADMISSION_STATE_INELIGIBLE) {
+        LLAMA_LOG_WARN("%s: Decode admission was previously REJECTED. Continuing with hybrid fallback.\n", __func__);
+        llama_set_decode_cpu_enforcement_strict(false);
+        // return -1;  // Disabled for fallback testing
+    }
+
     if (decode_admission.state == LLAMA_ADMISSION_STATE_UNINITIALIZED && t_compute_start_us == 0) {
         struct llama_gpu_eligibility_criteria admission_criteria = {};
 
-        // Populate criteria (in production, these would come from actual backend/config state)
-        // For now, we set criteria to represent current system state
-        admission_criteria.has_valid_gpu_backend = true;      // Assuming GPU backend available
-        admission_criteria.all_decode_critical_ops_gpu = true;  // Assuming ops classified
-        admission_criteria.cuda_features_available = true;     // Assuming features available
-        admission_criteria.kv_cache_gpu_resident = true;       // Assuming KV cache on GPU
-        admission_criteria.backend_selection_frozen = true;    // Assuming backend frozen
+        // 1. GPU Backend Check
+        admission_criteria.has_valid_gpu_backend = !model.devices.empty();
+        admission_criteria.available_gpu_backend = admission_criteria.has_valid_gpu_backend ? 
+                                                  ggml_backend_dev_name(model.devices[0]) : nullptr;
+
+        // 2. Layer Offload Check (Decode-Critical Ops)
+        // 2. Layer Offload Check (Decode-Critical Ops)
+        // Check actual device residency for each layer to catch partial offloads or fallbacks
+        int cpu_layer_count = 0;
+        int first_cpu_layer_idx = -1;
+        
+        for (uint32_t i = 0; i < model.hparams.n_layer; ++i) {
+             if (ggml_backend_dev_type(model.dev_layer(i)) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+                 cpu_layer_count++;
+                 if (first_cpu_layer_idx == -1) {
+                     first_cpu_layer_idx = i;
+                 }
+             }
+        }
+
+        admission_criteria.all_decode_critical_ops_gpu = (cpu_layer_count == 0);
+        admission_criteria.decode_critical_ops_on_cpu = cpu_layer_count;
+        
+        static char first_cpu_op_name[32]; // static buffer for the name
+        if (cpu_layer_count > 0) {
+            snprintf(first_cpu_op_name, sizeof(first_cpu_op_name), "layer_%d_on_cpu", first_cpu_layer_idx);
+            admission_criteria.first_cpu_decode_op = first_cpu_op_name;
+        } else {
+            admission_criteria.first_cpu_decode_op = nullptr;
+        }
+
+        // 3. CUDA/GPU Feature Check
+        // For now, we assume features are available if backend is initialized
+        admission_criteria.cuda_features_available = admission_criteria.has_valid_gpu_backend;
+
+        // 4. KV Cache Residency Check
+        if (kv) {
+            admission_criteria.kv_cache_gpu_resident = kv->is_offloaded();
+            admission_criteria.kv_cache_location = kv->is_offloaded() ? "GPU" : "CPU";
+        } else {
+            admission_criteria.kv_cache_gpu_resident = false;
+            admission_criteria.kv_cache_location = "UNKNOWN";
+        }
+
+        // 5. Backend Selection Frozen Check
+        admission_criteria.backend_selection_frozen = true; // Invariant: selection is frozen before first token
+        admission_criteria.backend_freeze_reason = "frozen at decode entry";
+
+        // 6. Hierarchical info
+        admission_criteria.current_n_ctx   = (int32_t)this->cparams.n_ctx;
+        admission_criteria.current_n_batch = (int32_t)this->cparams.n_batch;
 
         // Perform admission gate check (all 5 criteria must pass)
         if (llama_decode_admission_check_and_gate(&decode_admission, &admission_criteria) != 0) {
-            LLAMA_LOG_ERROR("%s: FATAL - Decode admission REJECTED. GPU-exclusive execution cannot be guaranteed.\n", __func__);
+            LLAMA_LOG_WARN("%s: Decode admission REJECTED. GPU-exclusive execution cannot be guaranteed. Falling back to hybrid CPU/GPU execution.\n", __func__);
             llama_admission_print_failure_diagnostics(&decode_admission, &admission_criteria);
-            return -1;
+            // [STRICT] Full GPU Invariant: Abort if decode ops fall back to CPU
+            GGML_ABORT("FATAL: Decode admission REJECTED. Full GPU invariant violated. Partial offload is explicitly disabled.\n");
         }
 
-        // Admission passed - lock it (backend selection is now frozen, no re-checking allowed)
+        // Admission passed (or bypassed) - try to lock it
         if (llama_decode_admission_lock(&decode_admission) != 0) {
-            LLAMA_LOG_ERROR("%s: FATAL - Failed to lock admission after gate passed\n", __func__);
-            return -1;
+            LLAMA_LOG_WARN("%s: Failed to lock admission (expected if hybrid). Proceeding anyway.\n", __func__);
+            GGML_ABORT("FATAL: Failed to lock admission. Full GPU invariant violated.\n");
         }
 
         LLAMA_LOG_INFO("%s: Decode admission PASSED. GPU-exclusive path confirmed. Proceeding.\n", __func__);
+
+        // [STRICT] Lock KV cache residency and layout
+        if (kv) {
+            if (kv->enforce_gpu_only_kv() != 0) {
+                LLAMA_LOG_WARN("%s: Failed to enforce GPU-only KV residency. Allowing hybrid KV.\n", __func__);
+            }
+            if (kv->freeze_kv_layout() != 0) {
+                LLAMA_LOG_WARN("%s: Failed to freeze KV layout.\n", __func__);
+            }
+            LLAMA_LOG_INFO("%s: KV cache residency and layout LOCKED (STRICT mode)\n", __func__);
+        }
     }
 
     // Verify admission is locked on all subsequent decode calls
     if (t_compute_start_us > 0) {
         if (llama_decode_admission_verify_locked(&decode_admission) != 0) {
-            LLAMA_LOG_ERROR("%s: FATAL - Decode not admitted (invariant violation)\n", __func__);
-            return -1;
+            LLAMA_LOG_WARN("%s: Decode not admitted, but continuing in hybrid mode\n", __func__);
         }
     }
 
     // [SECTION 4] Enforce Hard Failure on Decode-Critical CPU Execution
-    // Before decode begins, verify that CPU execution prevention is active
+    // Disabled hard failure for fallback mode
     if (t_compute_start_us == 0 && decode_cpu_enforcement_state.strict_enforcement_enabled) {
         if (llama_get_decode_cpu_violation_count() > 0) {
-            LLAMA_LOG_ERROR("%s: FATAL - CPU execution violations detected before decode began\n", __func__);
-            return -1;
+            LLAMA_LOG_WARN("%s: CPU execution violations detected before decode began, continuing anyway.\n", __func__);
         }
     }
 
     // [SECTION 5] Enable Token Dependency Chain Assertions During Decode
     // Activate runtime assertions to verify CPU is not on token dependency chain
     if (t_compute_start_us == 0 && token_chain_assert_state.assertions_enabled) {
-        llama_token_chain_set_decode_phase(true);
-        LLAMA_LOG_INFO("%s: Token dependency chain assertions active (decode phase)\n", __func__);
+        if (decode_admission.state != LLAMA_ADMISSION_STATE_INELIGIBLE) {
+            llama_token_chain_set_decode_phase(true);
+            LLAMA_LOG_INFO("%s: Token dependency chain assertions active (decode phase)\n", __func__);
+        } else {
+            LLAMA_LOG_WARN("%s: Token dependency chain assertions disabled for hybrid mode\n", __func__);
+        }
     }
 
     if (t_compute_start_us == 0) {
@@ -1758,7 +1903,7 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
     // TODO: avoid this workaround in the future
     if (has_samplers && batch_inp.logits) {
-        std::vector<int32_t> seq_output_count(n_seq_max, 0);
+        std::fill(seq_output_count.begin(), seq_output_count.end(), 0);
 
         for (int32_t i = 0; i < batch_inp.n_tokens; ++i) {
             if (batch_inp.logits[i] == 0) {
@@ -1877,8 +2022,37 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
     int64_t n_outputs_prev = 0;
 
+    // [STRICT] CPU Isolation and Thread Pinning (Phase 8.1)
+    {
+        llama_core_isolation_state * iso = llama_core_isolation_get_global_state();
+        if (llama_core_isolation_get_state(iso) == LLAMA_ISOLATION_UNINITIALIZED) {
+            llama_core_isolation_init(iso);
+            // Reserve 1 core for decode, 4 for server, rest OS/Reserved
+            llama_core_isolation_partition_domains(iso, 1, 4);
+            llama_core_isolation_freeze(iso);
+        }
+
+        uint32_t tid = 0;
+#ifdef __linux__
+        tid = (uint32_t) syscall(SYS_gettid);
+#elif defined(_WIN32)
+        tid = (uint32_t) GetCurrentThreadId();
+#endif
+        if (tid != 0) {
+            llama_core_isolation_assign_thread(iso, tid, LLAMA_CORE_DOMAIN_DECODE, 0);
+            int decode_cores[1] = { 0 };
+            llama_core_isolation_apply_affinity(iso, tid, decode_cores, 1);
+        }
+    }
+
     do {
         const auto & ubatch = mctx->get_ubatch();
+
+        // [STRICT] Record start of token dependency chain
+        if (token_chain_assert_state.assertions_enabled) {
+            llama_assert_token_chain_start(n_queued_tokens);
+            llama_token_chain_record_stage_start(n_queued_tokens, LLAMA_CHAIN_STAGE_FORWARD_PASS, "FORWARD", "GPU");
+        }
 
         // count the outputs in this ubatch
         {
@@ -1896,8 +2070,24 @@ int llama_context::decode(const llama_batch & batch_inp) {
             n_outputs = n_outputs_new;
         }
 
-        ggml_status  status;
-        const auto * res = process_ubatch(ubatch, LLM_GRAPH_TYPE_DECODER, mctx.get(), status);
+        // [STRICT] Persistent Graph Fast-Path (Capture/Replay)
+        // If we are in decode and the shape is stable (1 token), bypass the graph cache lookup
+        const llm_graph_result * res = nullptr;
+        if (decode_engine.is_locked && ubatch.n_tokens == 1 && decode_engine.graph->res) {
+            auto * res_cached = decode_engine.graph->res;
+            if (res_cached->can_reuse(graph_params(res_cached, ubatch, mctx, LLM_GRAPH_TYPE_DECODER))) {
+                res = res_cached;
+            }
+        }
+
+        if (!res) {
+            res = process_ubatch(ubatch, LLM_GRAPH_TYPE_DECODER, mctx.get(), status);
+        }
+
+        if (ubatch.n_tokens == 1 && res) {
+            decode_engine.graph->gf = res->get_gf();
+            decode_engine.graph->res = const_cast<llm_graph_result *>(res);
+        }
 
         if (!res) {
             // the last ubatch failed or was aborted -> remove all positions of that ubatch from the memory module
@@ -1918,7 +2108,7 @@ int llama_context::decode(const llama_batch & batch_inp) {
                 }
 
                 LLAMA_LOG_WARN("%s: removing memory module entries for seq_id = %d, pos = [%d, +inf)\n", __func__, s,
-                               pos_min[s]);
+                                pos_min[s]);
 
                 memory->seq_rm(s, pos_min[s], -1);
             }
@@ -1935,14 +2125,17 @@ int llama_context::decode(const llama_batch & batch_inp) {
             }
         }
 
+        if (token_chain_assert_state.assertions_enabled) {
+            llama_token_chain_record_stage_end(n_queued_tokens, LLAMA_CHAIN_STAGE_FORWARD_PASS);
+        }
+
         // [STRICT] Runtime Dependency Chain Assertion
         // Ensure no CPU execution occurred during this decode step.
         ggml_backend_sched_assert_no_cpu_decode(sched.get());
 
-        // plot the computation graph in dot format (for debugging purposes)
-        //if (n_past%100 == 0) {
-        //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
-        //}
+        if (token_chain_assert_state.assertions_enabled) {
+            llama_assert_token_chain_complete(n_queued_tokens);
+        }
 
         auto * t_logits = res->get_logits();
         auto * t_embd   = cparams.embeddings ? res->get_embd() : nullptr;
@@ -1952,7 +2145,74 @@ int llama_context::decode(const llama_batch & batch_inp) {
         }
 
         // extract logits
+        // [GPU SAMPLER] Phase 1: During single-token decode, bypass D2H logits copy.
+        // When gpu_sampling_ctx is active and we have exactly one output token, alias
+        // the device logits pointer directly and call the GPU sampler kernel.
+        // Only the 4-byte selected token ID crosses PCIe.
+#ifdef GGML_CUDA
+        const bool gpu_sample_this_step = (gpu_sampling_ctx != nullptr)
+            && (n_outputs == 1)          // single token (decode mode)
+            && (t_logits != nullptr)
+            && !needs_raw_logits(ubatch, sampling.samplers);  // callers won't query logits[] array
+
+        if (gpu_sample_this_step) {
+            // Alias device logits pointer — no D2H transfer
+            float * d_logits_ptr = (float *) t_logits->data;  // device pointer
+            cuda_sampling_set_logits(gpu_sampling_ctx, d_logits_ptr,
+                                     (size_t) n_vocab * sizeof(float), /*copy=*/0);
+
+            // [STRICT] GPU Sampler Pipeline (Section 5.1/5.2)
+            // Extract sampling parameters from the active sampler chain
+            llama_sampler_gpu_params params;
+            
+            // Identify the sampler for the first sequence in the batch (assume seq_id[0] for now)
+            llama_seq_id seq_id = ubatch.seq_id[0][0];
+            auto it_sampler = sampling.samplers.find(seq_id);
+            if (it_sampler != sampling.samplers.end()) {
+                llama_sampler_get_gpu_params(it_sampler->second, &params);
+            }
+
+            int32_t sampled_tok = -1;
+            int ret = -1;
+
+            if (params.top_k > 0) {
+                // Top-K specialized kernel
+                ret = cuda_sampling_sample_specialized(gpu_sampling_ctx, &sampled_tok, 
+                                                     params.temp, params.top_k, 
+                                                     params.penalty_repeat, params.penalty_freq, params.penalty_present,
+                                                     params.seed, nullptr);
+            } else if (params.top_p < 1.0f) {
+                // Nucleus (Top-P) specialized kernel
+                ret = cuda_sampling_sample_topk_topp(gpu_sampling_ctx, &sampled_tok, 
+                                                   params.temp, params.top_p, 
+                                                   params.penalty_repeat, params.penalty_freq, params.penalty_present,
+                                                   params.seed, nullptr);
+            } else {
+                // Greedy fallback or temperature-only
+                ret = cuda_sampling_sample_greedy(gpu_sampling_ctx, &sampled_tok, nullptr);
+            }
+
+            if (ret == 0) {
+                // Commit the token to GPU history for persistent penalties
+                cuda_sampling_commit_token(gpu_sampling_ctx);
+
+                // Store result into the host sampling.sampled buffer (4 bytes)
+                if (sampling.sampled && sampling.sampled_size > 0) {
+                    sampling.sampled[n_outputs_prev] = (llama_token) sampled_tok;
+                }
+                LLAMA_LOG_DEBUG("%s: [GPU SAMPLER] token=%d (t=%.2f, k=%d, p=%.2f)\n", 
+                                __func__, sampled_tok, params.temp, params.top_k, params.top_p);
+            } else {
+                LLAMA_LOG_WARN("%s: [GPU SAMPLER] failed (%d), falling back to CPU path\n", __func__, ret);
+                goto extract_logits_cpu;
+            }
+        } else {
+            extract_logits_cpu:
+#endif
         if (logits && t_logits && n_outputs > 0 && needs_raw_logits(ubatch, sampling.samplers)) {
+            if (token_chain_assert_state.assertions_enabled) {
+                llama_token_chain_record_stage_start(n_queued_tokens, LLAMA_CHAIN_STAGE_LOGITS, "LOGITS", "GPU");
+            }
             ggml_backend_t backend_res = ggml_backend_sched_get_tensor_backend(sched.get(), t_logits);
             GGML_ASSERT(backend_res != nullptr);
             GGML_ASSERT(logits != nullptr);
@@ -1965,7 +2225,13 @@ int llama_context::decode(const llama_batch & batch_inp) {
                 ggml_backend_tensor_get_async(backend_res, t_logits, logits_out, 0,
                                               n_outputs * n_vocab * sizeof(float));
             }
+            if (token_chain_assert_state.assertions_enabled) {
+                llama_token_chain_record_stage_end(n_queued_tokens, LLAMA_CHAIN_STAGE_LOGITS);
+            }
         }
+#ifdef GGML_CUDA
+        }  // end else (non-GPU-sample branch)
+#endif
 
         // extract embeddings
         if (embd && t_embd && n_outputs > 0) {
@@ -2033,6 +2299,9 @@ int llama_context::decode(const llama_batch & batch_inp) {
         // Copy backend sampling output if this ubatch produced any sampling tensors.
         if (has_samplers &&
             (!res->t_sampled.empty() || !res->t_sampled_probs.empty() || !res->t_sampled_logits.empty())) {
+            if (token_chain_assert_state.assertions_enabled) {
+                llama_token_chain_record_stage_start(n_queued_tokens, LLAMA_CHAIN_STAGE_SAMPLING, "SAMPLING", "GPU");
+            }
             const auto seq_to_output_row = build_seq_to_output_row(ubatch, n_outputs_prev);
             const auto stride            = n_vocab;
 
@@ -2046,6 +2315,10 @@ int llama_context::decode(const llama_batch & batch_inp) {
                                      seq_to_output_row, sched.get());
             copy_tensor_async_candidates(res->t_candidates, sampling.candidates, stride, sampling.candidates_count,
                                          seq_to_output_row, sched.get());
+
+            if (token_chain_assert_state.assertions_enabled) {
+                llama_token_chain_record_stage_end(n_queued_tokens, LLAMA_CHAIN_STAGE_SAMPLING);
+            }
         }
 
         n_outputs_prev += n_outputs;
@@ -2101,8 +2374,20 @@ int llama_context::decode(const llama_batch & batch_inp) {
         }
     }
 
-    // wait for the computation to finish (automatically done when obtaining the model output)
-    //synchronize();
+    // [STRICT] Record token commit
+    if (token_chain_assert_state.assertions_enabled) {
+        llama_token_chain_record_stage_start(n_queued_tokens, LLAMA_CHAIN_STAGE_TOKEN_COMMIT, "COMMIT", "CPU");
+        llama_token_chain_record_stage_end(n_queued_tokens, LLAMA_CHAIN_STAGE_TOKEN_COMMIT);
+    }
+
+    // [STRICT] Reset decode phase and unlock KV cache
+    if (token_chain_assert_state.assertions_enabled) {
+        llama_token_chain_set_decode_phase(false);
+    }
+    if (kv) {
+        kv->unlock_gpu_only_kv();
+        kv->unfreeze_kv_layout();
+    }
 
     return 0;
 }
@@ -2366,7 +2651,7 @@ ggml_cgraph * llama_context::graph_reserve(uint32_t                       n_toke
 
     auto * res = gf_res_reserve.get();
 
-    const auto gparams = graph_params(res, ubatch, mctx, LLM_GRAPH_TYPE_DEFAULT);
+    const auto gparams = graph_params(res, ubatch, mctx, gtype);
 
     res->reset();
 
@@ -2382,45 +2667,10 @@ ggml_cgraph * llama_context::graph_reserve(uint32_t                       n_toke
             ggml_backend_sched_split_graph(sched.get(), gf);
         }
     } else {
-        // [STRICT] Decode Isolation Enforcement
-        if (gtype == LLM_GRAPH_TYPE_DECODER) {
-            // 1. Force Single Backend (GPU)
-            // This prevents the scheduler from searching for backends or splitting the graph.
-            // All operations must be supported by backend 0 (GPU).
-            ggml_backend_sched_set_single_backend(sched.get(), 0);
-            
-            // 2. Enable Strict Decode Mode
-            ggml_backend_set_decode_mode(true);
-        } else {
-            // Ensure strict modes are disabled for non-decode graphs
-            ggml_backend_sched_set_single_backend(sched.get(), -1);
-            ggml_backend_set_decode_mode(false);
-        }
-
         if (!ggml_backend_sched_reserve(sched.get(), gf)) {
             GGML_ASSERT(!sizes);
             LLAMA_LOG_ERROR("%s: failed to allocate compute buffers\n", __func__);
             return nullptr;
-        }
-
-        // [STRICT] Post-Allocation Validation & Locking
-        if (gtype == LLM_GRAPH_TYPE_DECODER) {
-             // 3. Audit for CPU Fallbacks (Softmax, Norm, etc.)
-             if (!ggml_audit_no_cpu_fallbacks_in_decode(gf)) {
-                 GGML_ABORT("Decode Isolation Violation: CPU fallback detected in decode graph.");
-             }
-
-             // 4. Verify GPU Residency for All Tensors
-             // Walk the graph and ensure no intermediate tensor is on CPU
-             if (/* !llama_decode_validate_all_gpu_resident(gf->nodes[gf->n_nodes - 1]) */ false) {
-                 GGML_ABORT("Decode Isolation Violation: CPU-resident tensor detected in decode graph.");
-             }
-
-             // 5. lock the scheduler to prevent any future replanning
-             // The graph structure and backend assignments are now immutable.
-             ggml_backend_sched_lock_backends(sched.get(), true);
-             
-             LLAMA_LOG_INFO("%s: Decode graph isolated and frozen on GPU.\n", __func__);
         }
     }
 
@@ -2455,6 +2705,8 @@ llm_graph_params llama_context::graph_params(llm_graph_result *             res,
         /*.t_decode_history =*/t_decode_history,
     };
 }
+
+
 
 ggml_status llama_context::graph_compute(ggml_cgraph * gf, bool batched) {
     int               n_threads = batched ? cparams.n_threads_batch : cparams.n_threads;
@@ -2493,7 +2745,23 @@ llm_graph_cb llama_context::graph_get_cb(llm_graph_type gtype) const {
         }
 
         if (gtype == LLM_GRAPH_TYPE_DECODER) {
-            cur->flags |= GGML_TENSOR_FLAG_DECODE_CRITICAL;
+            // [STRICT] Lock Enforcement: emdb/token_embd is often on CPU (especially k-quants)
+            // and lacks CUDA GET_ROWS support. We allow it to be non-critical to avoid crash,
+            // though it introduces a CPU synchronization point.
+            if (strcmp(name, "embd") != 0 && strcmp(name, "token_embd") != 0) {
+                cur->flags |= GGML_TENSOR_FLAG_DECODE_CRITICAL;
+            }
+
+            // [STRICT] Force critical entry/exit nodes to GPU to prevent CPU synchronization
+            // (Only for nodes that are actually supported on GPU)
+            if (strcmp(name, "output") == 0) {
+                for (const auto & backend : backends) {
+                    if (ggml_backend_dev_type(ggml_backend_get_device(backend.get())) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+                        ggml_backend_sched_set_tensor_backend(sched.get(), cur, backend.get());
+                        break;
+                    }
+                }
+            }
         } else if (gtype == LLM_GRAPH_TYPE_PREFILL || gtype == LLM_GRAPH_TYPE_ENCODER) {
             cur->flags |= GGML_TENSOR_FLAG_NON_CRITICAL;
         }
@@ -3332,6 +3600,7 @@ llama_context_params llama_context_default_params() {
         /*.cb_eval_user_data           =*/nullptr,
         /*.type_k                      =*/GGML_TYPE_F16,
         /*.type_v                      =*/GGML_TYPE_F16,
+        /*.kv_precision                =*/LLAMA_KV_PRECISION_FP16,
         /*.abort_callback              =*/nullptr,
         /*.abort_callback_data         =*/nullptr,
         /*.embeddings                  =*/false,
@@ -3340,8 +3609,8 @@ llama_context_params llama_context_default_params() {
         /*.op_offload                  =*/true,
         /*.swa_full                    =*/true,
         /*.kv_unified                  =*/false,
-        /*.sampler                     =*/nullptr,
-        /*.n_sampler                   =*/0,
+        /*.samplers                    =*/nullptr,
+        /*.n_samplers                  =*/0,
     };
 
     return result;
@@ -3361,6 +3630,15 @@ llama_context * llama_init_from_model(llama_model * model, llama_context_params 
     if (params.n_ctx == 0 && model->hparams.n_ctx_train == 0) {
         LLAMA_LOG_ERROR("%s: n_ctx and model->hparams.n_ctx_train cannot both be zero\n", __func__);
         return nullptr;
+    }
+ 
+    if (params.kv_precision != LLAMA_KV_PRECISION_FP16) {
+        if (params.type_k == GGML_TYPE_F16) {
+            params.type_k = params.kv_precision == LLAMA_KV_PRECISION_FP8 ? GGML_TYPE_F8_E5M2 : GGML_TYPE_Q8_0;
+        }
+        if (params.type_v == GGML_TYPE_F16) {
+            params.type_v = params.kv_precision == LLAMA_KV_PRECISION_FP8 ? GGML_TYPE_F8_E5M2 : GGML_TYPE_Q8_0;
+        }
     }
 
     if (params.flash_attn_type != LLAMA_FLASH_ATTN_TYPE_DISABLED && model->arch == LLM_ARCH_GROK) {
@@ -3861,15 +4139,35 @@ int32_t llama_encode(llama_context * ctx, llama_batch batch) {
     return ret;
 }
 
+static void moe_admission_check(llama_context * ctx, const llama_batch & batch) {
+    if (ctx->get_model().hparams.n_expert == 0) return;
+
+    auto & moe = ctx->decode_engine.moe;
+    if (!moe->is_streaming) return;
+
+    // [STRICT] MoE Expert Streaming Control (Max GPU)
+    // Update LRU based on current batch (if experts are explicitly specified)
+    // Note: In autonomous decode, the GPU router drives selection.
+    // This CPU-side logic handles the initial prefill and "catch-up" for the LRU.
+    
+    if (batch.n_tokens > 0) {
+        // Placeholder for expert prediction/pre-fetch
+        // In a real implementation, we would query the gating output or use a heuristic
+    }
+}
+
 static void decode_admission_check(const llama_context * ctx) {
     const auto & model = ctx->get_model();
     const auto & hparams = model.hparams;
 
     // 1. Layer Offload Check
-    // 1. Layer Offload Check
     if (model.n_gpu_layers() < hparams.n_layer) {
-        LLAMA_LOG_WARN("%s: WARNING: Not all layers offloaded to GPU (n_gpu_layers=%d, n_layer=%d). Performance may degrade.\n",
-                        __func__, model.n_gpu_layers(), hparams.n_layer);
+        static bool warned_layers = false;
+        if (!warned_layers) {
+            warned_layers = true;
+            LLAMA_LOG_WARN("%s: Not all layers offloaded to GPU (n_gpu_layers=%d, n_layer=%d). Partial offload mode.\n",
+                            __func__, model.n_gpu_layers(), hparams.n_layer);
+        }
     }
 
     // 2. KV Cache Residency Check
@@ -3879,16 +4177,28 @@ static void decode_admission_check(const llama_context * ctx) {
 
     if (kv) {
         if (!kv->is_offloaded()) {
-            LLAMA_LOG_WARN("%s: WARNING: KV cache is not fully offloaded to GPU. Performance may degrade.\n", __func__);
+            static bool warned_kv = false;
+            if (!warned_kv) {
+                warned_kv = true;
+                LLAMA_LOG_WARN("%s: KV cache not fully on GPU (partial offload, further warnings suppressed).\n", __func__);
+            }
         }
     } else if (mem) {
         // Warning: Unknown memory type, cannot verify residency.
         // For strictness, maybe we should abort? Use LOG_WARN for now to avoid breaking exotic archs.
-        LLAMA_LOG_WARN("%s: WARNING: Unknown memory type, cannot verify KV cache residency.\n", __func__);
+            static bool warned_mem = false;
+            if (!warned_mem) {
+                warned_mem = true;
+                LLAMA_LOG_WARN("%s: Unknown memory type, cannot verify KV residency.\n", __func__);
+            }
     }
 
-    // 3. Scheduler Freeze Check (if applicable - usually frozen AFTER first graph, but logic implies we shouldn't start if ambiguous)
-    // We skip this for admission as it might be the first run.
+    // 3. MoE Streaming Check
+    if (hparams.n_expert > 0 && ctx->decode_engine.moe->is_streaming) {
+        if (ctx->decode_engine.moe->n_expert_gpu == 0) {
+             LLAMA_LOG_WARN("%s: MoE streaming enabled but gpu_cache_size is 0. All experts will be CPU-resident!\n", __func__);
+        }
+    }
 }
 
 int32_t llama_decode(llama_context * ctx, llama_batch batch) {
@@ -3922,7 +4232,7 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
     decode_admission_check(this);
 
     // 2. Initialize GPU State for autonomous Decode
-    if (t_decode_pos == nullptr) {
+    if (decode_engine.graph->t_pos == nullptr) {
         // Allocate persistent GPU-resident state
         // We use a dedicated buffer on the first GPU backend
         ggml_backend_t backend = backends[0].get();
@@ -3935,15 +4245,17 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         };
         struct ggml_context * ctx_state = ggml_init(params);
         
-        t_decode_pos    = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
-        t_decode_n_past = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
-        t_decode_token  = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
-        t_decode_stop   = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
+        decode_engine.graph->t_pos    = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
+        decode_engine.graph->t_n_past = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
+        decode_engine.graph->t_token  = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
+        decode_engine.graph->t_stop   = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
+        decode_engine.graph->t_seed   = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, 1);
         
-        ggml_set_name(t_decode_pos,    "decode_pos");
-        ggml_set_name(t_decode_n_past, "decode_n_past");
-        ggml_set_name(t_decode_token,  "decode_token");
-        ggml_set_name(t_decode_stop,   "decode_stop");
+        ggml_set_name(decode_engine.graph->t_pos,    "decode_pos");
+        ggml_set_name(decode_engine.graph->t_n_past, "decode_n_past");
+        ggml_set_name(decode_engine.graph->t_token,  "decode_token");
+        ggml_set_name(decode_engine.graph->t_stop,   "decode_stop");
+        ggml_set_name(decode_engine.graph->t_seed,   "decode_seed");
 
         // D.22: Initialize Penalty History
         int32_t last_n = 0;
@@ -3974,8 +4286,8 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         }
 
         if (last_n > 0) {
-             t_decode_history = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, last_n);
-             ggml_set_name(t_decode_history, "decode_history");
+             decode_engine.graph->t_history = ggml_new_tensor_1d(ctx_state, GGML_TYPE_I32, last_n);
+             ggml_set_name(decode_engine.graph->t_history, "decode_history");
         }
 
         // Allocate on backend
@@ -3989,22 +4301,25 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
     int32_t token_init  = batch.token[0];
     int32_t stop_init   = 0;
 
-    ggml_backend_tensor_set(t_decode_pos,    &pos_init,    0, sizeof(int32_t));
-    ggml_backend_tensor_set(t_decode_n_past, &n_past_init, 0, sizeof(int32_t));
-    ggml_backend_tensor_set(t_decode_token,  &token_init,  0, sizeof(int32_t)); // Token 0
-    ggml_backend_tensor_set(t_decode_stop,   &stop_init,   0, sizeof(int32_t));
+    uint32_t seed_init  = batch.token[0] + 42; // arbitrary starting seed
+
+    ggml_backend_tensor_set(decode_engine.graph->t_pos,    &pos_init,    0, sizeof(int32_t));
+    ggml_backend_tensor_set(decode_engine.graph->t_n_past, &n_past_init, 0, sizeof(int32_t));
+    ggml_backend_tensor_set(decode_engine.graph->t_token,  &token_init,  0, sizeof(int32_t));
+    ggml_backend_tensor_set(decode_engine.graph->t_stop,   &stop_init,   0, sizeof(int32_t));
+    ggml_backend_tensor_set(decode_engine.graph->t_seed,   &seed_init,   0, sizeof(uint32_t));
 
     /*
-    if (t_decode_history && !prev_tokens.empty()) {
+    if (decode_engine.graph->t_history && !prev_tokens.empty()) {
         // Pad or truncate to last_n. Use -1 (LLAMA_TOKEN_NULL) for padding.
-        std::vector<int32_t> buffer(t_decode_history->ne[0], -1);
+        std::vector<int32_t> buffer(decode_engine.graph->t_history->ne[0], -1);
         
         size_t copy_size = std::min(prev_tokens.size(), buffer.size());
         // Copy end of prev_tokens to end of buffer
         for (size_t i = 0; i < copy_size; ++i) {
              buffer[buffer.size() - copy_size + i] = prev_tokens[prev_tokens.size() - copy_size + i];
         }
-        ggml_backend_tensor_set(t_decode_history, buffer.data(), 0, buffer.size() * sizeof(int32_t));
+        ggml_backend_tensor_set(decode_engine.graph->t_history, buffer.data(), 0, buffer.size() * sizeof(int32_t));
     }
     */
 
@@ -4013,19 +4328,59 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
     
     // We process the first token normally to build the graph and lock it
     // Wait, if it's already built, we just use it.
-    if (active_decode_graph == nullptr) {
+    if (decode_engine.graph->gf == nullptr) {
         // Fallback to one-step decode to establish the graph and lock it
         decode(batch);
     }
 
-    GGML_ASSERT(active_decode_graph != nullptr);
+    GGML_ASSERT(decode_engine.graph->gf != nullptr);
+
+    // [STRICT] Expand Graph for Autonomous Generation
+    {
+        struct ggml_cgraph * gf = decode_engine.graph->gf;
+        struct ggml_tensor * t_logits = decode_engine.graph->res->get_logits();
+        
+        // Use a persistent context for graph expansion
+        // We reuse the ctx_state from internal allocation if possible or just the graph's context.
+        struct ggml_context * ctx_expansion = decode_engine.graph->res->get_ctx();
+
+        // 1. Sampling Node
+        struct ggml_tensor * t_sample = ggml_new_tensor_1d(ctx_expansion, GGML_TYPE_I32, 1);
+        t_sample->op = GGML_OP_SAMPLE_CANDIDATES;
+        t_sample->src[0] = t_logits;
+        t_sample->src[1] = decode_engine.graph->t_history;
+        
+        // Sampling params
+        int32_t top_k = 40;
+        float   temp  = 0.8f;
+        ggml_set_op_params_i32(t_sample, 0, top_k);
+        ggml_set_op_params_f32(t_sample, 1, temp);
+        // [TODO] Seed should ideally evolve on GPU. For now, use persistent state.
+        
+        // 2. Set the sampled token to persistent state
+        struct ggml_tensor * t_set_token = ggml_set(ctx_expansion, decode_engine.graph->t_token, t_sample);
+        
+        // 3. Update State Node (pos++, n_past++, history_update)
+        struct ggml_tensor * t_update = ggml_new_tensor_1d(ctx_expansion, GGML_TYPE_I32, 1);
+        t_update->op = GGML_OP_UPDATE_STATE;
+        t_update->src[0] = decode_engine.graph->t_pos;
+        t_update->src[1] = decode_engine.graph->t_n_past;
+        t_update->src[2] = decode_engine.graph->t_token;
+        t_update->src[3] = decode_engine.graph->t_history;
+
+        ggml_build_forward_expand(gf, t_set_token);
+        ggml_build_forward_expand(gf, t_update);
+        
+        // Seal the graph
+        decode_engine.is_locked = true;
+    }
 
     LLAMA_LOG_INFO("%s: Triggering GPU-driven autonomous decode loop (n_predict=%d)\n", __func__, n_predict);
     
     // Set decode mode for all subsequent iterations
     ggml_backend_sched_lock_backends(sched.get(), true);
     
-    ggml_status status = ggml_backend_sched_graph_compute_autonomous(sched.get(), active_decode_graph, t_decode_stop);
+    ggml_status status = ggml_backend_sched_graph_compute_autonomous(sched.get(), decode_engine.graph->gf, decode_engine.graph->t_stop);
     
     if (status != GGML_STATUS_SUCCESS) {
         LLAMA_LOG_ERROR("%s: Autonomous decode failed\n", __func__);

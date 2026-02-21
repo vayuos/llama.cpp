@@ -235,6 +235,12 @@ typedef struct {
     int8_t qs[QK8_1]; // quants
 } block_q8_1;
 static_assert(sizeof(block_q8_1) == 2*sizeof(ggml_half) + QK8_1, "wrong q8_1 block size/padding");
+ 
+ #define QK_F8_E5M2 32
+ typedef struct {
+     uint8_t qs[QK_F8_E5M2]; // f8_e5m2 quants
+ } block_f8_e5m2;
+ static_assert(sizeof(block_f8_e5m2) == QK_F8_E5M2, "wrong f8_e5m2 block size/padding");
 
 //
 // Ternary quantization

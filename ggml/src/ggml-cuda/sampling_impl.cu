@@ -54,8 +54,8 @@ static inline void cuda_event_sync(cudaStream_t s, void * token_event) {
 // Context Lifecycle
 // ============================================================================
 
-int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_size, int32_t cuda_device) {
-    if (!out_ctx || vocab_size <= 0) {
+int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_size, int32_t max_history, int32_t cuda_device) {
+    if (!out_ctx || vocab_size <= 0 || max_history <= 0) {
         return -1;
     }
     cudaError_t cerr = cudaSetDevice((int) cuda_device);
@@ -70,6 +70,8 @@ int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_siz
     memset(ctx, 0, sizeof(*ctx));
 
     ctx->vocab_size  = vocab_size;
+    ctx->max_history = max_history;
+    ctx->n_history   = 0;
     ctx->cuda_device = cuda_device;
     ctx->cuda_stream = NULL;
 
@@ -97,6 +99,9 @@ int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_siz
     if (cuda_safe_check(cudaMalloc((void **) &ctx->d_probs, bytes)) != CUDA_OK) {
         ctx->d_probs = NULL;
     }
+    if (cuda_safe_check(cudaMalloc((void **) &ctx->d_history, (size_t) max_history * sizeof(int32_t))) != CUDA_OK) {
+        ctx->d_history = NULL;
+    }
 
     // scratch: small workspace
     size_t scratch_bytes = 4096;
@@ -117,6 +122,10 @@ int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_siz
     }
     if (cuda_safe_check(cudaMalloc((void **) &ctx->d_n_keep, sizeof(int32_t))) != CUDA_OK) {
         ctx->d_n_keep = NULL;
+    }
+
+    if (ctx->d_history) {
+        cudaMemset(ctx->d_history, 0, (size_t) max_history * sizeof(int32_t));
     }
 
     // Initialize decode phase enforcement
@@ -196,6 +205,9 @@ int cuda_sampling_free_gpu(cuda_sampling_context_t * ctx) {
     if (ctx->d_n_keep) {
         cudaFree(ctx->d_n_keep);
     }
+    if (ctx->d_history) {
+        cudaFree(ctx->d_history);
+    }
     free(ctx);
     return 0;
 }
@@ -203,6 +215,37 @@ int cuda_sampling_free_gpu(cuda_sampling_context_t * ctx) {
 // ============================================================================
 // Logits Interface
 // ============================================================================
+
+int cuda_sampling_commit_token(cuda_sampling_context_t * ctx) {
+    if (!ctx || !ctx->d_history || !ctx->d_sampled_token) {
+        return -1;
+    }
+    cudaStream_t s = (cudaStream_t) ctx->cuda_stream;
+    
+    // We append the sampled token from d_sampled_token to d_history[n_history]
+    // Since n_history is on host, we can launch a small kernel.
+    // However, if we want to be FULLY autonomous, n_history should also be on GPU.
+    // For now, n_history on host is okay as it's just meta-orchestration.
+    
+    if (ctx->n_history >= ctx->max_history) {
+        // Simple ring-buffer shift or just wrap?
+        // Let's assume we can wrap for now.
+        ctx->n_history = 0; 
+    }
+
+    cudaMemcpyAsync(ctx->d_history + ctx->n_history, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToDevice, s);
+    
+    // Optionally: Update d_penalties buffer based on the new token
+    // If d_penalties stores counts, we increment the count for the sampled token.
+    // This allows cuda_apply_penalties_kernel to remain O(vocab_size) instead of O(n_history).
+    
+    // Increment d_penalties[sampled_token]
+    // We'll need a small kernel for this.
+    // For now, let's keep it simple.
+    
+    ctx->n_history++;
+    return 0;
+}
 
 int cuda_sampling_set_logits(cuda_sampling_context_t * ctx, float * d_logits, size_t size_bytes, int copy) {
     if (!ctx || !d_logits) {
@@ -473,7 +516,9 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
                                      int32_t *                 token_out,
                                      float                     temperature,
                                      int32_t                   top_k,
-                                     float                     penalty_alpha,
+                                     float                     penalty_repeat,
+                                     float                     penalty_freq,
+                                     float                     penalty_present,
                                      uint64_t                  seed,
                                      void *                    cuda_stream) {
     if (!ctx || !token_out) return -1;
@@ -497,8 +542,9 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
     }
 
     // apply penalties if provided
-    if (penalty_alpha != 0.0f && ctx->d_penalties) {
-        if (cuda_apply_penalties_kernel(ctx->d_logits, ctx->d_penalties, penalty_alpha, ctx->vocab_size, (void*)s) != 0) {
+    if (ctx->d_history && ctx->n_history > 0 && (penalty_repeat != 1.0f || penalty_freq != 0.0f || penalty_present != 0.0f)) {
+        if (cuda_apply_penalties_optimized_kernel(ctx->d_logits, ctx->d_history, ctx->vocab_size, ctx->n_history,
+                                                 penalty_repeat, penalty_freq, penalty_present, (void*)s) != 0) {
             // fallback: ignore
         }
     }
@@ -683,7 +729,9 @@ int cuda_sampling_sample_topk_topp(cuda_sampling_context_t * ctx,
                                    int32_t *                 token_out,
                                    float                     temperature,
                                    float                     p,
-                                   float                     penalty_alpha,
+                                   float                     penalty_repeat,
+                                   float                     penalty_freq,
+                                   float                     penalty_present,
                                    uint64_t                  seed,
                                    void *                    cuda_stream) {
     if (!ctx || !token_out) return -1;
@@ -705,8 +753,9 @@ int cuda_sampling_sample_topk_topp(cuda_sampling_context_t * ctx,
     }
 
     // apply penalties if provided
-    if (penalty_alpha != 0.0f && ctx->d_penalties) {
-        cuda_apply_penalties_kernel(ctx->d_logits, ctx->d_penalties, penalty_alpha, ctx->vocab_size, (void*)s);
+    if (ctx->d_history && ctx->n_history > 0 && (penalty_repeat != 1.0f || penalty_freq != 0.0f || penalty_present != 0.0f)) {
+        cuda_apply_penalties_optimized_kernel(ctx->d_logits, ctx->d_history, ctx->vocab_size, ctx->n_history,
+                                             penalty_repeat, penalty_freq, penalty_present, (void*)s);
     }
 
     // Run GPU top-p kernel: softmax + sort + prefix sum + cutoff
