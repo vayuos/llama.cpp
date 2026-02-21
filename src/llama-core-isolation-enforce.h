@@ -405,6 +405,11 @@ void llama_core_isolation_get_metrics(
     uint64_t * out_checks_passed,
     uint64_t * out_checks_failed);
 
+/**
+ * Get the global isolation state singleton
+ */
+llama_core_isolation_state * llama_core_isolation_get_global_state(void);
+
 #ifdef __cplusplus
 }
 #endif

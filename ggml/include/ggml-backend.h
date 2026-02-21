@@ -344,6 +344,7 @@ extern "C" {
     GGML_API void                 ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data);
 
     // Assert that no part of the last graph computation executed on the CPU
+    GGML_API void                 ggml_backend_sched_set_strict_decode_cpu_enforcement(bool enable);
     GGML_API void                 ggml_backend_sched_assert_no_cpu_decode(ggml_backend_sched_t sched);
 
     // Query whether a backend-specific decode-mode (GPU-driven token decode) is active.

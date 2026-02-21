@@ -94,8 +94,10 @@ public:
         }
 
         void clear() {
+            strm.clear();
             idxs.clear();
         }
+
 
         // check if indices are contiguous starting from head()
         bool is_contiguous() const {

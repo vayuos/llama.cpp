@@ -19,7 +19,7 @@
 static struct llama_decode_admission_control g_decode_admission = {
     LLAMA_ADMISSION_STATE_UNINITIALIZED,
     LLAMA_ADMISSION_FAIL_UNKNOWN,
-    { false, nullptr, false, 0, nullptr, false, nullptr, false, nullptr, false, nullptr, false },
+    { false, nullptr, false, 0, nullptr, false, nullptr, false, nullptr, false, nullptr, 0, 0, false },
     false,
     false,
     "",
@@ -280,7 +280,8 @@ int llama_decode_admission_check_and_gate(
         return -1;
     }
 
-    fprintf(stdout, "[DECODE ADMISSION GATE] Performing GPU-exclusive eligibility check...\n");
+    static bool gate_warned = false;
+    if (!gate_warned) { gate_warned = true; fprintf(stdout, "[DECODE ADMISSION GATE] Performing GPU-exclusive eligibility check...\n"); }
 
     // Perform exhaustive eligibility check (all 5 criteria)
     if (llama_admission_check_gpu_eligibility(criteria) != 0) {
@@ -301,12 +302,22 @@ int llama_decode_admission_check_and_gate(
 
         fprintf(stderr, "FATAL: Decode admission REJECTED - %s\n",
                 llama_admission_failure_name(admission->failure_reason));
+
+        // Hierarchical GPU Priority Advice (Step 2 of the policy)
+        fprintf(stdout, "[ADMISSION ADVICE] GPU Saturation Priority Policy Violation detected.\n");
+        fprintf(stdout, "[ADMISSION ADVICE] Please follow this hierarchy to resolve residency issues:\n");
+        fprintf(stdout, "  1. Reduce context size (-c %d -> try smaller value)\n", criteria->current_n_ctx);
+        fprintf(stdout, "  2. Reduce batch size (-b %d -> try smaller value)\n", criteria->current_n_batch);
+        fprintf(stdout, "  3. Ensure KV cache is fully on GPU (check VRAM headroom)\n");
+        fprintf(stdout, "  4. (Absolute Last Resort) Allow partial layer spill ONLY for non-critical ops.\n");
+        fprintf(stdout, "[ADMISSION ADVICE] CRITICAL: Attention, MLP, KV Updates, and Logits MUST NOT run on CPU.\n");
+
         return -1;
     }
 
     // All criteria passed - decode is admitted
     admission->state = LLAMA_ADMISSION_STATE_ELIGIBLE;
-    fprintf(stdout, "[DECODE ADMISSION GATE] PASSED - Decode is eligible for GPU-exclusive execution\n");
+    if (gate_warned) { fprintf(stdout, "[DECODE ADMISSION GATE] PASSED - Decode is eligible for GPU-exclusive execution\n"); }
     return 0;
 }
 

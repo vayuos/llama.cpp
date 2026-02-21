@@ -7,6 +7,11 @@
 
 #include "ggml-cpp.h"
 #include "ggml-opt.h"
+
+// GPU-exclusive sampling pipeline (CUDA)
+#ifdef GGML_CUDA
+#include "../ggml/src/ggml-cuda/sampling.h"
+#endif
 #include "llama-decode-admission-control.h"
 #include "llama-decode-boundary-enforce.h"
 #include "llama-decode-cpu-hard-failure.h"
@@ -81,6 +86,7 @@
 #include "llama-pcie-traffic-watchdog.h"
 #include "llama-decode-stability-harness.h"
 #include "llama-decode-acceptance-criteria.h"
+#include "llama-decode-engine.h"
 
 #include <map>
 #include <mutex>
@@ -117,9 +123,10 @@ struct llama_context {
     //   - changing samplers
     //   - changing attention type
     //   - etc.
-    // [STRICT] Graph Persistence: Track active graph during decode
-    // Valid only when is_decode_active is true.
-    struct ggml_cgraph * active_decode_graph = nullptr;
+
+    // [STRICT] Full GPU Decode Engine (Max GPU Strategy)
+    // Encapsulates all decode-critical data plane components
+    llama_decode_engine decode_engine = {};
 
     // [STRICT] Decode Boundary Enforcement: Prevents CPU↔GPU op boundary splitting
     // Enforces all decode ops execute on GPU with no intermediate tensor transfers
@@ -537,13 +544,6 @@ struct llama_context {
     // 12 non-negotiable criteria - partial compliance is failure
     std::unique_ptr<decode_acceptance_validator> acceptance_validator = nullptr;
 
-    // [STRICT] autonomous Decode State (GPU-resident)
-    struct ggml_tensor * t_decode_pos    = nullptr;
-    struct ggml_tensor * t_decode_n_past = nullptr;
-    struct ggml_tensor * t_decode_token  = nullptr;
-    struct ggml_tensor * t_decode_stop   = nullptr; // GPU sets this to 1 when EOS or limit reached
-    struct ggml_tensor * t_decode_history = nullptr; // Ring buffer for penalties (GPU)
-
     int autonomous_decode(const llama_batch & batch, int n_predict);
 
     void sched_reserve();
@@ -855,5 +855,17 @@ struct llama_context {
 
     mutable int32_t n_reused = 0;  // number of times the previous graph was reused
 
+    // [STRICT] Persistent host buffers for decode control path
+    // Eliminates per-token host-side allocations during forward pass
+    std::vector<int32_t> seq_output_count;
+
     mutable std::recursive_mutex mutex;
+
+    // [GPU SAMPLER] Phase 1: GPU-resident sampling context
+    // Initialized once at context creation; used per-token to bypass CPU logits copy.
+    // When non-null and decode mode active: GPU argmax/topk/topp runs entirely on device.
+    // Only the 4-byte token ID crosses PCIe after sampling.
+#ifdef GGML_CUDA
+    cuda_sampling_context_t * gpu_sampling_ctx = nullptr;
+#endif
 };

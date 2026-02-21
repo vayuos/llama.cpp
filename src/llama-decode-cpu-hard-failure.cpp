@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "ggml-backend.h"
+
 // ============================================================================
 // GLOBAL ENFORCEMENT STATE
 // ============================================================================
@@ -18,6 +20,7 @@ static int g_violation_count = 0;      // Count total violations detected
 
 void llama_set_decode_cpu_enforcement_strict(bool enforce_strict) {
     g_enforce_strict = enforce_strict;
+    ggml_backend_sched_set_strict_decode_cpu_enforcement(enforce_strict);
     fprintf(stdout, "[DECODE CPU ENFORCEMENT] Mode: %s\n",
             enforce_strict ? "STRICT (abort on violation)" : "PERMISSIVE (log but continue)");
 }

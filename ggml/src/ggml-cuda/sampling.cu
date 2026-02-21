@@ -1,7 +1,50 @@
 #include "sampling.cuh"
 #include "sampling.h"
-
+#include "top-k.cuh"
 #include <device_launch_parameters.h>
+#include <cub/cub.cuh>
+
+// ============================================================================
+// State Management Kernels
+// ============================================================================
+
+// [STRICT] GPU-Resident State Update Kernel
+// Increments position and n_past, and updates token history entirely on GPU.
+__global__ void update_state_kernel(int32_t * pos, int32_t * n_past, int32_t * history, const int32_t * token, int32_t n_history) {
+    if (blockIdx.x == 0 && threadIdx.x == 0) {
+        // 1. Increment pos and n_past
+        if (pos) (*pos)++;
+        if (n_past) (*n_past)++;
+        
+        // 2. Shift history and push new token
+        if (history && n_history > 0 && token) {
+            for (int i = 0; i < n_history - 1; ++i) {
+                history[i] = history[i+1];
+            }
+            history[n_history - 1] = *token;
+        }
+    }
+}
+
+void ggml_cuda_update_state(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+    const ggml_tensor * src0_pos = dst->src[0];
+    const ggml_tensor * src1_past = dst->src[1];
+    const ggml_tensor * src2_token = dst->src[2];
+    const ggml_tensor * src3_history = dst->src[3]; // Might be null
+
+    int32_t * d_pos = (int32_t *) src0_pos->data;
+    int32_t * d_past = (int32_t *) src1_past->data;
+    const int32_t * d_token = (const int32_t *) src2_token->data;
+    int32_t * d_history = src3_history ? (int32_t *) src3_history->data : nullptr;
+    int32_t n_history = src3_history ? (int32_t) src3_history->ne[0] : 0;
+
+    cudaStream_t stream = ctx.stream();
+    update_state_kernel<<<1, 1, 0, stream>>>(d_pos, d_past, d_history, d_token, n_history);
+}
+
+// ============================================================================
+// Penalty Kernels
+// ============================================================================
 
 __global__ void apply_penalties_optimized_kernel(float *         logits,
                                                  const int32_t * last_tokens,
@@ -77,13 +120,9 @@ void ggml_cuda_penalties(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     }
 }
 
-// ----------------------------------------------------------------------------
+// ============================================================================
 // Fused Sampling Implementation
-// ----------------------------------------------------------------------------
-
-#include "top-k.cuh"
-#include <cub/cub.cuh>
-#include "sampling.cuh"
+// ============================================================================
 
 __global__ void sample_multinomial_simple(const float * probs, int * out_idx, int n, uint64_t seed) {
     extern __shared__ float s_cdf[];
@@ -127,16 +166,15 @@ __global__ void gather_result(int * dst, const int * local_idx, const int * cand
     if (candidates) {
         *dst = candidates[*local_idx];
     } else {
-        *dst = *local_idx; // or local_idx[0] if it was array? No, out_idx is int*
+        *dst = *local_idx;
     }
 }
 
-/*
-static void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
+void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0_logits = dst->src[0];
     
-    int32_t params[16]; // Safe buffer
-    memcpy(params, dst->op_params, sizeof(params)); // Copy to avoid misalignment if any? No, op_params is int32.
+    int32_t params[16];
+    memcpy(params, dst->op_params, sizeof(params));
 
     int32_t k         = params[0];
     float   temp      = 0.0f; memcpy(&temp, &params[1], sizeof(float));
@@ -152,31 +190,17 @@ static void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_te
     
     CUDA_CHECK(cudaMemcpyAsync(d_logits, src0_logits->data, n_vocab * sizeof(float), cudaMemcpyDeviceToDevice, stream));
     
-    // 2. Apply Penalties (if src1 present)
-    // Assuming src1 is history.
-    if (dst->src[1] && dst->src[1]->ne[0] > 0) {
-        // We reuse ggml_cuda_penalties logic but on d_logits
-        // ggml_cuda_penalties works on dst tensor params usually.
-        // We need params: repeat, alpha, presence.
-        // Let's assume they are passed as extra op_params [3,4,5] or similar.
-        // For simplicity: skip penalties here if not fully plumbed, or assume applied before?
-        // Plan said "Chain: Logits -> Penalty -> Fused Sample".
-        // So logits are ALREADY penalized.
-        // Good.
-    }
-    
-    // 3. Temp Scale
+    // 2. Temp Scale
     if (temp > 0.0f && temp != 1.0f) {
         cuda_temperature_scale_kernel(d_logits, temp, 0, (int)n_vocab, stream);
     }
     
     float * d_probs = d_logits;
-    int *   d_candidates = nullptr; // nullptr implies 0..N-1
+    int *   d_candidates = nullptr;
     int     n_probs = (int)n_vocab;
     
-    // 4. Top K
+    // 3. Top K
     if (k > 0 && k < n_vocab) {
-#ifdef CUB_TOP_K_AVAILABLE
         ggml_cuda_pool_alloc<float> top_k_vals_alloc(pool, k * sizeof(float));
         ggml_cuda_pool_alloc<int>   top_k_inds_alloc(pool, k * sizeof(int));
         float * d_vals = top_k_vals_alloc.get();
@@ -187,29 +211,25 @@ static void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_te
         d_probs = d_vals;
         d_candidates = d_inds;
         n_probs = k;
-#endif
     }
     
-    // 5. Softmax
+    // 4. Softmax
     ggml_cuda_pool_alloc<float> scratch_alloc(pool, 4096); 
     cuda_softmax_kernel(d_probs, d_probs, n_probs, scratch_alloc.get(), stream);
     
-    // 6. Sample
+    // 5. Sample
     ggml_cuda_pool_alloc<int> out_idx_alloc(pool, sizeof(int));
     int * d_out_idx = out_idx_alloc.get();
     
-    // Shared mem for scan: n_probs * sizeof(float)
-    // Safe max n_probs = 1024 for 4KB shared? No, 1024 floats = 4KB.
-    // So limit k <= 1024. If k > 1024, implementation needs robust scan.
     if (n_probs <= 1024) {
         sample_multinomial_simple<<<1, 256, n_probs * sizeof(float), stream>>>(d_probs, d_out_idx, n_probs, (uint64_t)seed);
     } else {
-        // Fallback: Sample from first 1024? Or fail?
-        // Likely fail silently in this implementation or sample from truncated.
+        // Fallback for very large k (not recommended but for safety)
+        int32_t val = 0;
+        cuda_argmax_kernel(d_probs, d_out_idx, n_probs, scratch_alloc.get(), stream);
     }
     
-    // 7. Write result
+    // 6. Write result
     int * dst_ptr = (int *)dst->data;
     gather_result<<<1, 1, 0, stream>>>(dst_ptr, d_out_idx, d_candidates);
 }
-*/

@@ -66,6 +66,11 @@ typedef struct {
     int32_t   logits_copied_to_host;   // ERROR: 1 if logits illegally copied to host
     int32_t   bulk_transfer_attempted; // ERROR: 1 if non-token transfer attempted
 
+    // Token history (GPU-resident)
+    int32_t * d_history;        // [max_history] token ID history
+    int32_t   n_history;        // current number of tokens in history
+    int32_t   max_history;      // capacity of history buffer
+
     // Configuration
     int32_t vocab_size;
     int32_t cuda_device;
@@ -138,6 +143,18 @@ int cuda_apply_penalties_kernel(float *       d_logits,
                                 float         alpha,
                                 int32_t       vocab_size,
                                 void *        cuda_stream);
+
+/**
+ * Optimized penalty kernel (supports repeat, frequency, presence)
+ */
+int cuda_apply_penalties_optimized_kernel(float *         d_logits,
+                                          const int32_t * d_last_tokens,
+                                          int32_t         vocab_size,
+                                          int32_t         n_last,
+                                          float           repeat_penalty,
+                                          float           alpha_frequency,
+                                          float           alpha_presence,
+                                          void *          cuda_stream);
 
 /**
  * Compute softmax probabilities from logits
@@ -372,7 +389,7 @@ int cuda_unified_select_token(const float *    d_logits,
  *
  * @return              0 on success, negative on error
  */
-int cuda_sampling_init_gpu(cuda_sampling_context_t ** ctx, int32_t vocab_size, int32_t cuda_device);
+int cuda_sampling_init_gpu(cuda_sampling_context_t ** ctx, int32_t vocab_size, int32_t max_history, int32_t cuda_device);
 
 /**
  * Free GPU sampling context and associated device memory
@@ -394,6 +411,18 @@ int cuda_sampling_free_gpu(cuda_sampling_context_t * ctx);
  * @return              0 on success, negative on error
  */
 int cuda_sampling_set_logits(cuda_sampling_context_t * ctx, float * d_logits, size_t size_bytes, int copy);
+
+/**
+ * Commit the last sampled token to the GPU-resident history buffer
+ *
+ * Appends ctx->d_sampled_token to the end of ctx->d_history.
+ * Used to maintain penalties and RNG state entirely on device.
+ *
+ * @param ctx       Sampling context
+ *
+ * @return          0 on success, negative on error
+ */
+int cuda_sampling_commit_token(cuda_sampling_context_t * ctx);
 
 /**
  * Perform greedy sampling (return token with highest logit)
@@ -434,7 +463,9 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
                                      int32_t *                 token_out,
                                      float                     temperature,
                                      int32_t                   top_k,
-                                     float                     penalty_alpha,
+                                     float                     penalty_repeat,
+                                     float                     penalty_freq,
+                                     float                     penalty_present,
                                      uint64_t                  seed,
                                      void *                    cuda_stream);
 
@@ -467,7 +498,9 @@ int cuda_sampling_sample_topk_topp(cuda_sampling_context_t * ctx,
                                    int32_t *                 token_out,
                                    float                     temperature,
                                    float                     p,
-                                   float                     penalty_alpha,
+                                   float                     penalty_repeat,
+                                   float                     penalty_freq,
+                                   float                     penalty_present,
                                    uint64_t                  seed,
                                    void *                    cuda_stream);
 

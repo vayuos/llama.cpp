@@ -25,7 +25,7 @@
 #endif
 
 // Global isolation state
-static llama_core_isolation_state g_core_isolation_state = {
+llama_core_isolation_state g_core_isolation_state = {
     .total_cores = 0,
     .cores_per_socket = 0,
     .num_sockets = 1,
@@ -840,4 +840,11 @@ void llama_core_isolation_get_metrics(
     if (out_total_context_switches) *out_total_context_switches = state->total_context_switches;
     if (out_checks_passed) *out_checks_passed = state->assertion_checks_passed;
     if (out_checks_failed) *out_checks_failed = state->assertion_checks_failed;
+}
+
+/**
+ * Get the global isolation state singleton
+ */
+llama_core_isolation_state * llama_core_isolation_get_global_state(void) {
+    return &g_core_isolation_state;
 }
