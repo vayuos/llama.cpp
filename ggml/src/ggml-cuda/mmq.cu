@@ -69,7 +69,7 @@ static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, con
 }
 
 void ggml_cuda_mul_mat_q(
-        ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * ids, ggml_tensor * dst) {
+        ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * ids, ggml_tensor * dst, const ggml_cuda_mm_fusion_args_host * fusion) {
     GGML_ASSERT(        src1->type == GGML_TYPE_F32);
     GGML_ASSERT(        dst->type  == GGML_TYPE_F32);
     GGML_ASSERT(!ids || ids->type  == GGML_TYPE_I32); // Optional, used for batched GGML_MUL_MAT_ID.
@@ -123,6 +123,13 @@ void ggml_cuda_mul_mat_q(
             get_mmq_x_max_host(cc)*sizeof(block_q8_1_mmq);
         ggml_cuda_pool_alloc<char> src1_q8_1(ctx.pool(), nbytes_src1_q8_1);
 
+        float rms_eps = 0.0f;
+        const float * rms_w = nullptr;
+        if (fusion) {
+            rms_eps = fusion->rms_eps;
+            rms_w = (const float *) (fusion->rms_w ? fusion->rms_w->data : nullptr);
+        }
+
         {
             const int64_t s11 = src1->nb[1] / ts_src1;
             const int64_t s12 = src1->nb[2] / ts_src1;
@@ -130,11 +137,11 @@ void ggml_cuda_mul_mat_q(
             if (use_native_mxfp4) {
                 static_assert(sizeof(block_fp4_mmq) == 4 * sizeof(block_q8_1));
                 quantize_mmq_mxfp4_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded,
-                                        ne11, ne12, ne13, stream);
+                                        ne11, ne12, ne13, rms_eps, rms_w, stream);
 
             } else {
                 quantize_mmq_q8_1_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded,
-                                       ne11, ne12, ne13, stream);
+                                       ne11, ne12, ne13, rms_eps, rms_w, stream);
             }
             CUDA_CHECK(cudaGetLastError());
         }
@@ -188,16 +195,23 @@ void ggml_cuda_mul_mat_q(
     const int64_t ne13_flat = 1;
 
     {
+        float rms_eps = 0.0f;
+        const float * rms_w = nullptr;
+        if (fusion) {
+            rms_eps = fusion->rms_eps;
+            rms_w = (const float *) (fusion->rms_w ? fusion->rms_w->data : nullptr);
+        }
+
         const int64_t s11 = src1->nb[1] / ts_src1;
         const int64_t s12 = src1->nb[2] / ts_src1;
         const int64_t s13 = src1->nb[3] / ts_src1;
 
         if (use_native_mxfp4) {
             quantize_mmq_mxfp4_cuda(src1_d, ids_src1.get(), src1_q8_1.get(), src0->type, ne10, s11, s12, s13,
-                                    ne10_padded, ne11_flat, ne12_flat, ne13_flat, stream);
+                                    ne10_padded, ne11_flat, ne12_flat, ne13_flat, rms_eps, rms_w, stream);
         } else {
             quantize_mmq_q8_1_cuda(src1_d, ids_src1.get(), src1_q8_1.get(), src0->type, ne10, s11, s12, s13,
-                                   ne10_padded, ne11_flat, ne12_flat, ne13_flat, stream);
+                                   ne10_padded, ne11_flat, ne12_flat, ne13_flat, rms_eps, rms_w, stream);
         }
         CUDA_CHECK(cudaGetLastError());
     }
@@ -221,7 +235,9 @@ void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
-    const int64_t src1_padded_row_size, cudaStream_t stream) {
+    const int64_t src1_padded_row_size, const ggml_cuda_mm_fusion_args_host * fusion, cudaStream_t stream) {
+
+    GGML_UNUSED(fusion);
 
     const int64_t ne00 = src0->ne[0];
 

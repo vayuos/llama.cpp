@@ -144,6 +144,11 @@ static const struct {
     {"add",             true},
     {"mul",             true},
 
+    // Sampling (Phase 3)
+    {"sample_candidates", true},
+    {"penalties",         true},
+    {"update_state",      true},
+
     {nullptr, false}
 };
 

@@ -1240,6 +1240,7 @@ typedef void (*ggml_cuda_op_mul_mat_t)(ggml_backend_cuda_context & ctx,
                                        const int64_t               row_high,
                                        const int64_t               src1_ncols,
                                        const int64_t               src1_padded_row_size,
+                                       const ggml_cuda_mm_fusion_args_host * fusion,
                                        cudaStream_t                stream);
 
 #ifndef GGML_CUDA_PEER_MAX_BATCH_SIZE
@@ -1300,7 +1301,9 @@ static void ggml_cuda_op_mul_mat_cublas(ggml_backend_cuda_context & ctx,
                                         const int64_t               row_high,
                                         const int64_t               src1_ncols,
                                         const int64_t               src1_padded_row_size,
+                                        const ggml_cuda_mm_fusion_args_host * fusion,
                                         cudaStream_t                stream) {
+    GGML_UNUSED(fusion);
     GGML_ASSERT(src0_dd_i != nullptr);
     GGML_ASSERT(src1_ddf_i != nullptr);
     GGML_ASSERT(dst_dd_i != nullptr);
@@ -1514,7 +1517,8 @@ static void ggml_cuda_op_mul_mat(ggml_backend_cuda_context & ctx,
                                  const ggml_tensor *         src1,
                                  ggml_tensor *               dst,
                                  ggml_cuda_op_mul_mat_t      op,
-                                 quantize_cuda_t             quantize_src1) {
+                                 quantize_cuda_t             quantize_src1,
+                                 const ggml_cuda_mm_fusion_args_host * fusion = nullptr) {
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
     const int64_t ne02 = src0->ne[2];
@@ -1671,9 +1675,11 @@ static void ggml_cuda_op_mul_mat(ggml_backend_cuda_context & ctx,
             dev[id].src1_ddq = dev[id].src1_ddq_alloc.alloc(ctx.pool(id), src_1_ddq_size);
 
             if (src1_on_device && src1_is_contiguous) {
+                float rms_eps = fusion ? fusion->rms_eps : 0.0f;
+                const float * rms_w = (fusion && fusion->rms_w) ? (const float *) fusion->rms_w->data : nullptr;
                 quantize_src1(dev[id].src1_ddf, nullptr, dev[id].src1_ddq, src0->type, ne10, nb11 / sizeof(float),
                               nb12 / sizeof(float), nb13 / sizeof(float), src1_padded_col_size, ne11, ne12, ne13,
-                              stream);
+                              rms_eps, rms_w, stream);
                 CUDA_CHECK(cudaGetLastError());
             }
         }
@@ -1783,7 +1789,7 @@ static void ggml_cuda_op_mul_mat(ggml_backend_cuda_context & ctx,
 
                 // do the computation
                 op(ctx, src0, src1, dst, src0_dd_i, src1_ddf_i, src1_ddq_i, dst_dd_i, dev[id].row_low, dev[id].row_high,
-                   src1_ncols, src1_padded_col_size, stream);
+                   src1_ncols, src1_padded_col_size, fusion, stream);
                 CUDA_CHECK(cudaGetLastError());
 
                 // copy dst to host or other device if necessary
@@ -2270,7 +2276,8 @@ static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
 static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx,
                               const ggml_tensor *         src0,
                               const ggml_tensor *         src1,
-                              ggml_tensor *               dst) {
+                              ggml_tensor *               dst,
+                              const ggml_cuda_mm_fusion_args_host * fusion = nullptr) {
     const bool split = ggml_backend_buft_is_cuda_split(src0->buffer->buft);
 
     // If src0 is a temporary compute buffer it may have some padding that needs to be cleared for mul_mat_vec_q or mul_mat_q.
@@ -2321,14 +2328,6 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx,
         any_gpus_with_slow_fp16 = any_gpus_with_slow_fp16 || !fast_fp16_hardware_available(cc);
     }
 
-    // debug helpers
-    //printf("src0: %8d %8d %8d %8d\n", src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3]);
-    //printf("      %8d %8d %8d %8d\n", src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3]);
-    //printf("src1: %8d %8d %8d %8d\n", src1->ne[0], src1->ne[1], src1->ne[2], src1->ne[3]);
-    //printf("      %8d %8d %8d %8d\n", src1->nb[0], src1->nb[1], src1->nb[2], src1->nb[3]);
-    //printf("src0 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src0), ggml_is_transposed(src0), ggml_type_name(src0->type), src0->name);
-    //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
-
     //TODO update for generic tensor parallelism
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
     bool      use_batched_cublas_f16 =
@@ -2356,29 +2355,31 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx,
     if (!split && use_mul_mat_vec_f) {
         // the custom F16 vector kernel can be used over batched cuBLAS GEMM
         // but this is only faster for GPUs without tensor cores or with a thin src0 matrix (particularly KQV in attention)
-        ggml_cuda_mul_mat_vec_f(ctx, src0, src1, nullptr, dst);
+        ggml_cuda_mul_mat_vec_f(ctx, src0, src1, nullptr, dst, fusion);
     } else if (!split && use_mul_mat_f) {
-        ggml_cuda_mul_mat_f(ctx, src0, src1, nullptr, dst);
+        ggml_cuda_mul_mat_f(ctx, src0, src1, nullptr, dst, fusion);
     } else if (!split && use_mul_mat_vec_q) {
-        ggml_cuda_mul_mat_vec_q(ctx, src0, src1, nullptr, dst);
+        ggml_cuda_mul_mat_vec_q(ctx, src0, src1, nullptr, dst, fusion);
     } else if (!split && use_mul_mat_q) {
-        ggml_cuda_mul_mat_q(ctx, src0, src1, nullptr, dst);
+        ggml_cuda_mul_mat_q(ctx, src0, src1, nullptr, dst, fusion);
     } else if (!split && (use_batched_cublas_f16 || use_batched_cublas_bf16 || use_batched_cublas_f32) &&
                !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2] * src1->ne[3] > 1) {
         // general KQ + KQV multi-batch without FlashAttention
-        ggml_cuda_mul_mat_batched_cublas(ctx, src0, src1, dst);
+        ggml_cuda_mul_mat_batched_cublas(ctx, src0, src1, dst, fusion);
     } else if (use_mul_mat_vec_f) {
-        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_f, nullptr);
+        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_f, nullptr, fusion);
     } else if (use_mul_mat_vec_q) {
-        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, quantize_row_q8_1_cuda);
+        quantize_cuda_t quant = fusion && fusion->rms_w ? quantize_row_q8_1_rms_cuda : quantize_row_q8_1_cuda;
+        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, quant, fusion);
     } else if (use_mul_mat_q) {
-        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_q, quantize_mmq_q8_1_cuda);
+        quantize_cuda_t quant = fusion && fusion->rms_w ? quantize_mmq_q8_1_rms_cuda : quantize_mmq_q8_1_cuda;
+        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_q, quant, fusion);
     } else {
         if (ggml_is_quantized(src0->type) && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE) {
             GGML_LOG_ERROR("%s: FATAL: quantized decode matmul reached cuBLAS fallback path (type=%s)\n", __func__, ggml_type_name(src0->type));
             GGML_ABORT("unsupported quantized matmul");
         }
-        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_cublas, nullptr);
+        ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_cublas, nullptr, fusion);
     }
 }
 
@@ -3586,8 +3587,15 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
         }
     }
 
-    if (!ggml_can_fuse(cgraph, node_idx, ops)) {
-        return false;
+    if (ops.size() == 2 && ops.begin()[0] == GGML_OP_RMS_NORM && (ops.begin()[1] == GGML_OP_MUL_MAT || ops.begin()[1] == GGML_OP_MUL_MAT_ID)) {
+        const ggml_tensor * rms_norm = cgraph->nodes[node_idx];
+        const ggml_tensor * mul_mat  = cgraph->nodes[node_idx + 1];
+
+        if (mul_mat->src[1] != rms_norm) {
+            return false;
+        }
+
+        return true;
     }
 
     if ((ops.size() == 2 || ops.size() == 3) && ops.begin()[0] == GGML_OP_RMS_NORM && ops.begin()[1] == GGML_OP_MUL) {
@@ -4048,6 +4056,35 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
 
                     if (fused_mul_mat_vec) {
                         i += fused_node_count - 1;
+                        continue;
+                    }
+
+                    if (ggml_cuda_can_fuse(cgraph, i, { GGML_OP_RMS_NORM, GGML_OP_MUL_MAT }, {}) ||
+                        ggml_cuda_can_fuse(cgraph, i, { GGML_OP_RMS_NORM, GGML_OP_MUL_MAT_ID }, {})) {
+
+                        ggml_tensor * rms_norm = cgraph->nodes[i];
+                        ggml_tensor * mul_mat  = cgraph->nodes[i + 1];
+
+                        ggml_cuda_mm_fusion_args_host fusion_data{};
+                        fusion_data.rms_eps = ((const float *) rms_norm->op_params)[0];
+                        fusion_data.rms_w   = rms_norm->src[1];
+
+                        const ggml_tensor * src0 = mul_mat->src[0];
+                        const ggml_tensor * src1 = rms_norm->src[0];
+
+                        if (mul_mat->op == GGML_OP_MUL_MAT) {
+                            ggml_cuda_mul_mat(*cuda_ctx, src0, src1, mul_mat, &fusion_data);
+                        } else {
+                            // GGML_OP_MUL_MAT_ID
+                            const ggml_tensor * ids = mul_mat->src[2];
+                            if (ggml_cuda_should_use_mmq(src0->type, cuda_ctx->device, src1->ne[1], ids->ne[0])) {
+                                ggml_cuda_mul_mat_q(*cuda_ctx, src0, src1, ids, mul_mat, &fusion_data);
+                            } else {
+                                ggml_cuda_mul_mat_f(*cuda_ctx, src0, src1, ids, mul_mat, &fusion_data);
+                            }
+                        }
+
+                        i += 1;
                         continue;
                     }
 
