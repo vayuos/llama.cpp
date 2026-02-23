@@ -431,6 +431,9 @@ llama_context::llama_context(const llama_model & model, llama_context_params par
     token_chain_assert_state.assertion_count = 0;
     llama_set_token_chain_assertions_enabled(true);
     LLAMA_LOG_INFO("%s: Token dependency chain runtime assertion enabled\n", __func__);
+
+    // Initialize GPU-Exclusive Decode Engine
+    llama_decode_engine_init(&decode_engine, &model, &params);
 }
 
 llama_context::~llama_context() {
@@ -2703,6 +2706,7 @@ llm_graph_params llama_context::graph_params(llm_graph_result *             res,
         /*.t_decode_token  =*/t_decode_token,
         /*.t_decode_stop   =*/t_decode_stop,
         /*.t_decode_history =*/t_decode_history,
+        /*.expert_cache    =*/decode_engine.moe ? decode_engine.moe->cache.get() : nullptr,
     };
 }
 
@@ -4344,29 +4348,57 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         // We reuse the ctx_state from internal allocation if possible or just the graph's context.
         struct ggml_context * ctx_expansion = decode_engine.graph->res->get_ctx();
 
-        // 1. Sampling Node
+        // D.22: Extract Sampling Parameters for GPU
+        llama_sampler_gpu_params gpu_params = {};
+        gpu_params.temp = 1.0f;
+        gpu_params.top_k = 0;
+        gpu_params.top_p = 1.0f;
+        
+        // Use the first sampler in the context (usually the only one for this sequence)
+        if (!sampling.samplers.empty()) {
+            llama_sampler_get_gpu_params(sampling.samplers.begin()->second, &gpu_params);
+        }
+
+        // 1. Penalties Node (GPU-Resident)
+        struct ggml_tensor * t_penalized_logits = t_logits;
+        if (decode_engine.graph->t_history) {
+            t_penalized_logits = ggml_penalties(
+                ctx_expansion,
+                t_logits,
+                decode_engine.graph->t_history,
+                gpu_params.penalty_repeat,
+                gpu_params.penalty_freq,
+                gpu_params.penalty_present);
+            ggml_set_name(t_penalized_logits, "penalties");
+        }
+
+        // 2. Sampling Node (GPU-Resident: argmax or multinomial)
         struct ggml_tensor * t_sample = ggml_new_tensor_1d(ctx_expansion, GGML_TYPE_I32, 1);
         t_sample->op = GGML_OP_SAMPLE_CANDIDATES;
-        t_sample->src[0] = t_logits;
-        t_sample->src[1] = decode_engine.graph->t_history;
+        t_sample->src[0] = t_penalized_logits;
+        t_sample->src[1] = nullptr; // SAMPLE_CANDIDATES doesn't need history if penalties applied upstream
+        t_sample->src[2] = decode_engine.graph->t_seed;
+        t_sample->n_src = 3;
         
-        // Sampling params
-        int32_t top_k = 40;
-        float   temp  = 0.8f;
-        ggml_set_op_params_i32(t_sample, 0, top_k);
-        ggml_set_op_params_f32(t_sample, 1, temp);
-        // [TODO] Seed should ideally evolve on GPU. For now, use persistent state.
+        ggml_set_op_params_i32(t_sample, 0, gpu_params.top_k);
+        ggml_set_op_params_f32(t_sample, 1, gpu_params.temp);
+        ggml_set_op_params_i32(t_sample, 2, gpu_params.seed);
+        ggml_set_name(t_sample, "sampled_token");
         
-        // 2. Set the sampled token to persistent state
+        // 3. Set the sampled token to persistent state context
         struct ggml_tensor * t_set_token = ggml_set(ctx_expansion, decode_engine.graph->t_token, t_sample);
+        ggml_set_name(t_set_token, "set_token");
         
-        // 3. Update State Node (pos++, n_past++, history_update)
+        // 4. Update State Node (pos++, n_past++, history_update) entirely on GPU
         struct ggml_tensor * t_update = ggml_new_tensor_1d(ctx_expansion, GGML_TYPE_I32, 1);
         t_update->op = GGML_OP_UPDATE_STATE;
         t_update->src[0] = decode_engine.graph->t_pos;
         t_update->src[1] = decode_engine.graph->t_n_past;
         t_update->src[2] = decode_engine.graph->t_token;
         t_update->src[3] = decode_engine.graph->t_history;
+        t_update->src[4] = decode_engine.graph->t_seed;
+        t_update->n_src = 5;
+        ggml_set_name(t_update, "update_state");
 
         ggml_build_forward_expand(gf, t_set_token);
         ggml_build_forward_expand(gf, t_update);

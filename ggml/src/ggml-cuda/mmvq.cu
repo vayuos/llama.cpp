@@ -34,17 +34,16 @@ static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type) 
 }
 
 
-// static __device__ __forceinline__ float ggml_cuda_apply_activation(float x, ggml_unary_op op) {
-//     GGML_UNUSED(op);
-//     switch (op) {
-//         case GGML_UNARY_OP_SILU:    return ggml_cuda_op_silu_single(x);
-//         case GGML_UNARY_OP_GELU:    return ggml_cuda_op_gelu_single(x);
-//         case GGML_UNARY_OP_RELU:    return fmaxf(0.0f, x);
-//         case GGML_UNARY_OP_SIGMOID: return 1.0f / (1.0f + expf(-x));
-//         case GGML_UNARY_OP_TANH:    return tanhf(x);
-//         default: return x;
-//     }
-// }
+static __device__ __forceinline__ float ggml_cuda_apply_activation(float x, ggml_unary_op op) {
+    switch (op) {
+        case GGML_UNARY_OP_SILU:    return ggml_cuda_op_silu_single(x);
+        case GGML_UNARY_OP_GELU:    return ggml_cuda_op_gelu_single(x);
+        case GGML_UNARY_OP_RELU:    return fmaxf(0.0f, x);
+        case GGML_UNARY_OP_SIGMOID: return 1.0f / (1.0f + expf(-x));
+        case GGML_UNARY_OP_TANH:    return tanhf(x);
+        default:                    return x;
+    }
+}
 
 static constexpr __device__ int get_vdr_mmvq(ggml_type type) {
     switch (type) {
@@ -357,13 +356,16 @@ static __global__ void mul_mat_vec_q(
                             break;
                     }
                 }
+                if (act_op != GGML_UNARY_OP_COUNT) {
+                    result = ggml_cuda_apply_activation(result, act_op);
+                }
             }
             dst[j*stride_col_dst + threadIdx.x] = result;
         }
     }
 
     if constexpr (!has_fusion) {
-        GGML_UNUSED_VARS(use_gate, use_bias, use_gate_bias, glu_op, gate_bias, x_bias, tmp_gate);
+        GGML_UNUSED_VARS(use_gate, use_bias, use_gate_bias, glu_op, act_op, gate_bias, x_bias, tmp_gate);
     }
 }
 
@@ -386,7 +388,7 @@ static void mul_mat_vec_q_switch_fusion(
         const dim3 & block_nums, const dim3 & block_dims, const int nbytes_shared,
         const uint32_t ids_stride, cudaStream_t stream) {
 
-    const bool has_fusion = fusion.gate != nullptr || fusion.x_bias != nullptr || fusion.gate_bias != nullptr;
+    const bool has_fusion = fusion.gate != nullptr || fusion.x_bias != nullptr || fusion.gate_bias != nullptr || fusion.act_op != GGML_UNARY_OP_COUNT;
     if constexpr (c_ncols_dst == 1) {
         if (has_fusion) {
             mul_mat_vec_q<type, c_ncols_dst, true, is_multi_token_id><<<block_nums, block_dims, nbytes_shared, stream>>>
@@ -756,7 +758,9 @@ void ggml_cuda_op_mul_mat_vec_q(
     ggml_backend_cuda_context & ctx,
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
-    const int64_t src1_padded_row_size, cudaStream_t stream) {
+    const int64_t src1_padded_row_size, const ggml_cuda_mm_fusion_args_host * fusion, cudaStream_t stream) {
+
+    ggml_cuda_mm_fusion_args_device fusion_local = fusion ? ggml_cuda_mm_fusion_args_device_from_host(*fusion) : ggml_cuda_mm_fusion_args_device{};
 
     const int64_t ne00 = src0->ne[0];
     const int64_t row_diff = row_high - row_low;
@@ -774,9 +778,6 @@ void ggml_cuda_op_mul_mat_vec_q(
 
     const int stride_row_x = ne00 / ggml_blck_size(src0->type);
     const int stride_col_y = src1_padded_row_size / QK8_1;
-
-    ggml_cuda_mm_fusion_args_device fusion_local{};
-    fusion_local.act_op = GGML_UNARY_OP_COUNT;
 
     mul_mat_vec_q_switch_type(
         src0_dd_i, src0->type, src1_ddq_i, nullptr, fusion_local, dst_dd_i, ne00, row_diff, src1_ncols, stride_row_x, stride_col_y, nrows_dst,

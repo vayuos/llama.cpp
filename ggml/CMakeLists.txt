@@ -206,6 +206,11 @@ option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp on
 set   (GGML_CUDA_COMPRESSION_MODE "size" CACHE STRING
                                             "ggml: cuda link binary compression mode; requires cuda 12.8+")
 set_property(CACHE GGML_CUDA_COMPRESSION_MODE PROPERTY STRINGS "none;speed;balance;size")
+option(GGML_CUDA_GPU_ONLY "ggml: build for GPU-exclusive decode, disabling CPU fallback compute" OFF)
+
+if (GGML_CUDA_GPU_ONLY)
+    add_compile_definitions(GGML_CUDA_GPU_ONLY)
+endif()
 
 option(GGML_HIP                             "ggml: use HIP"                                   OFF)
 option(GGML_HIP_GRAPHS                      "ggml: use HIP graph, experimental, slow"         OFF)

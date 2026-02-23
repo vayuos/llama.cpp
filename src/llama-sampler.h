@@ -43,11 +43,13 @@ struct llama_sampler * llama_sampler_init_dry_testing(
 
 // [MAX GPU] Extraction of sampling parameters for GPU-resident execution
 struct llama_sampler_gpu_params {
-    float   temp           = 1.0f;
-    int32_t top_k          = 0;
-    float   top_p          = 1.0f;
-    float   penalty_repeat = 1.0f;
-    uint32_t seed          = 0;
+    float    temp            = 1.0f;
+    int32_t  top_k           = 0;
+    float    top_p           = 1.0f;
+    float    penalty_repeat  = 1.0f;
+    float    penalty_freq    = 0.0f;
+    float    penalty_present = 0.0f;
+    uint32_t seed            = 0;
 };
 
 void llama_sampler_get_gpu_params(const struct llama_sampler * smpl, struct llama_sampler_gpu_params * params);

@@ -10,7 +10,7 @@
 
 // [STRICT] GPU-Resident State Update Kernel
 // Increments position and n_past, and updates token history entirely on GPU.
-__global__ void update_state_kernel(int32_t * pos, int32_t * n_past, int32_t * history, const int32_t * token, int32_t n_history) {
+__global__ void update_state_kernel(int32_t * pos, int32_t * n_past, int32_t * history, const int32_t * token, int32_t n_history, uint32_t * seed) {
     if (blockIdx.x == 0 && threadIdx.x == 0) {
         // 1. Increment pos and n_past
         if (pos) (*pos)++;
@@ -23,6 +23,11 @@ __global__ void update_state_kernel(int32_t * pos, int32_t * n_past, int32_t * h
             }
             history[n_history - 1] = *token;
         }
+
+        // 3. Evolve seed
+        if (seed) {
+            *seed = *seed * 1103515245 + 12345;
+        }
     }
 }
 
@@ -31,15 +36,17 @@ void ggml_cuda_update_state(ggml_backend_cuda_context & ctx, ggml_tensor * dst) 
     const ggml_tensor * src1_past = dst->src[1];
     const ggml_tensor * src2_token = dst->src[2];
     const ggml_tensor * src3_history = dst->src[3]; // Might be null
+    const ggml_tensor * src4_seed = (dst->n_src > 4) ? dst->src[4] : nullptr;
 
     int32_t * d_pos = (int32_t *) src0_pos->data;
     int32_t * d_past = (int32_t *) src1_past->data;
     const int32_t * d_token = (const int32_t *) src2_token->data;
     int32_t * d_history = src3_history ? (int32_t *) src3_history->data : nullptr;
     int32_t n_history = src3_history ? (int32_t) src3_history->ne[0] : 0;
+    uint32_t * d_seed = src4_seed ? (uint32_t *) src4_seed->data : nullptr;
 
     cudaStream_t stream = ctx.stream();
-    update_state_kernel<<<1, 1, 0, stream>>>(d_pos, d_past, d_history, d_token, n_history);
+    update_state_kernel<<<1, 1, 0, stream>>>(d_pos, d_past, d_history, d_token, n_history, d_seed);
 }
 
 // ============================================================================
@@ -124,7 +131,7 @@ void ggml_cuda_penalties(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
 // Fused Sampling Implementation
 // ============================================================================
 
-__global__ void sample_multinomial_simple(const float * probs, int * out_idx, int n, uint64_t seed) {
+__global__ void sample_multinomial_simple(const float * probs, int * out_idx, int n, uint64_t seed_val, const uint32_t * d_seed) {
     extern __shared__ float s_cdf[];
     int tid = threadIdx.x;
     
@@ -143,7 +150,8 @@ __global__ void sample_multinomial_simple(const float * probs, int * out_idx, in
         
         // 3. Random
         // Simple PCG
-        uint64_t state = seed + 0x853c49e6748fea9bULL;
+        uint64_t s = d_seed ? (uint64_t)*d_seed : seed_val;
+        uint64_t state = s + 0x853c49e6748fea9bULL;
         uint64_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
         uint32_t res = (uint32_t)((word >> 22u) ^ word);
         float r = (float)res / (float)UINT32_MAX; 
@@ -176,9 +184,12 @@ void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * 
     int32_t params[16];
     memcpy(params, dst->op_params, sizeof(params));
 
-    int32_t k         = params[0];
-    float   temp      = 0.0f; memcpy(&temp, &params[1], sizeof(float));
-    uint32_t seed     = (uint32_t)params[2];
+    int32_t   k    = params[0];
+    float     temp = 0.0f; memcpy(&temp, &params[1], sizeof(float));
+    uint32_t  seed = (uint32_t)params[2];
+
+    const ggml_tensor * src2_seed = (dst->n_src > 2) ? dst->src[2] : nullptr;
+    const uint32_t * d_seed = src2_seed ? (const uint32_t *) src2_seed->data : nullptr;
 
     ggml_cuda_pool & pool = ctx.pool();
     cudaStream_t stream = ctx.stream();
@@ -222,7 +233,7 @@ void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * 
     int * d_out_idx = out_idx_alloc.get();
     
     if (n_probs <= 1024) {
-        sample_multinomial_simple<<<1, 256, n_probs * sizeof(float), stream>>>(d_probs, d_out_idx, n_probs, (uint64_t)seed);
+        sample_multinomial_simple<<<1, 256, n_probs * sizeof(float), stream>>>(d_probs, d_out_idx, n_probs, (uint64_t)seed, d_seed);
     } else {
         // Fallback for very large k (not recommended but for safety)
         int32_t val = 0;

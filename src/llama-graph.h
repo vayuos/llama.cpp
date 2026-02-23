@@ -26,6 +26,7 @@ class llama_kv_cache_iswa_context;
 class llama_memory_recurrent_context;
 class llama_memory_hybrid_context;
 class llama_memory_hybrid_iswa_context;
+class llama_expert_cache;
 
 // certain models (typically multi-modal) can produce different types of graphs
 enum llm_graph_type {
@@ -582,6 +583,8 @@ struct llm_graph_params {
     struct ggml_tensor * t_decode_stop   = nullptr;
     struct ggml_tensor * t_decode_history = nullptr; // Ring buffer for penalties
 
+    class llama_expert_cache * expert_cache = nullptr;
+
     // return true if the "other" params would result in a graph with the same topology as with the current params
     //   having the same topology allows us to reuse the graph in some cases
     bool allow_reuse(const llm_graph_params & other) const {
@@ -774,6 +777,8 @@ struct llm_graph_context {
     struct ggml_tensor * t_decode_n_past = nullptr;
     struct ggml_tensor * t_decode_token  = nullptr;
     struct ggml_tensor * t_decode_stop   = nullptr;
+
+    class llama_expert_cache * expert_cache = nullptr;
 
     const llm_graph_cb & cb_func;
 

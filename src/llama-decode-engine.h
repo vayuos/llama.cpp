@@ -2,6 +2,7 @@
 
 #include "ggml.h"
 #include "ggml-backend.h"
+#include "llama-expert-cache.h"
 #include <vector>
 #include <memory>
 
@@ -45,8 +46,7 @@ struct llama_gpu_moe_cache {
     // [STRICT] MoE Expert Streaming Control
     // Manages dynamic expert weights for massive MoE models
     bool   is_streaming = false;
-    size_t n_expert_gpu = 0;     // Max experts in GPU VRAM
-    std::vector<int32_t> lru_list; // LRU for expert swapping
+    std::unique_ptr<llama_expert_cache> cache;
 };
 
 struct llama_gpu_sampler {
@@ -84,7 +84,7 @@ struct llama_decode_engine {
 };
 
 // Data plane entry points (Execution only on GPU/Data Plane)
-void llama_decode_engine_init(struct llama_decode_engine * engine);
+void llama_decode_engine_init(struct llama_decode_engine * engine, const struct llama_model * model, const struct llama_context_params * params);
 void llama_decode_engine_run(struct llama_decode_engine * engine);
 void llama_decode_engine_stop(struct llama_decode_engine * engine);
 
