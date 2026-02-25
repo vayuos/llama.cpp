@@ -2,11 +2,11 @@
 #include "llama-context.h"
 #include "llama-model.h"
 #include "llama-impl.h"
-#include "ggml-cuda.h"
-#include "ggml-backend-impl.h"
+#include "ggml-backend.h"
 #include <cstdio>
 
 void llama_decode_engine_init(struct llama_decode_engine * engine, const struct llama_model * model, const struct llama_context_params * params) {
+    (void)params;
     if (!engine || !model) return;
 
     engine->gpu_ctx = std::make_unique<llama_gpu_context>();
@@ -18,35 +18,15 @@ void llama_decode_engine_init(struct llama_decode_engine * engine, const struct 
     engine->is_running = false;
     engine->is_locked  = false;
 
-    // Initialize MoE Expert Cache if model is MoE
+    // NOTE: MoE expert streaming cache is disabled.
+    // The original code called ggml_backend_init_by_type() which creates a NEW independent
+    // CUDA backend with its own stream/context, separate from the main inference backend.
+    // GPU memory allocated on this foreign backend is inaccessible from the main CUDA context,
+    // causing cudaErrorIllegalAddress. The slot-remapping path in build_moe_ffn is also
+    // disabled (shape mismatch), so this cache is unused. Leaving as no-op for now.
     if (model->hparams.n_expert > 0) {
-        const auto & layer = model->layers[0];
-        size_t expert_size = 0;
-        
-        if (layer.ffn_gate_exps) expert_size += ggml_nbytes(layer.ffn_gate_exps) / model->hparams.n_expert;
-        if (layer.ffn_down_exps) expert_size += ggml_nbytes(layer.ffn_down_exps) / model->hparams.n_expert;
-        if (layer.ffn_up_exps)   expert_size += ggml_nbytes(layer.ffn_up_exps)   / model->hparams.n_expert;
-
-        if (expert_size > 0) {
-            engine->moe->is_streaming = true;
-            // Default to 1/4 of experts in GPU if we don't have enough VRAM
-            size_t n_slots = std::max((size_t)1, model->hparams.n_expert / 4);
-            
-            ggml_backend_t backend = model->devices.empty() ? nullptr : ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, 0);
-
-            engine->moe->cache = std::make_unique<llama_expert_cache>(
-                backend,
-                model->hparams.n_expert,
-                n_slots,
-                expert_size,
-                layer.ffn_gate_exps ? layer.ffn_gate_exps->ne[0] : 0, layer.ffn_gate_exps ? layer.ffn_gate_exps->ne[1] : 0,
-                layer.ffn_up_exps   ? layer.ffn_up_exps->ne[0]   : 0, layer.ffn_up_exps   ? layer.ffn_up_exps->ne[1]   : 0,
-                layer.ffn_down_exps ? layer.ffn_down_exps->ne[0] : 0, layer.ffn_down_exps ? layer.ffn_down_exps->ne[1] : 0
-            );
-            
-            LLAMA_LOG_INFO("%s: initialized MoE expert streaming cache with %zu slots (%zu MB total VRAM)\n",
-                __func__, n_slots, (n_slots * expert_size) / (1024 * 1024));
-        }
+        LLAMA_LOG_INFO("%s: MoE model detected (%zu experts) — expert streaming cache disabled (slot-remapping path not active)\n",
+            __func__, (size_t)model->hparams.n_expert);
     }
 }
 

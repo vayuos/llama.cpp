@@ -61,6 +61,7 @@ void ggml_cuda_ssm_convolve(
     int32_t D,
     int32_t K,
     cudaStream_t stream) {
+    GGML_UNUSED(ctx);
 
     dim3 block(32, 8);
     dim3 grid((D + 31) / 32, (T + 7) / 8);
@@ -126,6 +127,7 @@ void ggml_cuda_ssm_state_update(
     int32_t T,
     int32_t D,
     cudaStream_t stream) {
+    GGML_UNUSED(ctx);
 
     dim3 grid(T, (D + 255) / 256);
     dim3 block(256);
@@ -157,7 +159,6 @@ __global__ void ssm_gated_recurrence_kernel(
     int32_t D) {                  // state dimension
 
     int t = blockIdx.x;
-    int _ = threadIdx.x;
 
     if (t >= T) {
         return;
@@ -198,6 +199,7 @@ void ggml_cuda_ssm_gated_recurrence(
     int32_t T,
     int32_t D,
     cudaStream_t stream) {
+    GGML_UNUSED(ctx);
 
     int block_size = 256;
     dim3 grid(T);
@@ -264,14 +266,6 @@ void ggml_cuda_ssm_forward_fused(
 // VALIDATION AND TESTING
 // ============================================================================
 
-struct ggml_cuda_ssm_validation_result {
-    bool convolution_ok;
-    bool state_update_ok;
-    bool gating_ok;
-    bool fused_ok;
-    const char * error_msg;
-};
-
 /**
  * Validate SSM kernels (runs small test cases).
  * Used for debugging and CI/CD verification.
@@ -297,8 +291,10 @@ struct ggml_cuda_ssm_validation_result ggml_cuda_ssm_validate() {
     cudaStream_t stream = nullptr;
 
     // Test convolution
+    // Note: ctx is not actually used in this mockup version of ssm_convolve_kernel
+    ggml_backend_cuda_context dummy_ctx(0);
     ggml_cuda_ssm_convolve(
-        *(ggml_backend_cuda_context*)nullptr,
+        dummy_ctx,
         d_input, d_weights, d_output, T_test, D_test, K_test, stream);
 
     CUDA_CHECK(cudaGetLastError());

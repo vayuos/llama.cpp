@@ -35,8 +35,8 @@ void ggml_cuda_update_state(ggml_backend_cuda_context & ctx, ggml_tensor * dst) 
     const ggml_tensor * src0_pos = dst->src[0];
     const ggml_tensor * src1_past = dst->src[1];
     const ggml_tensor * src2_token = dst->src[2];
-    const ggml_tensor * src3_history = dst->src[3]; // Might be null
-    const ggml_tensor * src4_seed = (dst->n_src > 4) ? dst->src[4] : nullptr;
+    const ggml_tensor * src3_history = dst->src[3];
+    const ggml_tensor * src4_seed = dst->src[4];
 
     int32_t * d_pos = (int32_t *) src0_pos->data;
     int32_t * d_past = (int32_t *) src1_past->data;
@@ -187,8 +187,7 @@ void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * 
     int32_t   k    = params[0];
     float     temp = 0.0f; memcpy(&temp, &params[1], sizeof(float));
     uint32_t  seed = (uint32_t)params[2];
-
-    const ggml_tensor * src2_seed = (dst->n_src > 2) ? dst->src[2] : nullptr;
+    const ggml_tensor * src2_seed = dst->src[2];
     const uint32_t * d_seed = src2_seed ? (const uint32_t *) src2_seed->data : nullptr;
 
     ggml_cuda_pool & pool = ctx.pool();
@@ -236,7 +235,6 @@ void ggml_cuda_sample_candidates(ggml_backend_cuda_context & ctx, ggml_tensor * 
         sample_multinomial_simple<<<1, 256, n_probs * sizeof(float), stream>>>(d_probs, d_out_idx, n_probs, (uint64_t)seed, d_seed);
     } else {
         // Fallback for very large k (not recommended but for safety)
-        int32_t val = 0;
         cuda_argmax_kernel(d_probs, d_out_idx, n_probs, scratch_alloc.get(), stream);
     }
     

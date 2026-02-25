@@ -1064,10 +1064,11 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "GLU",
     "PENALTIES",
     "SAMPLE_CANDIDATES",
+    "UPDATE_STATE",
     "FUSED_MUL_MAT_BIAS_ACT",
 };
 
-static_assert(GGML_OP_COUNT == 98, "GGML_OP_COUNT != 98");
+static_assert(GGML_OP_COUNT == 99, "GGML_OP_COUNT != 99");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -1176,10 +1177,11 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "glu(x)",
     "penalties(x,y)",
     "sample_candidates(x)",
+    "update_state(x)",
     "fused_mul_mat_bias_act(x,y,z)",
 };
 
-static_assert(GGML_OP_COUNT == 98, "GGML_OP_COUNT != 98");
+static_assert(GGML_OP_COUNT == 99, "GGML_OP_COUNT != 99");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 

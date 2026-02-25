@@ -25,32 +25,7 @@
 #endif
 
 // Global isolation state
-llama_core_isolation_state g_core_isolation_state = {
-    .total_cores = 0,
-    .cores_per_socket = 0,
-    .num_sockets = 1,
-    .has_numa = false,
-    .decode_cores = NULL,
-    .n_decode_cores = 0,
-    .server_cores = NULL,
-    .n_server_cores = 0,
-    .cuda_control_core = -1,
-    .thread_assignments = NULL,
-    .n_threads_tracked = 0,
-    .max_threads_capacity = 0,
-    .affinity_mode = LLAMA_AFFINITY_SOFT,
-    .state = LLAMA_ISOLATION_UNINITIALIZED,
-    .enforcement_active = false,
-    .frozen_at_ns = 0,
-    .decode_on_server_count = 0,
-    .server_on_decode_count = 0,
-    .migration_violations = 0,
-    .core_sharing_violations = 0,
-    .preemption_events = 0,
-    .total_context_switches = 0,
-    .assertion_checks_passed = 0,
-    .assertion_checks_failed = 0
-};
+llama_core_isolation_state g_core_isolation_state = {};
 
 /**
  * Get number of available CPU cores
@@ -656,7 +631,7 @@ bool llama_core_isolation_assert_immutable(llama_core_isolation_state * state) {
         LLAMA_LOG_ERROR("CORE ISOLATION: Immutability assert failed - state is %d (not FROZEN)\n",
                        state->state);
         state->assertion_checks_failed++;
-        LLAMA_ABORT("Core isolation not frozen");
+        GGML_ABORT("Core isolation not frozen");
         return false;
     }
 
@@ -664,14 +639,14 @@ bool llama_core_isolation_assert_immutable(llama_core_isolation_state * state) {
     if (!state->decode_cores || state->n_decode_cores == 0) {
         LLAMA_LOG_ERROR("CORE ISOLATION: Decode cores were cleared\n");
         state->assertion_checks_failed++;
-        LLAMA_ABORT("Decode cores cleared");
+        GGML_ABORT("Decode cores cleared");
         return false;
     }
 
     if (!state->server_cores || state->n_server_cores == 0) {
         LLAMA_LOG_ERROR("CORE ISOLATION: Server cores were cleared\n");
         state->assertion_checks_failed++;
-        LLAMA_ABORT("Server cores cleared");
+        GGML_ABORT("Server cores cleared");
         return false;
     }
 

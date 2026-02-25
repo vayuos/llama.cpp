@@ -13,9 +13,9 @@ if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Force Release build for optimization
-if (NOT XCODE AND NOT MSVC)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-endif()
+#if (NOT XCODE AND NOT MSVC)
+#    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+#endif()
 
 message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 

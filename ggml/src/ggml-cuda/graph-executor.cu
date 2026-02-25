@@ -93,6 +93,7 @@ int ggml_cuda_graph_capture_end(uint64_t graph_id, cudaStream_t stream) {
 // ============================================================================
 
 int ggml_cuda_graph_instantiate(uint64_t graph_id, cudaStream_t stream) {
+    GGML_UNUSED(stream);
     if (!g_cuda_graph_enabled || graph_id == 0) {
         return -1;
     }
@@ -114,7 +115,6 @@ int ggml_cuda_graph_instantiate(uint64_t graph_id, cudaStream_t stream) {
     }
 
     // Instantiate executable graph
-    char error_buffer[256];
     CUDA_CHECK(cudaGraphInstantiateWithFlags(&state.graph_exec, state.graph, 0));
     state.is_instantiated = true;
 
@@ -188,7 +188,8 @@ int ggml_cuda_graph_destroy(uint64_t graph_id) {
 // ============================================================================
 
 struct ggml_cuda_graph_stats ggml_cuda_graph_get_stats(uint64_t graph_id) {
-    struct ggml_cuda_graph_stats stats = {0};
+    struct ggml_cuda_graph_stats stats;
+    memset(&stats, 0, sizeof(stats));
 
     auto it = g_graph_cache.find(graph_id);
     if (it == g_graph_cache.end()) {

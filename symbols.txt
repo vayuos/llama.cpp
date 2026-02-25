@@ -1,0 +1,683 @@
+0000000000022000 <.init>:
+0000000000022020 <.plt>:
+00000000000241c0 <__cxa_finalize@plt>:
+00000000000241d0 <std::thread::join()@plt>:
+00000000000241e0 <std::runtime_error::~runtime_error()@plt>:
+00000000000241f0 <std::basic_istream<char, std::char_traits<char> >& std::operator>><char, std::char_traits<char> >(std::basic_istream<char, std::char_traits<char> >&, char&)@plt>:
+0000000000024200 <std::basic_istream<char, std::char_traits<char> >& std::getline<char, std::char_traits<char>, std::allocator<char> >(std::basic_istream<char, std::char_traits<char> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, char)@plt>:
+0000000000024210 <llama_perf_sampler@plt>:
+0000000000024220 <llama_model_n_params@plt>:
+0000000000024230 <OPENSSL_thread_stop@plt>:
+0000000000024240 <llama_print_system_info@plt>:
+0000000000024250 <mtmd_input_chunk_get_tokens_text@plt>:
+0000000000024260 <llama_supports_gpu_offload@plt>:
+0000000000024270 <SSL_CTX_get_cert_store@plt>:
+0000000000024280 <std::basic_ifstream<char, std::char_traits<char> >::~basic_ifstream()@plt>:
+0000000000024290 <getsockname@plt>:
+00000000000242a0 <std::__throw_out_of_range_fmt(char const*, ...)@plt>:
+00000000000242b0 <std::__throw_logic_error(char const*)@plt>:
+00000000000242c0 <EVP_sha256@plt>:
+00000000000242d0 <llama_state_seq_save_file@plt>:
+00000000000242e0 <__cxa_begin_catch@plt>:
+00000000000242f0 <llama_get_embeddings_ith@plt>:
+0000000000024300 <fdopen@plt>:
+0000000000024310 <std::exception::~exception()@plt>:
+0000000000024320 <ggml_backend_cpu_buffer_type@plt>:
+0000000000024330 <__isoc23_strtoul@plt>:
+0000000000024340 <memcpy@plt>:
+0000000000024350 <localeconv@plt>:
+0000000000024360 <llama_model_n_ctx_train@plt>:
+0000000000024370 <std::__throw_bad_alloc()@plt>:
+0000000000024380 <llama_memory_can_shift@plt>:
+0000000000024390 <stat@plt>:
+00000000000243a0 <std::filesystem::__cxx11::path::_List::_Impl_deleter::operator()(std::filesystem::__cxx11::path::_List::_Impl*) const@plt>:
+00000000000243b0 <SSL_free@plt>:
+00000000000243c0 <mtmd_tokenize@plt>:
+00000000000243d0 <std::ostream::sentry::~sentry()@plt>:
+00000000000243e0 <std::filesystem::__cxx11::path::_List::_List()@plt>:
+00000000000243f0 <operator delete(void*, unsigned long)@plt>:
+0000000000024400 <llama_encode@plt>:
+0000000000024410 <std::filesystem::status(std::filesystem::__cxx11::path const&)@plt>:
+0000000000024420 <llama_sampler_init_adaptive_p@plt>:
+0000000000024430 <EVP_DigestUpdate@plt>:
+0000000000024440 <std::locale::classic()@plt>:
+0000000000024450 <llama_sampler_init_xtc@plt>:
+0000000000024460 <llama_state_seq_get_data_ext@plt>:
+0000000000024470 <llama_sampler_init_typical@plt>:
+0000000000024480 <setsockopt@plt>:
+0000000000024490 <llama_apply_adapter_cvec@plt>:
+00000000000244a0 <X509_NAME_get_text_by_NID@plt>:
+00000000000244b0 <std::filesystem::remove(std::filesystem::__cxx11::path const&)@plt>:
+00000000000244c0 <llama_set_embeddings@plt>:
+00000000000244d0 <SSL_peek@plt>:
+00000000000244e0 <fcntl@plt>:
+00000000000244f0 <strncpy@plt>:
+0000000000024500 <operator new(unsigned long)@plt>:
+0000000000024510 <memmove@plt>:
+0000000000024520 <std::__throw_invalid_argument(char const*)@plt>:
+0000000000024530 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::replace(unsigned long, unsigned long, char const*, unsigned long)@plt>:
+0000000000024540 <toupper@plt>:
+0000000000024550 <std::filesystem::file_size(std::filesystem::__cxx11::path const&)@plt>:
+0000000000024560 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::rfind(char const*, unsigned long, unsigned long) const@plt>:
+0000000000024570 <std::random_device::_M_fini()@plt>:
+0000000000024580 <EVP_MD_CTX_new@plt>:
+0000000000024590 <std::ostream::tellp()@plt>:
+00000000000245a0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::find_last_not_of(char const*, unsigned long, unsigned long) const@plt>:
+00000000000245b0 <std::invalid_argument::invalid_argument(char const*)@plt>:
+00000000000245c0 <std::__future_base::_Result_base::~_Result_base()@plt>:
+00000000000245d0 <llama_vocab_get_text@plt>:
+00000000000245e0 <std::ostream::operator<<(std::basic_streambuf<char, std::char_traits<char> >*)@plt>:
+00000000000245f0 <mtmd_bitmap_free@plt>:
+0000000000024600 <llama_model_size@plt>:
+0000000000024610 <std::__exception_ptr::exception_ptr::_M_release()@plt>:
+0000000000024620 <std::basic_filebuf<char, std::char_traits<char> >::close()@plt>:
+0000000000024630 <SSL_shutdown@plt>:
+0000000000024640 <getpwuid@plt>:
+0000000000024650 <remove@plt>:
+0000000000024660 <inet_ntop@plt>:
+0000000000024670 <std::runtime_error::what() const@plt>:
+0000000000024680 <std::__detail::_List_node_base::_M_hook(std::__detail::_List_node_base*)@plt>:
+0000000000024690 <llama_batch_free@plt>:
+00000000000246a0 <strtof@plt>:
+00000000000246b0 <__vsnprintf_chk@plt>:
+00000000000246c0 <llama_init_from_model@plt>:
+00000000000246d0 <llama_model_n_layer@plt>:
+00000000000246e0 <llama_sampler_apply@plt>:
+00000000000246f0 <ggml_backend_dev_by_name@plt>:
+0000000000024700 <close@plt>:
+0000000000024710 <std::__exception_ptr::exception_ptr::_M_addref()@plt>:
+0000000000024720 <strncmp@plt>:
+0000000000024730 <llama_sampler_init_logit_bias@plt>:
+0000000000024740 <llama_sampler_reset@plt>:
+0000000000024750 <llama_n_ubatch@plt>:
+0000000000024760 <__res_init@plt>:
+0000000000024770 <BIO_ctrl@plt>:
+0000000000024780 <ggml_backend_reg_get_proc_address@plt>:
+0000000000024790 <llama_backend_init@plt>:
+00000000000247a0 <pthread_mutex_unlock@plt>:
+00000000000247b0 <mtmd_bitmap_set_id@plt>:
+00000000000247c0 <llama_sampler_chain_n@plt>:
+00000000000247d0 <mtmd_input_chunk_copy@plt>:
+00000000000247e0 <std::runtime_error::runtime_error(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+00000000000247f0 <__fprintf_chk@plt>:
+0000000000024800 <std::runtime_error::runtime_error(char const*)@plt>:
+0000000000024810 <llama_batch_get_one@plt>:
+0000000000024820 <std::random_device::_M_getval()@plt>:
+0000000000024830 <std::rethrow_exception(std::__exception_ptr::exception_ptr)@plt>:
+0000000000024840 <mkdir@plt>:
+0000000000024850 <llama_model_is_recurrent@plt>:
+0000000000024860 <mtmd_input_chunks_free@plt>:
+0000000000024870 <std::runtime_error::runtime_error(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+0000000000024880 <pthread_mutex_lock@plt>:
+0000000000024890 <ggml_time_ms@plt>:
+00000000000248a0 <llama_state_seq_load_file@plt>:
+00000000000248b0 <pthread_once@plt>:
+00000000000248c0 <std::__throw_regex_error(std::regex_constants::error_type)@plt>:
+00000000000248d0 <llama_vocab_fim_sep@plt>:
+00000000000248e0 <llama_memory_seq_add@plt>:
+00000000000248f0 <readlink@plt>:
+0000000000024900 <__stack_chk_fail@plt>:
+0000000000024910 <llama_set_adapter_lora@plt>:
+0000000000024920 <mtmd_input_chunks_get@plt>:
+0000000000024930 <poll@plt>:
+0000000000024940 <std::__cxx11::basic_stringstream<char, std::char_traits<char>, std::allocator<char> >::basic_stringstream()@plt>:
+0000000000024950 <llama_sampler_init_top_n_sigma@plt>:
+0000000000024960 <mtmd_input_chunk_get_id@plt>:
+0000000000024970 <memset@plt>:
+0000000000024980 <std::__cxx11::basic_stringbuf<char, std::char_traits<char>, std::allocator<char> >::_M_sync(char*, unsigned long, unsigned long)@plt>:
+0000000000024990 <mtmd_bitmap_get_data@plt>:
+00000000000249a0 <std::ostream::operator<<(int)@plt>:
+00000000000249b0 <ggml_free@plt>:
+00000000000249c0 <ggml_n_dims@plt>:
+00000000000249d0 <std::__throw_bad_cast()@plt>:
+00000000000249e0 <fputs@plt>:
+00000000000249f0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::append(char const*, unsigned long)@plt>:
+0000000000024a00 <llama_sampler_init_infill@plt>:
+0000000000024a10 <llama_set_warmup@plt>:
+0000000000024a20 <__cxa_thread_atexit@plt>:
+0000000000024a30 <llama_memory_seq_pos_min@plt>:
+0000000000024a40 <getuid@plt>:
+0000000000024a50 <__cxa_guard_acquire@plt>:
+0000000000024a60 <send@plt>:
+0000000000024a70 <llama_decode@plt>:
+0000000000024a80 <llama_model_n_swa@plt>:
+0000000000024a90 <pow@plt>:
+0000000000024aa0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::find(char const*, unsigned long, unsigned long) const@plt>:
+0000000000024ab0 <signal@plt>:
+0000000000024ac0 <accept4@plt>:
+0000000000024ad0 <std::current_exception()@plt>:
+0000000000024ae0 <llama_token_to_piece@plt>:
+0000000000024af0 <ggml_backend_register@plt>:
+0000000000024b00 <SSL_CTX_load_verify_locations@plt>:
+0000000000024b10 <ggml_backend_buft_name@plt>:
+0000000000024b20 <ggml_get_tensor@plt>:
+0000000000024b30 <llama_max_tensor_buft_overrides@plt>:
+0000000000024b40 <std::basic_ios<char, std::char_traits<char> >::init(std::basic_streambuf<char, std::char_traits<char> >*)@plt>:
+0000000000024b50 <operator delete[](void*)@plt>:
+0000000000024b60 <__isoc23_strtoll@plt>:
+0000000000024b70 <std::ostream& std::ostream::_M_insert<long>(long)@plt>:
+0000000000024b80 <gguf_find_key@plt>:
+0000000000024b90 <connect@plt>:
+0000000000024ba0 <__strncpy_chk@plt>:
+0000000000024bb0 <std::__cxx11::basic_stringstream<char, std::char_traits<char>, std::allocator<char> >::~basic_stringstream()@plt>:
+0000000000024bc0 <__cxa_allocate_exception@plt>:
+0000000000024bd0 <std::__cxx11::basic_stringbuf<char, std::char_traits<char>, std::allocator<char> >::str() const@plt>:
+0000000000024be0 <llama_vocab_n_tokens@plt>:
+0000000000024bf0 <strlen@plt>:
+0000000000024c00 <GENERAL_NAMES_free@plt>:
+0000000000024c10 <std::thread::_State::~_State()@plt>:
+0000000000024c20 <llama_model_free@plt>:
+0000000000024c30 <exp2@plt>:
+0000000000024c40 <std::__throw_system_error(int)@plt>:
+0000000000024c50 <__cxa_guard_abort@plt>:
+0000000000024c60 <__cxa_init_primary_exception@plt>:
+0000000000024c70 <fclose@plt>:
+0000000000024c80 <std::runtime_error::~runtime_error()@plt>:
+0000000000024c90 <memchr@plt>:
+0000000000024ca0 <std::ctype<char> const& std::use_facet<std::ctype<char> >(std::locale const&)@plt>:
+0000000000024cb0 <expf@plt>:
+0000000000024cc0 <posix_spawn_file_actions_addclose@plt>:
+0000000000024cd0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::rfind(char, unsigned long) const@plt>:
+0000000000024ce0 <std::basic_istream<char, std::char_traits<char> >& std::operator>><char, std::char_traits<char>, std::allocator<char> >(std::basic_istream<char, std::char_traits<char> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)@plt>:
+0000000000024cf0 <llama_split_path@plt>:
+0000000000024d00 <llama_supports_rpc@plt>:
+0000000000024d10 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::copy(char*, unsigned long, unsigned long) const@plt>:
+0000000000024d20 <std::__throw_range_error(char const*)@plt>:
+0000000000024d30 <ASN1_STRING_length@plt>:
+0000000000024d40 <gguf_free@plt>:
+0000000000024d50 <isalnum@plt>:
+0000000000024d60 <open@plt>:
+0000000000024d70 <llama_synchronize@plt>:
+0000000000024d80 <std::__throw_bad_array_new_length()@plt>:
+0000000000024d90 <socket@plt>:
+0000000000024da0 <operator new[](unsigned long)@plt>:
+0000000000024db0 <std::__cxx11::basic_istringstream<char, std::char_traits<char>, std::allocator<char> >::basic_istringstream(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::_Ios_Openmode)@plt>:
+0000000000024dc0 <mtmd_input_chunk_get_type@plt>:
+0000000000024dd0 <llama_chat_apply_template@plt>:
+0000000000024de0 <strstr@plt>:
+0000000000024df0 <std::_Hash_bytes(void const*, unsigned long, unsigned long)@plt>:
+0000000000024e00 <std::ctype<char>::_M_widen_init() const@plt>:
+0000000000024e10 <X509_STORE_free@plt>:
+0000000000024e20 <SSL_CTX_set_default_verify_paths@plt>:
+0000000000024e30 <std::istream::read(char*, long)@plt>:
+0000000000024e40 <std::_Rb_tree_decrement(std::_Rb_tree_node_base*)@plt>:
+0000000000024e50 <llama_vocab_get_add_sep@plt>:
+0000000000024e60 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::insert(unsigned long, char const*)@plt>:
+0000000000024e70 <std::ostream::write(char const*, long)@plt>:
+0000000000024e80 <llama_adapter_get_alora_invocation_tokens@plt>:
+0000000000024e90 <ggml_backend_dev_memory@plt>:
+0000000000024ea0 <std::ostream::flush()@plt>:
+0000000000024eb0 <fflush@plt>:
+0000000000024ec0 <ggml_backend_dev_name@plt>:
+0000000000024ed0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned long, unsigned long, char const*, unsigned long)@plt>:
+0000000000024ee0 <std::ostream& std::ostream::_M_insert<unsigned long>(unsigned long)@plt>:
+0000000000024ef0 <SSL_CTX_free@plt>:
+0000000000024f00 <llama_get_sampled_logits_ith@plt>:
+0000000000024f10 <ggml_backend_dev_get@plt>:
+0000000000024f20 <llama_model_load_from_file@plt>:
+0000000000024f30 <posix_spawn_file_actions_init@plt>:
+0000000000024f40 <std::__basic_file<char>::~__basic_file()@plt>:
+0000000000024f50 <__memcpy_chk@plt>:
+0000000000024f60 <gguf_get_tensor_name@plt>:
+0000000000024f70 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::operator=(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&)@plt>:
+0000000000024f80 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)@plt>:
+0000000000024f90 <std::basic_ios<char, std::char_traits<char> >::imbue(std::locale const&)@plt>:
+0000000000024fa0 <std::locale::operator=(std::locale const&)@plt>:
+0000000000024fb0 <strchr@plt>:
+0000000000024fc0 <EVP_MD_CTX_free@plt>:
+0000000000024fd0 <SSL_CTX_check_private_key@plt>:
+0000000000024fe0 <setenv@plt>:
+0000000000024ff0 <llama_sampler_name@plt>:
+0000000000025000 <setpriority@plt>:
+0000000000025010 <std::ostream::sentry::sentry(std::ostream&)@plt>:
+0000000000025020 <std::ostream::put(char)@plt>:
+0000000000025030 <ggml_opt_dataset_data@plt>:
+0000000000025040 <SSL_write@plt>:
+0000000000025050 <std::__cxx11::basic_istringstream<char, std::char_traits<char>, std::allocator<char> >::~basic_istringstream()@plt>:
+0000000000025060 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace_aux(unsigned long, unsigned long, unsigned long, char)@plt>:
+0000000000025070 <llama_perf_context_reset@plt>:
+0000000000025080 <sysconf@plt>:
+0000000000025090 <__cxa_guard_release@plt>:
+00000000000250a0 <mtmd_support_vision@plt>:
+00000000000250b0 <llama_sampler_init_grammar_lazy_patterns@plt>:
+00000000000250c0 <ggml_backend_dev_type@plt>:
+00000000000250d0 <std::basic_ostream<char, std::char_traits<char> >& std::operator<< <std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*)@plt>:
+00000000000250e0 <std::invalid_argument::invalid_argument(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+00000000000250f0 <std::future_category()@plt>:
+0000000000025100 <llama_get_sampled_probs_count_ith@plt>:
+0000000000025110 <SSL_CTX_set_options@plt>:
+0000000000025120 <std::condition_variable::notify_one()@plt>:
+0000000000025130 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_construct(unsigned long, char)@plt>:
+0000000000025140 <std::filesystem::__cxx11::path::_List::end() const@plt>:
+0000000000025150 <llama_split_prefix@plt>:
+0000000000025160 <munmap@plt>:
+0000000000025170 <mtmd_helper_eval_chunk_single@plt>:
+0000000000025180 <SSL_set_verify@plt>:
+0000000000025190 <std::__throw_length_error(char const*)@plt>:
+00000000000251a0 <shutdown@plt>:
+00000000000251b0 <llama_free@plt>:
+00000000000251c0 <isprint@plt>:
+00000000000251d0 <std::__throw_out_of_range(char const*)@plt>:
+00000000000251e0 <SSL_ctrl@plt>:
+00000000000251f0 <__cxa_throw@plt>:
+0000000000025200 <llama_sampler_clone@plt>:
+0000000000025210 <llama_max_devices@plt>:
+0000000000025220 <llama_sampler_free@plt>:
+0000000000025230 <llama_flash_attn_type_name@plt>:
+0000000000025240 <fgets@plt>:
+0000000000025250 <llama_sampler_chain_add@plt>:
+0000000000025260 <std::condition_variable::wait(std::unique_lock<std::mutex>&)@plt>:
+0000000000025270 <freeifaddrs@plt>:
+0000000000025280 <llama_sampler_chain_get@plt>:
+0000000000025290 <llama_sampler_init_top_p@plt>:
+00000000000252a0 <_Unwind_Resume@plt>:
+00000000000252b0 <ggml_backend_dev_description@plt>:
+00000000000252c0 <localtime@plt>:
+00000000000252d0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::find_last_not_of(char, unsigned long) const@plt>:
+00000000000252e0 <std::basic_ostream<char, std::char_traits<char> >& std::operator<< <std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char)@plt>:
+00000000000252f0 <pthread_setaffinity_np@plt>:
+0000000000025300 <llama_get_sampled_candidates_ith@plt>:
+0000000000025310 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::append(char const*)@plt>:
+0000000000025320 <ASN1_STRING_get0_data@plt>:
+0000000000025330 <mtmd_context_params_default@plt>:
+0000000000025340 <SSL_pending@plt>:
+0000000000025350 <exit@plt>:
+0000000000025360 <llama_model_has_decoder@plt>:
+0000000000025370 <freeaddrinfo@plt>:
+0000000000025380 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::resize(unsigned long, char)@plt>:
+0000000000025390 <mtmd_input_chunk_free@plt>:
+00000000000253a0 <llama_memory_seq_pos_max@plt>:
+00000000000253b0 <posix_spawn_file_actions_adddup2@plt>:
+00000000000253c0 <llama_sampler_init_temp@plt>:
+00000000000253d0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_create(unsigned long&, unsigned long)@plt>:
+00000000000253e0 <std::istream& std::istream::_M_extract<long>(long&)@plt>:
+00000000000253f0 <std::istream::sentry::sentry(std::istream&, bool)@plt>:
+0000000000025400 <std::condition_variable::~condition_variable()@plt>:
+0000000000025410 <pthread_self@plt>:
+0000000000025420 <SSL_CTX_new@plt>:
+0000000000025430 <llama_sampler_init_mirostat@plt>:
+0000000000025440 <std::__codecvt_utf8_base<char32_t>::~__codecvt_utf8_base()@plt>:
+0000000000025450 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::erase(unsigned long, unsigned long)@plt>:
+0000000000025460 <llama_pooling_type@plt>:
+0000000000025470 <llama_sampler_init_top_k@plt>:
+0000000000025480 <std::ios_base::~ios_base()@plt>:
+0000000000025490 <std::chrono::_V2::system_clock::now()@plt>:
+00000000000254a0 <llama_sampler_chain_default_params@plt>:
+00000000000254b0 <islower@plt>:
+00000000000254c0 <BIO_new_socket@plt>:
+00000000000254d0 <llama_get_memory@plt>:
+00000000000254e0 <exp2f@plt>:
+00000000000254f0 <std::__atomic_futex_unsigned_base::_M_futex_wait_until(unsigned int*, unsigned int, bool, std::chrono::duration<long, std::ratio<1l, 1l> >, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)@plt>:
+0000000000025500 <time@plt>:
+0000000000025510 <mtmd_bitmap_get_n_bytes@plt>:
+0000000000025520 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append(char const*, unsigned long)@plt>:
+0000000000025530 <std::locale::locale(std::locale const&)@plt>:
+0000000000025540 <std::ios_base::failure[abi:cxx11]::failure(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+0000000000025550 <ggml_backend_dev_count@plt>:
+0000000000025560 <std::__detail::_Prime_rehash_policy::_M_next_bkt(unsigned long) const@plt>:
+0000000000025570 <llama_chat_builtin_templates@plt>:
+0000000000025580 <posix_spawn@plt>:
+0000000000025590 <getenv@plt>:
+00000000000255a0 <std::_V2::generic_category()@plt>:
+00000000000255b0 <getsockopt@plt>:
+00000000000255c0 <SSL_CTX_use_certificate_chain_file@plt>:
+00000000000255d0 <isspace@plt>:
+00000000000255e0 <ggml_backend_load_all@plt>:
+00000000000255f0 <std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)())@plt>:
+0000000000025600 <std::ostream& std::ostream::_M_insert<double>(double)@plt>:
+0000000000025610 <strerror@plt>:
+0000000000025620 <__cxa_end_catch@plt>:
+0000000000025630 <llama_model_chat_template@plt>:
+0000000000025640 <llama_get_model@plt>:
+0000000000025650 <llama_vocab_is_eog@plt>:
+0000000000025660 <ggml_opt_dataset_labels@plt>:
+0000000000025670 <std::basic_ofstream<char, std::char_traits<char> >::~basic_ofstream()@plt>:
+0000000000025680 <std::locale::locale()@plt>:
+0000000000025690 <gmtime_r@plt>:
+00000000000256a0 <sigemptyset@plt>:
+00000000000256b0 <sigaction@plt>:
+00000000000256c0 <llama_backend_free@plt>:
+00000000000256d0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::find_first_not_of(char const*, unsigned long, unsigned long) const@plt>:
+00000000000256e0 <SSL_get_verify_result@plt>:
+00000000000256f0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_dispose()@plt>:
+0000000000025700 <mtmd_input_chunk_get_n_pos@plt>:
+0000000000025710 <std::thread::hardware_concurrency()@plt>:
+0000000000025720 <__cxa_rethrow@plt>:
+0000000000025730 <strcasecmp@plt>:
+0000000000025740 <llama_clear_adapter_lora@plt>:
+0000000000025750 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::find_last_of(char const*, unsigned long, unsigned long) const@plt>:
+0000000000025760 <llama_params_fit@plt>:
+0000000000025770 <llama_numa_init@plt>:
+0000000000025780 <ggml_opt_get_default_optimizer_params@plt>:
+0000000000025790 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::reserve(unsigned long)@plt>:
+00000000000257a0 <mtmd_input_chunks_init@plt>:
+00000000000257b0 <strcmp@plt>:
+00000000000257c0 <llama_vocab_get_add_eos@plt>:
+00000000000257d0 <ggml_abort@plt>:
+00000000000257e0 <std::random_device::_M_init(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+00000000000257f0 <ggml_backend_reg_by_name@plt>:
+0000000000025800 <EVP_md5@plt>:
+0000000000025810 <std::basic_filebuf<char, std::char_traits<char> >::basic_filebuf()@plt>:
+0000000000025820 <pipe@plt>:
+0000000000025830 <getnameinfo@plt>:
+0000000000025840 <tolower@plt>:
+0000000000025850 <std::condition_variable::condition_variable()@plt>:
+0000000000025860 <kill@plt>:
+0000000000025870 <std::_Rb_tree_rebalance_for_erase(std::_Rb_tree_node_base*, std::_Rb_tree_node_base&)@plt>:
+0000000000025880 <__cxa_atexit@plt>:
+0000000000025890 <llama_memory_seq_rm@plt>:
+00000000000258a0 <llama_vocab_eos@plt>:
+00000000000258b0 <fstat@plt>:
+00000000000258c0 <std::filesystem::__cxx11::directory_iterator::directory_iterator(std::filesystem::__cxx11::path const&, std::filesystem::directory_options, std::error_code*)@plt>:
+00000000000258d0 <mtmd_default_marker@plt>:
+00000000000258e0 <__cxa_free_exception@plt>:
+00000000000258f0 <std::filesystem::__cxx11::directory_iterator::operator++()@plt>:
+0000000000025900 <llama_perf_context_print@plt>:
+0000000000025910 <strftime@plt>:
+0000000000025920 <X509_get_subject_name@plt>:
+0000000000025930 <llama_model_default_params@plt>:
+0000000000025940 <std::__cxx11::basic_ostringstream<char, std::char_traits<char>, std::allocator<char> >::~basic_ostringstream()@plt>:
+0000000000025950 <EVP_DigestInit_ex@plt>:
+0000000000025960 <llama_vocab_type@plt>:
+0000000000025970 <std::filesystem::__cxx11::path::_M_split_cmpts()@plt>:
+0000000000025980 <std::_Rb_tree_increment(std::_Rb_tree_node_base const*)@plt>:
+0000000000025990 <std::basic_filebuf<char, std::char_traits<char> >::~basic_filebuf()@plt>:
+00000000000259a0 <llama_log_set@plt>:
+00000000000259b0 <isatty@plt>:
+00000000000259c0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_erase(unsigned long, unsigned long)@plt>:
+00000000000259d0 <llama_memory_clear@plt>:
+00000000000259e0 <__isoc23_strtol@plt>:
+00000000000259f0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&)@plt>:
+0000000000025a00 <SSL_new@plt>:
+0000000000025a10 <llama_adapter_lora_init@plt>:
+0000000000025a20 <mtmd_input_chunk_get_n_tokens@plt>:
+0000000000025a30 <std::thread::detach()@plt>:
+0000000000025a40 <waitpid@plt>:
+0000000000025a50 <mtmd_input_chunks_size@plt>:
+0000000000025a60 <llama_get_logits_ith@plt>:
+0000000000025a70 <gguf_get_val_u16@plt>:
+0000000000025a80 <llama_n_ctx_seq@plt>:
+0000000000025a90 <ERR_get_error@plt>:
+0000000000025aa0 <std::uncaught_exception()@plt>:
+0000000000025ab0 <bind@plt>:
+0000000000025ac0 <llama_sampler_init_dist@plt>:
+0000000000025ad0 <llama_model_has_encoder@plt>:
+0000000000025ae0 <getifaddrs@plt>:
+0000000000025af0 <isupper@plt>:
+0000000000025b00 <logf@plt>:
+0000000000025b10 <std::condition_variable::notify_all()@plt>:
+0000000000025b20 <std::filesystem::__cxx11::directory_iterator::operator*() const@plt>:
+0000000000025b30 <llama_memory_seq_cp@plt>:
+0000000000025b40 <ggml_nelements@plt>:
+0000000000025b50 <mmap@plt>:
+0000000000025b60 <std::chrono::_V2::steady_clock::now()@plt>:
+0000000000025b70 <std::__cxx11::basic_ostringstream<char, std::char_traits<char>, std::allocator<char> >::basic_ostringstream()@plt>:
+0000000000025b80 <std::__detail::_List_node_base::_M_unhook()@plt>:
+0000000000025b90 <std::__throw_future_error(int)@plt>:
+0000000000025ba0 <llama_model_is_hybrid@plt>:
+0000000000025bb0 <recv@plt>:
+0000000000025bc0 <TLS_client_method@plt>:
+0000000000025bd0 <__dynamic_cast@plt>:
+0000000000025be0 <SSL_CTX_use_PrivateKey_file@plt>:
+0000000000025bf0 <std::logic_error::logic_error(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+0000000000025c00 <std::basic_filebuf<char, std::char_traits<char> >::open(char const*, std::_Ios_Openmode)@plt>:
+0000000000025c10 <llama_get_sampled_token_ith@plt>:
+0000000000025c20 <llama_vocab_fim_pre@plt>:
+0000000000025c30 <std::_Rb_tree_increment(std::_Rb_tree_node_base*)@plt>:
+0000000000025c40 <X509_get_ext_d2i@plt>:
+0000000000025c50 <llama_adapter_get_alora_n_invocation_tokens@plt>:
+0000000000025c60 <std::basic_ostream<char, std::char_traits<char> >& std::__ostream_insert<char, std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*, long)@plt>:
+0000000000025c70 <ggml_backend_dev_buffer_type@plt>:
+0000000000025c80 <rand@plt>:
+0000000000025c90 <std::ios_base::ios_base()@plt>:
+0000000000025ca0 <llama_n_ctx@plt>:
+0000000000025cb0 <std::locale::~locale()@plt>:
+0000000000025cc0 <inet_pton@plt>:
+0000000000025cd0 <std::__detail::_Prime_rehash_policy::_M_need_rehash(unsigned long, unsigned long, unsigned long) const@plt>:
+0000000000025ce0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::substr(unsigned long, unsigned long) const@plt>:
+0000000000025cf0 <llama_state_seq_get_size_ext@plt>:
+0000000000025d00 <__errno_location@plt>:
+0000000000025d10 <llama_sampler_init_min_p@plt>:
+0000000000025d20 <mtmd_support_audio@plt>:
+0000000000025d30 <puts@plt>:
+0000000000025d40 <__printf_chk@plt>:
+0000000000025d50 <llama_sampler_init_penalties@plt>:
+0000000000025d60 <std::__basic_file<char>::is_open() const@plt>:
+0000000000025d70 <llama_perf_context@plt>:
+0000000000025d80 <llama_get_sampled_probs_ith@plt>:
+0000000000025d90 <SSL_CTX_set_cert_store@plt>:
+0000000000025da0 <ggml_time_us@plt>:
+0000000000025db0 <std::runtime_error::runtime_error(char const*)@plt>:
+0000000000025dc0 <llama_sampler_accept@plt>:
+0000000000025dd0 <llama_model_get_vocab@plt>:
+0000000000025de0 <llama_model_decoder_start_token@plt>:
+0000000000025df0 <std::future_error::~future_error()@plt>:
+0000000000025e00 <llama_state_seq_set_data_ext@plt>:
+0000000000025e10 <SSL_CTX_set_default_passwd_cb_userdata@plt>:
+0000000000025e20 <llama_vocab_fim_suf@plt>:
+0000000000025e30 <OPENSSL_sk_value@plt>:
+0000000000025e40 <SSL_CTX_use_certificate_file@plt>:
+0000000000025e50 <llama_get_sampled_logits_count_ith@plt>:
+0000000000025e60 <gguf_init_from_file@plt>:
+0000000000025e70 <llama_detokenize@plt>:
+0000000000025e80 <nanosleep@plt>:
+0000000000025e90 <X509_STORE_up_ref@plt>:
+0000000000025ea0 <llama_memory_breakdown_print@plt>:
+0000000000025eb0 <EVP_sha512@plt>:
+0000000000025ec0 <llama_model_n_embd@plt>:
+0000000000025ed0 <ggml_opt_dataset_init@plt>:
+0000000000025ee0 <std::basic_ifstream<char, std::char_traits<char> >::basic_ifstream(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::_Ios_Openmode)@plt>:
+0000000000025ef0 <std::_Rb_tree_insert_and_rebalance(bool, std::_Rb_tree_node_base*, std::_Rb_tree_node_base*, std::_Rb_tree_node_base&)@plt>:
+0000000000025f00 <llama_n_batch@plt>:
+0000000000025f10 <SSL_get1_peer_certificate@plt>:
+0000000000025f20 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::find(char, unsigned long) const@plt>:
+0000000000025f30 <llama_sampler_chain_init@plt>:
+0000000000025f40 <fwrite@plt>:
+0000000000025f50 <getaddrinfo@plt>:
+0000000000025f60 <SSL_set_bio@plt>:
+0000000000025f70 <memcmp@plt>:
+0000000000025f80 <llama_sampler_init_mirostat_v2@plt>:
+0000000000025f90 <llama_model_meta_key_str@plt>:
+0000000000025fa0 <llama_get_embeddings_seq@plt>:
+0000000000025fb0 <std::__exception_ptr::exception_ptr::exception_ptr(void*)@plt>:
+0000000000025fc0 <llama_vocab_sep@plt>:
+0000000000025fd0 <std::__throw_bad_function_call()@plt>:
+0000000000025fe0 <llama_vocab_fim_mid@plt>:
+0000000000025ff0 <std::basic_ios<char, std::char_traits<char> >::clear(std::_Ios_Iostate)@plt>:
+0000000000026000 <std::runtime_error::runtime_error(std::runtime_error const&)@plt>:
+0000000000026010 <posix_spawn_file_actions_destroy@plt>:
+0000000000026020 <SSL_CTX_ctrl@plt>:
+0000000000026030 <std::terminate()@plt>:
+0000000000026040 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_assign(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@plt>:
+0000000000026050 <ggml_threadpool_params_init@plt>:
+0000000000026060 <std::filesystem::__cxx11::path::_List::_List(std::filesystem::__cxx11::path::_List const&)@plt>:
+0000000000026070 <mtmd_init_from_file@plt>:
+0000000000026080 <pthread_cond_clockwait@plt>:
+0000000000026090 <listen@plt>:
+00000000000260a0 <ggml_type_name@plt>:
+00000000000260b0 <mtmd_helper_log_set@plt>:
+00000000000260c0 <SSL_read@plt>:
+00000000000260d0 <llama_sampler_init_temp_ext@plt>:
+00000000000260e0 <mtmd_helper_bitmap_init_from_buf@plt>:
+00000000000260f0 <rename@plt>:
+0000000000026100 <std::locale::id::_M_id() const@plt>:
+0000000000026110 <llama_vocab_fim_rep@plt>:
+0000000000026120 <llama_sampler_init_dry@plt>:
+0000000000026130 <pthread_getaffinity_np@plt>:
+0000000000026140 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(char const*, unsigned long, std::allocator<char> const&)@plt>:
+0000000000026150 <TLS_server_method@plt>:
+0000000000026160 <fileno@plt>:
+0000000000026170 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::push_back(char)@plt>:
+0000000000026180 <llama_sampler_get_seed@plt>:
+0000000000026190 <SSL_get_error@plt>:
+00000000000261a0 <llama_set_sampler@plt>:
+00000000000261b0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::assign(char const*)@plt>:
+00000000000261c0 <std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::swap(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)@plt>:
+00000000000261d0 <llama_vocab_get_add_bos@plt>:
+00000000000261e0 <llama_model_meta_val_str@plt>:
+00000000000261f0 <X509_free@plt>:
+0000000000026200 <gguf_get_n_tensors@plt>:
+0000000000026210 <std::__codecvt_utf8_base<char32_t>::do_max_length() const@plt>:
+0000000000026220 <std::istream::operator>>(int&)@plt>:
+0000000000026230 <EVP_DigestFinal_ex@plt>:
+0000000000026240 <getpeername@plt>:
+0000000000026250 <llama_tokenize@plt>:
+0000000000026260 <llama_model_n_embd_out@plt>:
+0000000000026270 <fopen@plt>:
+0000000000026280 <mtmd_free@plt>:
+0000000000026290 <__snprintf_chk@plt>:
+00000000000262a0 <llama_vocab_bos@plt>:
+00000000000262b0 <std::__cxx11::time_get<char, std::istreambuf_iterator<char, std::char_traits<char> > >::get(std::istreambuf_iterator<char, std::char_traits<char> >, std::istreambuf_iterator<char, std::char_traits<char> >, std::ios_base&, std::_Ios_Iostate&, tm*, char const*, char const*) const@plt>:
+00000000000262c0 <std::__future_base::_Result_base::_Result_base()@plt>:
+00000000000262d0 <std::time_put<char, std::ostreambuf_iterator<char, std::char_traits<char> > >::put(std::ostreambuf_iterator<char, std::char_traits<char> >, std::ios_base&, char, tm const*, char const*, char const*) const@plt>:
+00000000000262e0 <llama_adapter_meta_val_str@plt>:
+00000000000262f0 <__isoc23_strtoull@plt>:
+0000000000026300 <std::logic_error::logic_error(std::logic_error const&)@plt>:
+0000000000026310 <llama_sampler_init_grammar@plt>:
+0000000000026320 <std::__atomic_futex_unsigned_base::_M_futex_notify_all(unsigned int*)@plt>:
+0000000000026330 <strtod@plt>:
+0000000000026340 <OPENSSL_sk_num@plt>:
+0000000000026350 <llama_context_default_params@plt>:
+0000000000026360 <llama_batch_init@plt>:
+0000000000026370 <timegm@plt>:
+0000000000026380 <std::thread::_M_thread_deps_never_run()@@Base-0xa4fb0>:
+00000000000cb330 <std::thread::_M_thread_deps_never_run()@@Base>:
+000000000010c2e0 <std::__future_base::_State_baseV2::_M_do_set(std::function<std::unique_ptr<std::__future_base::_Result_base, std::__future_base::_Result_base::_Deleter> ()>*, bool*)@@Base>:
+0000000000133080 <std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (std::__future_base::_State_baseV2::*)(std::function<std::unique_ptr<std::__future_base::_Result_base, std::__future_base::_Result_base::_Deleter> ()>*, bool*), std::__future_base::_State_baseV2*, std::function<std::unique_ptr<std::__future_base::_Result_base, std::__future_base::_Result_base::_Deleter> ()>*, bool*>(std::once_flag&, void (std::__future_base::_State_baseV2::*&&)(std::function<std::unique_ptr<std::__future_base::_Result_base, std::__future_base::_Result_base::_Deleter> ()>*, bool*), std::__future_base::_State_baseV2*&&, std::function<std::unique_ptr<std::__future_base::_Result_base, std::__future_base::_Result_base::_Deleter> ()>*&&, bool*&&)::{lambda()#1}>(void (std::__future_base::_State_baseV2::*&)(std::function<std::unique_ptr<std::__future_base::_Result_base, std::__future_base::_Result_base::_Deleter> ()>*, bool*))::{lambda()#1}::_FUN()@@Base>:
+00000000001330c0 <void std::__exception_ptr::__dest_thunk<std::future_error>(void*)@@Base>:
+00000000001330d0 <std::once_flag::_Prepare_execution::_Prepare_execution<std::call_once<void (std::thread::*)(), std::thread*>(std::once_flag&, void (std::thread::*&&)(), std::thread*&&)::{lambda()#1}>(void (std::thread::*&)())::{lambda()#1}::_FUN()@@Base>:
+000000000019df50 <std::__detail::_Scanner<char>::_M_eat_escape_ecma()@@Base>:
+000000000019e490 <std::__detail::_Scanner<char>::_M_eat_escape_posix()@@Base>:
+00000000001aaeb0 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, false, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001aaee0 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, true, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001aaf10 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, false, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001aaf40 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, false, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001aaf80 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, true, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001aafc0 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, true, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab000 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, false, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab020 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, false, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab050 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, false, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab070 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, false, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab0b0 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, true, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab0f0 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, true, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab130 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, false, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab140 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, false, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab180 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, false, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab190 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, false, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab1d0 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, true, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab210 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, true, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001ab250 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, false, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab280 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, true, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab2b0 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, true, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab370 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, true, true, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab430 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, true, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab480 <std::_Function_handler<bool (char), std::__detail::_CharMatcher<std::__cxx11::regex_traits<char>, true, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab4d0 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, false, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab530 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, false, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab590 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, true, false> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001ab670 <std::_Function_handler<bool (char), std::__detail::_AnyMatcher<std::__cxx11::regex_traits<char>, false, true, true> >::_M_invoke(std::_Any_data const&, char&&)@@Base>:
+00000000001b3520 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, false, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001b3a20 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, true, false> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001b4c60 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, false, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000001b4fe0 <std::_Function_handler<bool (char), std::__detail::_BracketMatcher<std::__cxx11::regex_traits<char>, true, true> >::_M_manager(std::_Any_data&, std::_Any_data const&, std::_Manager_operation)@@Base>:
+00000000002315d0 <common_time_meas::common_time_meas(long&, bool)@@Base>:
+0000000000231620 <common_time_meas::~common_time_meas()@@Base>:
+0000000000231650 <cpu_get_num_physical_cores()@@Base>:
+0000000000232370 <cpu_get_num_math()@@Base>:
+0000000000232520 <common_params_get_system_info[abi:cxx11](common_params const&)@@Base>:
+00000000002328e0 <string_replace_all(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+0000000000232b30 <string_ends_with(std::basic_string_view<char, std::char_traits<char> > const&, std::basic_string_view<char, std::char_traits<char> > const&)@@Base>:
+0000000000232ba0 <string_find_partial_stop(std::basic_string_view<char, std::char_traits<char> > const&, std::basic_string_view<char, std::char_traits<char> > const&)@@Base>:
+0000000000233100 <regex_escape(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+0000000000234fa0 <string_join(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+00000000002352f0 <string_format[abi:cxx11](char const*, ...)@@Base>:
+00000000002355b0 <string_strip(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+00000000002359f0 <string_get_sortable_timestamp[abi:cxx11]()@@Base>:
+0000000000235dd0 <string_remove_suffix(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, std::basic_string_view<char, std::char_traits<char> > const&)@@Base>:
+0000000000235ea0 <string_repeat(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long)@@Base>:
+00000000002362a0 <string_from[abi:cxx11](bool)@@Base>:
+0000000000236330 <string_from[abi:cxx11](std::vector<int, std::allocator<int> > const&)@@Base>:
+0000000000236b60 <string_process_escapes(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)@@Base>:
+0000000000236d70 <fs_validate_filename(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool)@@Base>:
+0000000000238660 <fs_create_directory_with_parents(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+0000000000238850 <fs_is_directory(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+0000000000238970 <fs_get_cache_directory[abi:cxx11]()@@Base>:
+0000000000238f40 <fs_get_cache_file(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+00000000002390e0 <tty_can_use_colors()@@Base>:
+0000000000239170 <string_split(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+0000000000239620 <common_init_result::model()@@Base>:
+0000000000239630 <common_init_result::context()@@Base>:
+0000000000239640 <common_init_result::sampler(int)@@Base>:
+0000000000239660 <common_init_result::reset_samplers()@@Base>:
+00000000002396f0 <common_init_result::lora()@@Base>:
+0000000000239700 <common_init_result::~common_init_result()@@Base>:
+00000000002399d0 <get_model_endpoint[abi:cxx11]()@@Base>:
+0000000000239b20 <common_set_adapter_lora(llama_context*, std::vector<common_adapter_lora_info, std::allocator<common_adapter_lora_info> >&)@@Base>:
+0000000000239f20 <common_model_params_to_llama(common_params&)@@Base>:
+000000000023a0a0 <common_context_params_to_llama(common_params const&)@@Base>:
+000000000023a1d0 <ggml_threadpool_params_from_cpu_params(cpu_params const&)@@Base>:
+000000000023a230 <common_batch_clear(llama_batch&)@@Base>:
+000000000023a240 <common_batch_add(llama_batch&, int, int, std::vector<int, std::allocator<int> > const&, bool)@@Base>:
+000000000023a440 <common_lcp(std::vector<int, std::allocator<int> > const&, std::vector<int, std::allocator<int> > const&)@@Base>:
+000000000023a620 <common_lcs(std::vector<int, std::allocator<int> > const&, std::vector<int, std::allocator<int> > const&)@@Base>:
+000000000023adb0 <common_tokenize(llama_vocab const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)@@Base>:
+000000000023b020 <common_tokenize(llama_context const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)@@Base>:
+000000000023b0a0 <common_token_to_piece[abi:cxx11](llama_vocab const*, int, bool)@@Base>:
+000000000023b170 <common_token_to_piece[abi:cxx11](llama_context const*, int, bool)@@Base>:
+000000000023b1e0 <string_from[abi:cxx11](llama_context const*, std::vector<int, std::allocator<int> > const&)@@Base>:
+000000000023b8b0 <string_from[abi:cxx11](llama_context const*, llama_batch const&)@@Base>:
+000000000023cc80 <common_detokenize[abi:cxx11](llama_context const*, std::vector<int, std::allocator<int> > const&, bool)@@Base>:
+000000000023cdb0 <common_detokenize[abi:cxx11](llama_vocab const*, std::vector<int, std::allocator<int> > const&, bool)@@Base>:
+000000000023ced0 <common_embd_normalize(float const*, float*, int, int)@@Base>:
+000000000023da10 <common_embd_similarity_cos(float const*, float const*, int)@@Base>:
+000000000023ddf0 <set_process_priority(ggml_sched_priority)@@Base>:
+000000000023dea0 <postprocess_cpu_params(cpu_params&, cpu_params const*)@@Base>:
+000000000023df70 <parse_cpu_range(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool (&) [512])@@Base>:
+000000000023e320 <parse_cpu_mask(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool (&) [512])@@Base>:
+000000000023e700 <common_init()@@Base>:
+000000000023e7b0 <string_parse_kv_override(char const*, std::vector<llama_model_kv_override, std::allocator<llama_model_kv_override> >&)@@Base>:
+000000000023ec80 <common_init_result::common_init_result(common_params&)@@Base>:
+00000000002400e0 <fs_list(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool)@@Base>:
+00000000002406f0 <common_init_from_params(common_params&)@@Base>:
+0000000000240dc0 <std::__codecvt_abstract_base<char32_t, char, __mbstate_t>::in(__mbstate_t&, char const*, char const*, char const*&, char32_t*, char32_t*, char32_t*&) const@@Base>:
+0000000000240dd0 <std::__codecvt_abstract_base<char32_t, char, __mbstate_t>::out(__mbstate_t&, char32_t const*, char32_t const*, char32_t const*&, char*, char*, char*&) const@@Base>:
+0000000000241280 <common_opt_dataset_init(llama_context*, std::vector<int, std::allocator<int> > const&, long)@@Base>:
+00000000002414f0 <common_opt_get_optimizer(char const*)@@Base>:
+0000000000241530 <lr_opt::init()@@Base>:
+0000000000242320 <common_control_vector_load(std::vector<common_control_vector_load_info, std::allocator<common_control_vector_load_info> > const&)@@Base>:
+00000000002435c0 <lr_opt::get_lr(float) const@@Base>:
+0000000000243690 <common_opt_lr_pars(void*)@@Base>:
+0000000000264be0 <common_log_set_verbosity_thold(int)@@Base>:
+0000000000265930 <common_log_init()@@Base>:
+00000000002665a0 <common_log_main()@@Base>:
+0000000000267280 <common_log_pause(common_log*)@@Base>:
+0000000000267310 <common_log_resume(common_log*)@@Base>:
+0000000000267400 <common_log_free(common_log*)@@Base>:
+0000000000267570 <common_log_add(common_log*, ggml_log_level, char const*, ...)@@Base>:
+0000000000267630 <common_log_default_callback(ggml_log_level, char const*, void*)@@Base>:
+00000000002676a0 <common_log_set_file(common_log*, char const*)@@Base>:
+0000000000267850 <common_log_set_prefix(common_log*, bool)@@Base>:
+0000000000267890 <common_log_set_timestamps(common_log*, bool)@@Base>:
+00000000002678d0 <common_log_flush(common_log*)@@Base>:
+000000000026ef20 <common_log_set_colors(common_log*, log_colors)@@Base>:
+000000000028b0d0 <common_params_sampling::print[abi:cxx11]() const@@Base>:
+000000000028b200 <common_sampler_free(common_sampler*)@@Base>:
+000000000028b3f0 <common_sampler_accept(common_sampler*, int, bool)@@Base>:
+000000000028b530 <common_sampler_reset(common_sampler*)@@Base>:
+000000000028b570 <common_sampler_get(common_sampler const*)@@Base>:
+000000000028b5a0 <common_sampler_get_seed(common_sampler const*)@@Base>:
+000000000028b5b0 <common_sampler_get_candidates(common_sampler*, bool)@@Base>:
+000000000028b8b0 <common_sampler_last(common_sampler const*)@@Base>:
+000000000028b8f0 <common_sampler_print[abi:cxx11](common_sampler const*)@@Base>:
+000000000028bdc0 <common_sampler_type_to_chr(common_sampler_type)@@Base>:
+000000000028bde0 <common_sampler_type_to_str[abi:cxx11](common_sampler_type)@@Base>:
+000000000028bfc0 <common_perf_print(llama_context const*, common_sampler const*)@@Base>:
+000000000028c3f0 <common_sampler_sample(common_sampler*, llama_context*, int, bool)@@Base>:
+000000000028c760 <common_sampler_prev_str[abi:cxx11](common_sampler*, llama_context*, int)@@Base>:
+000000000028fc70 <common_sampler_clone(common_sampler*)@@Base>:
+000000000028ff10 <common_sampler_init(llama_model const*, common_params_sampling&)@@Base>:
+00000000002918c0 <common_sampler_sample_and_accept_n(common_sampler*, llama_context*, std::vector<int, std::allocator<int> > const&, std::vector<int, std::allocator<int> > const&, bool)@@Base>:
+0000000000291c20 <common_sampler_sample_and_accept_n(common_sampler*, llama_context*, std::vector<int, std::allocator<int> > const&, bool)@@Base>:
+0000000000294440 <common_sampler_types_from_chars(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@@Base>:
+0000000000295c10 <common_sampler_types_from_names(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, bool)@@Base>:
+000000000039a234 <.fini>:

@@ -176,6 +176,15 @@ void ggml_cuda_mul_mat_q(
     ggml_cuda_pool_alloc<int32_t> ids_dst(ctx.pool(), ne_get_rows);
     ggml_cuda_pool_alloc<int32_t> expert_bounds(ctx.pool(), ne02 + 1);
 
+    if (ids->buffer) {
+        fprintf(stderr, "DEBUG ggml_cuda_mul_mat_q: ids->buffer usage=%d, is_host=%d\n",
+               ggml_backend_buffer_get_usage(ids->buffer),
+               ggml_backend_buffer_is_host(ids->buffer));
+    } else {
+        fprintf(stderr, "DEBUG ggml_cuda_mul_mat_q: ids->buffer is NULL\n");
+    }
+    fflush(stderr);
+
     {
         GGML_ASSERT(ids->nb[0] == ggml_element_size(ids));
         const int si1  = ids->nb[1] / ggml_element_size(ids);

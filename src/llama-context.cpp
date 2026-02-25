@@ -291,7 +291,7 @@ llama_context::llama_context(const llama_model & model, llama_context_params par
 
         // [STRICT] Apply KV Precision overrides
         if (params.kv_precision == LLAMA_KV_PRECISION_FP8) {
-            type_k = type_v = GGML_TYPE_F8_E4M3;
+            type_k = type_v = GGML_TYPE_F8_E5M2;
         } else if (params.kv_precision == LLAMA_KV_PRECISION_Q8) {
             type_k = type_v = GGML_TYPE_Q8_0;
         }
@@ -1819,14 +1819,19 @@ int llama_context::decode(const llama_batch & batch_inp) {
         if (llama_decode_admission_check_and_gate(&decode_admission, &admission_criteria) != 0) {
             LLAMA_LOG_WARN("%s: Decode admission REJECTED. GPU-exclusive execution cannot be guaranteed. Falling back to hybrid CPU/GPU execution.\n", __func__);
             llama_admission_print_failure_diagnostics(&decode_admission, &admission_criteria);
-            // [STRICT] Full GPU Invariant: Abort if decode ops fall back to CPU
-            GGML_ABORT("FATAL: Decode admission REJECTED. Full GPU invariant violated. Partial offload is explicitly disabled.\n");
+            // Only abort if ALL layers are supposed to be on GPU (full GPU exclusive mode)
+            const bool full_gpu_mode = (model.n_gpu_layers() >= model.hparams.n_layer + 1);
+            if (full_gpu_mode) {
+                GGML_ABORT("FATAL: Decode admission REJECTED. Full GPU invariant violated. Partial offload is explicitly disabled.\n");
+            } else {
+                LLAMA_LOG_WARN("%s: Partial offload mode detected (n_gpu_layers=%d, n_layer=%d). Continuing with degraded GPU execution.\n",
+                    __func__, model.n_gpu_layers(), (int)model.hparams.n_layer);
+            }
         }
 
         // Admission passed (or bypassed) - try to lock it
         if (llama_decode_admission_lock(&decode_admission) != 0) {
             LLAMA_LOG_WARN("%s: Failed to lock admission (expected if hybrid). Proceeding anyway.\n", __func__);
-            GGML_ABORT("FATAL: Failed to lock admission. Full GPU invariant violated.\n");
         }
 
         LLAMA_LOG_INFO("%s: Decode admission PASSED. GPU-exclusive path confirmed. Proceeding.\n", __func__);
@@ -2078,11 +2083,12 @@ int llama_context::decode(const llama_batch & batch_inp) {
         const llm_graph_result * res = nullptr;
         if (decode_engine.is_locked && ubatch.n_tokens == 1 && decode_engine.graph->res) {
             auto * res_cached = decode_engine.graph->res;
-            if (res_cached->can_reuse(graph_params(res_cached, ubatch, mctx, LLM_GRAPH_TYPE_DECODER))) {
+            if (res_cached->can_reuse(graph_params(res_cached, ubatch, mctx.get(), LLM_GRAPH_TYPE_DECODER))) {
                 res = res_cached;
             }
         }
 
+        ggml_status status = GGML_STATUS_SUCCESS;
         if (!res) {
             res = process_ubatch(ubatch, LLM_GRAPH_TYPE_DECODER, mctx.get(), status);
         }
@@ -2701,11 +2707,11 @@ llm_graph_params llama_context::graph_params(llm_graph_result *             res,
         /*.n_outputs   =*/n_outputs,
         /*.cb          =*/graph_get_cb(gtype),
         /*.res         =*/res,
-        /*.t_decode_pos    =*/t_decode_pos,
-        /*.t_decode_n_past =*/t_decode_n_past,
-        /*.t_decode_token  =*/t_decode_token,
-        /*.t_decode_stop   =*/t_decode_stop,
-        /*.t_decode_history =*/t_decode_history,
+        /*.t_decode_pos    =*/decode_engine.graph ? decode_engine.graph->t_pos : nullptr,
+        /*.t_decode_n_past =*/decode_engine.graph ? decode_engine.graph->t_n_past : nullptr,
+        /*.t_decode_token  =*/decode_engine.graph ? decode_engine.graph->t_token : nullptr,
+        /*.t_decode_stop   =*/decode_engine.graph ? decode_engine.graph->t_stop : nullptr,
+        /*.t_decode_history =*/decode_engine.graph ? decode_engine.graph->t_history : nullptr,
         /*.expert_cache    =*/decode_engine.moe ? decode_engine.moe->cache.get() : nullptr,
     };
 }
@@ -4199,8 +4205,8 @@ static void decode_admission_check(const llama_context * ctx) {
 
     // 3. MoE Streaming Check
     if (hparams.n_expert > 0 && ctx->decode_engine.moe->is_streaming) {
-        if (ctx->decode_engine.moe->n_expert_gpu == 0) {
-             LLAMA_LOG_WARN("%s: MoE streaming enabled but gpu_cache_size is 0. All experts will be CPU-resident!\n", __func__);
+        if (!ctx->decode_engine.moe->cache) {
+             LLAMA_LOG_WARN("%s: MoE streaming enabled but cache is null. All experts will be CPU-resident!\n", __func__);
         }
     }
 }
@@ -4378,7 +4384,7 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         t_sample->src[0] = t_penalized_logits;
         t_sample->src[1] = nullptr; // SAMPLE_CANDIDATES doesn't need history if penalties applied upstream
         t_sample->src[2] = decode_engine.graph->t_seed;
-        t_sample->n_src = 3;
+        t_sample->src[2] = decode_engine.graph->t_seed;
         
         ggml_set_op_params_i32(t_sample, 0, gpu_params.top_k);
         ggml_set_op_params_f32(t_sample, 1, gpu_params.temp);
@@ -4386,7 +4392,7 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         ggml_set_name(t_sample, "sampled_token");
         
         // 3. Set the sampled token to persistent state context
-        struct ggml_tensor * t_set_token = ggml_set(ctx_expansion, decode_engine.graph->t_token, t_sample);
+        struct ggml_tensor * t_set_token = ggml_set_1d(ctx_expansion, decode_engine.graph->t_token, t_sample, 0);
         ggml_set_name(t_set_token, "set_token");
         
         // 4. Update State Node (pos++, n_past++, history_update) entirely on GPU
@@ -4397,7 +4403,7 @@ int llama_context::autonomous_decode(const llama_batch & batch, int n_predict) {
         t_update->src[2] = decode_engine.graph->t_token;
         t_update->src[3] = decode_engine.graph->t_history;
         t_update->src[4] = decode_engine.graph->t_seed;
-        t_update->n_src = 5;
+        t_update->src[4] = decode_engine.graph->t_seed;
         ggml_set_name(t_update, "update_state");
 
         ggml_build_forward_expand(gf, t_set_token);

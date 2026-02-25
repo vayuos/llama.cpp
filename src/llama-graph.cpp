@@ -4,6 +4,7 @@
 #include "llama-batch.h"
 #include "llama-cparams.h"
 #include "llama-impl.h"
+#include "llama-expert-cache.h"
 #include "llama-kv-cache-iswa.h"
 #include "llama-kv-cache.h"
 #include "llama-memory-hybrid-iswa.h"
@@ -1330,17 +1331,9 @@ ggml_tensor * llm_graph_context::build_moe_ffn(ggml_tensor *                 cur
     ggml_tensor * cur_down_exps = down_exps;
     ggml_tensor * cur_selected   = selected_experts;
 
-    if (expert_cache && n_tokens == 1) {
-        // [STRICT] GPU-Exclusive MoE Redirect
-        // Map logical expert IDs to physical VRAM slots
-        ggml_tensor * Mapping = expert_cache->get_mapping_tensor();
-        cur_selected = ggml_get_rows(ctx0, Mapping, selected_experts);
-        cb(cur_selected, "ffn_moe_selected_slots", il);
-
-        cur_up_exps   = expert_cache->get_up_slots();
-        cur_gate_exps = expert_cache->get_gate_slots();
-        cur_down_exps = expert_cache->get_down_slots();
-    }
+    // [NOTE] Expert cache slot-based remapping is disabled: slot tensors have shape [ne0, ne1, n_slots]
+    // but ggml_mul_mat_id requires ids->ne[1] == b->ne[2] (n_expert_used == n_slots), which is not satisfied.
+    // TODO: Re-enable once slot tensor shapes are corrected to match ggml_mul_mat_id requirements.
 
     ggml_tensor * up = build_lora_mm_id(cur_up_exps, cur, cur_selected);  // [n_ff, n_expert_used, n_tokens]
     cb(up, "ffn_moe_up", il);

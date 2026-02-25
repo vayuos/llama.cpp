@@ -1312,6 +1312,7 @@ common_init_result_ptr common_init_from_params(common_params & params) {
             tmp.push_back(decoder_start_token_id);
         }
         if (llama_model_has_decoder(model)) {
+            fprintf(stderr, "DEBUG: llama_decode called from warmup block in common_init_from_params\n");
             llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch)));
         }
         llama_memory_clear(llama_get_memory(lctx), true);

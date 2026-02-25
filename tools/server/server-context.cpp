@@ -2684,6 +2684,7 @@ struct server_context_impl {
                 batch.n_seq_id + i, batch.seq_id + i, batch.logits + i,
             };
 
+            fprintf(stderr, "DEBUG: llama_decode called from update_slots in server-context.cpp\n");
             const int ret = llama_decode(ctx, batch_view);
 
             metrics.on_decoded(slots);

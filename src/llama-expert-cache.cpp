@@ -3,9 +3,7 @@
 #include <cstring>
 #include <algorithm>
 
-#ifdef GGML_USE_CUDA
-#include <cuda_runtime.h>
-#endif
+#include "ggml-backend.h"
 
 llama_expert_cache::llama_expert_cache(
     ggml_backend_t backend,
@@ -20,7 +18,6 @@ llama_expert_cache::llama_expert_cache(
 
     slots.resize(n_slots);
 
-    // Initialize GGML context for metadata tensors
     struct ggml_init_params params = {
         /* .mem_size   = */ ggml_tensor_overhead() * n_slots * 4 + 1024,
         /* .mem_buffer = */ nullptr,
@@ -28,43 +25,21 @@ llama_expert_cache::llama_expert_cache(
     };
     ctx = ggml_init(params);
 
-#ifdef GGML_USE_CUDA
-    // Allocate pinned host memory for backing store
-    size_t total_host_size = n_expert_total * expert_size_bytes;
-    cudaHostAlloc(&host_data, total_host_size, cudaHostAllocDefault);
-    
-    // Allocate device memory for VRAM slots
-    size_t total_device_size = n_slots * expert_size_bytes;
-    cudaMalloc(&device_data, total_device_size);
-#else
     host_data = malloc(n_expert_total * expert_size_bytes);
-    device_data = malloc(n_slots * expert_size_bytes);
-#endif
 
-    // Initialize slots with pointers into device_data
     t_mapping = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n_expert_total);
-#ifdef GGML_USE_CUDA
-    cudaMalloc(&t_mapping->data, n_expert_total * 4);
-    // Initialize mapping with -1
-    std::vector<int32_t> initial_mapping(n_expert_total, -1);
-    cudaMemcpy(t_mapping->data, initial_mapping.data(), n_expert_total * 4, cudaMemcpyHostToDevice);
-#else
-    t_mapping->data = malloc(n_expert_total * 4);
-    memset(t_mapping->data, -1, n_expert_total * 4);
-#endif
 
-    // Assume weights are F16? Let's use F32 for now to match ggml_new_tensor call
-    // In a real scenario, this would match model->type
     ggml_type wtype = GGML_TYPE_F32; 
 
     t_gate_slots = ggml_new_tensor_3d(ctx, wtype, ne0_gate, ne1_gate, n_slots);
-    t_gate_slots->data = device_data; // Simple offset for now
-    
     t_up_slots   = ggml_new_tensor_3d(ctx, wtype, ne0_up, ne1_up, n_slots);
-    t_up_slots->data = (uint8_t*)device_data + (ne0_gate * ne1_gate * 4 * n_slots);
-    
     t_down_slots = ggml_new_tensor_3d(ctx, wtype, ne0_down, ne1_down, n_slots);
-    t_down_slots->data = (uint8_t*)device_data + ((ne0_gate * ne1_gate + ne0_up * ne1_up) * 4 * n_slots);
+
+    ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
+    device_data = (void*) buf;
+
+    std::vector<int32_t> initial_mapping(n_expert_total, -1);
+    ggml_backend_tensor_set(t_mapping, initial_mapping.data(), 0, n_expert_total * 4);
 
     for (size_t i = 0; i < n_slots; ++i) {
         slots[i].expert_id = -1;
@@ -74,49 +49,43 @@ llama_expert_cache::llama_expert_cache(
 
 llama_expert_cache::~llama_expert_cache() {
     if (ctx) ggml_free(ctx);
-#ifdef GGML_USE_CUDA
-    if (host_data) cudaFreeHost(host_data);
-    if (device_data) cudaFree(device_data);
-#else
     if (host_data) free(host_data);
-    if (device_data) free(device_data);
-#endif
+    if (device_data) ggml_backend_buffer_free((ggml_backend_buffer_t)device_data);
 }
 
 int32_t llama_expert_cache::acquire_expert(int32_t expert_id, void * stream) {
+    (void)stream;
     auto it = expert_to_slot.find(expert_id);
     if (it != expert_to_slot.end()) {
         return it->second;
     }
 
-    // Expert not in VRAM, find a slot to evict
     int32_t slot_idx = find_lru_slot();
     
-    // Evict old expert
     if (slots[slot_idx].expert_id != -1) {
         expert_to_slot.erase(slots[slot_idx].expert_id);
     }
 
-    // Load new expert weights asynchronously
     slots[slot_idx].expert_id = expert_id;
     expert_to_slot[expert_id] = slot_idx;
 
-    // Update GPU mapping tensor
-#ifdef GGML_USE_CUDA
-    cudaMemcpyAsync((int32_t*)t_mapping->data + expert_id, &slot_idx, 4, cudaMemcpyHostToDevice, (cudaStream_t)stream);
-#else
-    ((int32_t*)t_mapping->data)[expert_id] = slot_idx;
-#endif
+    int32_t val = slot_idx;
+    ggml_backend_tensor_set(t_mapping, &val, expert_id * 4, 4);
 
-#ifdef GGML_USE_CUDA
     void * src = (uint8_t*)host_data + (size_t)expert_id * expert_size_bytes;
-    void * dst = (uint8_t*)device_data + (size_t)slot_idx * expert_size_bytes;
-    cudaMemcpyAsync(dst, src, expert_size_bytes, cudaMemcpyHostToDevice, (cudaStream_t)stream);
-#else
-    void * src = (uint8_t*)host_data + (size_t)expert_id * expert_size_bytes;
-    void * dst = (uint8_t*)device_data + (size_t)slot_idx * expert_size_bytes;
-    memcpy(dst, src, expert_size_bytes);
-#endif
+    
+    size_t gate_size = ne0_gate * ne1_gate * ggml_type_size(GGML_TYPE_F32);
+    size_t up_size   = ne0_up * ne1_up * ggml_type_size(GGML_TYPE_F32);
+    size_t down_size = ne0_down * ne1_down * ggml_type_size(GGML_TYPE_F32);
+
+    void * src_gate = src;
+    void * src_up   = (uint8_t*)src + gate_size;
+    void * src_down = (uint8_t*)src + gate_size + up_size;
+
+    ggml_backend_tensor_set(t_gate_slots, src_gate, slot_idx * gate_size, gate_size);
+    ggml_backend_tensor_set(t_up_slots,   src_up,   slot_idx * up_size,   up_size);
+    ggml_backend_tensor_set(t_down_slots, src_down, slot_idx * down_size, down_size);
+
 
     return slot_idx;
 }

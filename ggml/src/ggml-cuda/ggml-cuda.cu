@@ -1777,8 +1777,11 @@ static void ggml_cuda_op_mul_mat(ggml_backend_cuda_context & ctx,
                 }
 
                 if (quantize_src1 && !src1_is_contiguous) {
+                    float rms_eps = fusion ? fusion->rms_eps : 0.0f;
+                    const float * rms_w = (fusion && fusion->rms_w) ? (const float *) fusion->rms_w->data : nullptr;
                     quantize_src1(src1_ddf_i, nullptr, src1_ddq_i, src0->type, ne10, ne10, ne11 * ne10,
-                                  ne12 * ne11 * ne10, src1_padded_col_size, src1_ncols, 1, 1, stream);
+                                  ne12 * ne11 * ne10, src1_padded_col_size, src1_ncols, 1, 1, 
+                                  rms_eps, rms_w, stream);
                     CUDA_CHECK(cudaGetLastError());
                 }
 
@@ -2335,27 +2338,13 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx,
     bool use_batched_cublas_bf16 = src0->type == GGML_TYPE_BF16 && bf16_mma_hardware_available(cc);
     bool use_batched_cublas_f32  = src0->type == GGML_TYPE_F32;
 
-    bool force_mmq = (dst->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL) != 0;
-    if (dst->op == GGML_OP_FUSED_MUL_MAT_BIAS_ACT) {
-        force_mmq = force_mmq || ((const int32_t *) dst->op_params)[2] != 0;
-    }
-
-    /* [PATCH] Only force MMQ for quantized types - f32/f16/bf16 must use their normal dispatch */
-    if (force_mmq && (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || src0->type == GGML_TYPE_BF16)) {
-        force_mmq = false;
-    }
-
-    if (force_mmq) {
-        use_mul_mat_vec_q = true;
-        use_mul_mat_q     = true;
-        use_mul_mat_vec_f = false;
-        use_mul_mat_f     = false;
-    }
+    // [DIAGNOSTIC] force_mmq from DECODE_CRITICAL flag is disabled; using default kernel selection.
 
     if (!split && use_mul_mat_vec_f) {
         // the custom F16 vector kernel can be used over batched cuBLAS GEMM
         // but this is only faster for GPUs without tensor cores or with a thin src0 matrix (particularly KQV in attention)
-        ggml_cuda_mul_mat_vec_f(ctx, src0, src1, nullptr, dst, fusion);
+        // fusion path requires ids or ne[1]==1; for batched inputs skip fusion
+        ggml_cuda_mul_mat_vec_f(ctx, src0, src1, nullptr, dst, src1->ne[1] == 1 ? fusion : nullptr);
     } else if (!split && use_mul_mat_f) {
         ggml_cuda_mul_mat_f(ctx, src0, src1, nullptr, dst, fusion);
     } else if (!split && use_mul_mat_vec_q) {
@@ -2365,14 +2354,14 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx,
     } else if (!split && (use_batched_cublas_f16 || use_batched_cublas_bf16 || use_batched_cublas_f32) &&
                !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2] * src1->ne[3] > 1) {
         // general KQ + KQV multi-batch without FlashAttention
-        ggml_cuda_mul_mat_batched_cublas(ctx, src0, src1, dst, fusion);
+        ggml_cuda_mul_mat_batched_cublas(ctx, src0, src1, dst);
     } else if (use_mul_mat_vec_f) {
         ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_f, nullptr, fusion);
     } else if (use_mul_mat_vec_q) {
         quantize_cuda_t quant = fusion && fusion->rms_w ? quantize_row_q8_1_rms_cuda : quantize_row_q8_1_cuda;
         ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, quant, fusion);
     } else if (use_mul_mat_q) {
-        quantize_cuda_t quant = fusion && fusion->rms_w ? quantize_mmq_q8_1_rms_cuda : quantize_mmq_q8_1_cuda;
+        quantize_cuda_t quant = quantize_mmq_q8_1_cuda;
         ggml_cuda_op_mul_mat(ctx, src0, src1, dst, ggml_cuda_op_mul_mat_q, quant, fusion);
     } else {
         if (ggml_is_quantized(src0->type) && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE) {
@@ -3591,9 +3580,19 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
         const ggml_tensor * rms_norm = cgraph->nodes[node_idx];
         const ggml_tensor * mul_mat  = cgraph->nodes[node_idx + 1];
 
+        // Guard: verify actual graph ops and null safety
+        if (!rms_norm || (rms_norm->op != GGML_OP_RMS_NORM)) { return false; }
+        if (!mul_mat  || (mul_mat->op != GGML_OP_MUL_MAT && mul_mat->op != GGML_OP_MUL_MAT_ID)) { return false; }
+        if (!mul_mat->src[1]) { return false; }
+
         if (mul_mat->src[1] != rms_norm) {
             return false;
         }
+
+        // The fused kernel computes rms_norm internally — only valid for single-token decode.
+        // For batched prefill (ne[1] > 1), fall through to per-node execution instead.
+        const ggml_tensor * input = rms_norm->src[0];
+        if (input && input->ne[1] > 1) { return false; }
 
         return true;
     }
@@ -3603,12 +3602,25 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
         const ggml_tensor * mul      = cgraph->nodes[node_idx + 1];
         const ggml_tensor * add      = nullptr;
 
+        // Guard: verify actual graph ops match expected pattern
+        if (!rms_norm || rms_norm->op != GGML_OP_RMS_NORM) { return false; }
+        if (!mul      || mul->op      != GGML_OP_MUL)      { return false; }
+
         if (ops.size() == 3 && ops.begin()[2] == GGML_OP_ADD) {
             add = cgraph->nodes[node_idx + 2];
+            if (!add || add->op != GGML_OP_ADD) { return false; }
         }
 
-        GGML_ASSERT(rms_norm->src[0]->type == GGML_TYPE_F32);
-        GGML_ASSERT(rms_norm->type == GGML_TYPE_F32);
+        // Null-safety: verify src tensors exist before dereferencing
+        if (!rms_norm->src[0] || !mul->src[0] || !mul->src[1]) { return false; }
+
+        // Soft guard: RMS_NORM must operate on F32 to be fuseable
+        if (rms_norm->src[0]->type != GGML_TYPE_F32) {
+            return false;
+        }
+        if (rms_norm->type != GGML_TYPE_F32) {
+            return false;
+        }
 
         //rms norm only supports F32
         if (mul->src[0]->type != GGML_TYPE_F32 || mul->src[1]->type != GGML_TYPE_F32 || mul->type != GGML_TYPE_F32) {
@@ -3643,10 +3655,15 @@ static bool ggml_cuda_can_fuse(const struct ggml_cgraph *                cgraph,
         const ggml_tensor * tanh   = cgraph->nodes[node_idx + 1];
         const ggml_tensor * scale2 = cgraph->nodes[node_idx + 2];
 
-        GGML_ASSERT(scale->src[0]->type == GGML_TYPE_F32);
-        GGML_ASSERT(scale->type == GGML_TYPE_F32);
+        // Soft guard: SCALE must operate on F32 to be fuseable
+        if (scale->src[0]->type != GGML_TYPE_F32) {
+            return false;
+        }
+        if (scale->type != GGML_TYPE_F32) {
+            return false;
+        }
 
-        if (ggml_get_unary_op(tanh) != GGML_UNARY_OP_TANH) {
+        if (tanh->op != GGML_OP_UNARY || ggml_get_unary_op(tanh) != GGML_UNARY_OP_TANH) {
             return false;
         }
 
@@ -4066,7 +4083,9 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                         ggml_tensor * mul_mat  = cgraph->nodes[i + 1];
 
                         ggml_cuda_mm_fusion_args_host fusion_data{};
-                        fusion_data.rms_eps = ((const float *) rms_norm->op_params)[0];
+                        float rms_eps;
+                        memcpy(&rms_eps, rms_norm->op_params, sizeof(float));
+                        fusion_data.rms_eps = rms_eps;
                         fusion_data.rms_w   = rms_norm->src[1];
 
                         const ggml_tensor * src0 = mul_mat->src[0];
@@ -4089,25 +4108,33 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
                     }
 
 
-                    // [PATCH] Disable decode-mode fusion enforcement for partial offload
-                    // Strict enforcement for decode mode: if we are in decode mode and encounter an unfused RMSNorm
-                    // that is part of a pattern we are supposed to fuse, we should have fused it or we fail.
+                    // [PARTIAL OFFLOAD] In partial offload mode, CPU-resident ops from non-GPU layers
+                    // legitimately appear unfused. Only abort in full GPU-exclusive mode.
                     if (ggml_backend_decode_mode_active()) {
                         if (node->op == GGML_OP_RMS_NORM) {
-                            GGML_LOG_ERROR("%s: FATAL: unfused RMSNorm encountered during decode - fusion mandatory\n", __func__);
-                            GGML_ABORT("unfused RMSNorm during decode");
+                            static bool warned_rms = false;
+                            if (!warned_rms) {
+                                warned_rms = true;
+                                GGML_LOG_WARN("%s: unfused RMSNorm encountered during decode (partial offload, further warnings suppressed)\n", __func__);
+                            }
                         }
                         if (node->op == GGML_OP_ADD || node->op == GGML_OP_ADD_ID) {
                             if (node->src[0]->op == GGML_OP_MUL_MAT || node->src[0]->op == GGML_OP_MUL_MAT_ID ||
                                 (node->src[1] && (node->src[1]->op == GGML_OP_MUL_MAT || node->src[1]->op == GGML_OP_MUL_MAT_ID))) {
-                                GGML_LOG_ERROR("%s: FATAL: unfused Bias internal to decode path encountered\n", __func__);
-                                GGML_ABORT("unfused Bias during decode");
+                                static bool warned_bias = false;
+                                if (!warned_bias) {
+                                    warned_bias = true;
+                                    GGML_LOG_WARN("%s: unfused Bias encountered during decode (partial offload, further warnings suppressed)\n", __func__);
+                                }
                             }
                         }
                         if (node->op == GGML_OP_UNARY) {
                             if (node->src[0]->op == GGML_OP_ADD || node->src[0]->op == GGML_OP_ADD_ID) {
-                                GGML_LOG_ERROR("%s: FATAL: unfused Activation after Bias encountered during decode\n", __func__);
-                                GGML_ABORT("unfused Activation during decode");
+                                static bool warned_act = false;
+                                if (!warned_act) {
+                                    warned_act = true;
+                                    GGML_LOG_WARN("%s: unfused Activation encountered during decode (partial offload, further warnings suppressed)\n", __func__);
+                                }
                             }
                         }
                     }

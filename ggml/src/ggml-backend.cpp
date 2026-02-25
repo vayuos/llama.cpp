@@ -1050,23 +1050,11 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
         GGML_ABORT("FATAL: Attempted to split/re-plan graph while backend scheduler is locked.\n"
                    "Decode execution plan must be static. Dynamic re-splitting is forbidden.\n");
     }
-
-    bool should_assign = true;
-    if (sched->is_frozen) {
-        for (int i = 0; i < graph->n_nodes; i++) {
-            if (graph->nodes[i]->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL) {
-                should_assign = false;
-                break;
-            }
-        }
-    }
-
-    // reset splits
-    sched->n_splits       = 0;
-    sched->n_graph_inputs = 0;
-    sched->is_reset       = false;
-
-    if (should_assign) {
+    // NOTE: The old "is_frozen" fast-path that set should_assign=false has been removed.
+    // It caused sched_reset (which clears all backend_ids to -1) to be followed by
+    // split_graph skipping assignment, leaving all nodes with backend_id=-1.
+    // This produced splits with backend_id=-1, causing sched->backends[-1] underflow
+    // and the resulting CUDA illegal memory access on first decode.
     if (sched->ctx == NULL) {
         struct ggml_init_params params = {
             /*.mem_size   =*/ sched->context_buffer_size,
@@ -1077,26 +1065,6 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
         if (sched->ctx == NULL) {
              GGML_ABORT("%s: failed to initialize context\n", __func__);
         }
-    }
-
-    if (sched->ctx == NULL) {
-        GGML_ABORT("%s: failed to initialize context\n", __func__);
-    }
-
-    // [STRICT] Backend Freezing: Check cache first
-    if (sched->is_frozen) {
-        for (int i = 0; i < graph->n_nodes; i++) {
-            struct ggml_tensor * node = graph->nodes[i];
-            if (ggml_is_view_op(node->op)) continue;
-            
-            int cached_backend_id = sched->backend_cache[node->op][node->type];
-            if (cached_backend_id != -1) {
-                tensor_backend_id(node) = cached_backend_id;
-            }
-        }
-    }
-        // But if we trust the cache to be populated fully after the first run, we can rely on it.
-        // For now, we fall through to heuristics if any node is missing, but pre-filled nodes are respected.
     }
 
     // [STRICT] Single Backend Enforcement
@@ -2015,6 +1983,9 @@ bool ggml_backend_sched_reserve(ggml_backend_sched_t sched, struct ggml_cgraph *
     return true;
 }
 
+// Allow the application to configure whether CPU decode-chain execution is strictly enforced
+static bool g_ggml_backend_sched_strict_decode_cpu_enforcement = false;
+
 bool ggml_backend_sched_alloc_graph(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
     GGML_ASSERT(sched);
     GGML_ASSERT((int) sched->hash_set.size >= graph->n_nodes + graph->n_leafs);
@@ -2045,8 +2016,7 @@ bool ggml_backend_sched_alloc_graph(ggml_backend_sched_t sched, struct ggml_cgra
                 // [STRICT] Enforce GPU-exclusive decode invariant
                 // Re-enable abort for decode-critical nodes on CPU when in strict mode.
                 // We use a check that will be linked to the global enforcement state.
-                extern bool llama_get_decode_cpu_enforcement_strict(void);
-                if (llama_get_decode_cpu_enforcement_strict()) {
+                if (g_ggml_backend_sched_strict_decode_cpu_enforcement) {
                     GGML_ABORT("FATAL: Decode-critical node %s (op: %s) assigned to CPU backend. "
                                "GPU-exclusive decode invariant violated.\n",
                                node->name, ggml_op_name(node->op));
@@ -2138,8 +2108,7 @@ enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sch
         if (node->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL) {
             ggml_backend_t backend = sched->backends[backend_id];
             if (ggml_backend_dev_type(ggml_backend_get_device(backend)) == GGML_BACKEND_DEVICE_TYPE_CPU) {
-                 extern bool llama_get_decode_cpu_enforcement_strict(void);
-                 if (llama_get_decode_cpu_enforcement_strict()) {
+                 if (g_ggml_backend_sched_strict_decode_cpu_enforcement) {
                      GGML_ABORT("FATAL: Decode-critical node %s (op: %s) scheduled on CPU backend at runtime. "
                                 "Hard invariant violation.\n",
                                 node->name, ggml_op_name(node->op));
@@ -2234,7 +2203,6 @@ void ggml_backend_sched_set_eval_callback(ggml_backend_sched_t             sched
 }
 
 // Allow the application to configure whether CPU decode-chain execution is strictly enforced
-static bool g_ggml_backend_sched_strict_decode_cpu_enforcement = false;
 
 void ggml_backend_sched_set_strict_decode_cpu_enforcement(bool enable) {
     g_ggml_backend_sched_strict_decode_cpu_enforcement = enable;
@@ -2266,8 +2234,7 @@ void ggml_backend_sched_set_single_backend(ggml_backend_sched_t sched, int backe
     if (sched->is_backend_locked) {
         if (sched->single_backend_id != backend_id) {
             // [STRICT] Enforce backend immutability during lock
-            extern bool llama_get_decode_cpu_enforcement_strict(void);
-            if (llama_get_decode_cpu_enforcement_strict()) {
+            if (g_ggml_backend_sched_strict_decode_cpu_enforcement) {
                  GGML_ABORT("FATAL: ggml_backend_sched_set_single_backend: backend changed while locked. "
                             "Structural decode invariance violated (current: %d, requested: %d).\n",
                             sched->single_backend_id, backend_id);
@@ -2313,6 +2280,13 @@ void ggml_backend_sched_check_consistency(ggml_backend_sched_t sched, struct ggm
         // [STRICT] Bypass consistency checks for embd since it can validly drift to CPU
         // while other GET_ROWS nodes (like KV cache) remain on GPU.
         if (strcmp(node->name, "embd") == 0 || strcmp(node->name, "token_embd") == 0) {
+            continue;
+        }
+
+        // View/in-place ops like SET_ROWS can legitimately have different backend properties
+        // depending on whether they are updating CPU or GPU memory. They shouldn't be
+        // subjected to the cached backend ID check.
+        if (node->op == GGML_OP_SET_ROWS) {
             continue;
         }
 

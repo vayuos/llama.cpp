@@ -125,7 +125,7 @@ typedef enum {
     LLAMA_ISOLATION_STATE_DECODE_GUARDED = 3, // Decode with isolation active
     LLAMA_ISOLATION_STATE_DECODE_COMPLETE = 4, // Decode completed
     LLAMA_ISOLATION_STATE_ERROR = 5         // Isolation violation detected
-} llama_isolation_state_t;
+} llama_decode_isolation_state_t;
 
 /**
  * Runtime guard and assertion tracking
@@ -145,7 +145,7 @@ typedef struct {
 typedef struct {
     // Execution mode and state
     llama_decode_mode_t current_mode;       // Current decode mode
-    llama_isolation_state_t isolation_state; // Isolation state machine
+    llama_decode_isolation_state_t isolation_state; // Isolation state machine
     bool isolation_active;                  // true when isolation is enforced
     uint64_t decode_start_ns;               // Timestamp when decode started
     uint64_t decode_end_ns;                 // Timestamp when decode completed

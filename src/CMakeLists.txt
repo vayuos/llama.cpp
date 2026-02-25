@@ -18,6 +18,9 @@ add_library(llama
             llama-decode-admission-control.cpp
             llama-decode-cpu-hard-failure.cpp
             llama-decode-invariant-enforce.cpp
+            llama-core-isolation-enforce.cpp
+            llama-decode-engine.cpp
+            llama-expert-cache.cpp
             llama-task-taxonomy.cpp
             llama-token-dependency-assert.cpp
             llama-backend-immutability-enforce.cpp

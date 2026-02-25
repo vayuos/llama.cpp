@@ -51,7 +51,7 @@ __global__ void rng_init_kernel(gpu_rng_state * state, uint32_t seed) {
  * Advance RNG state and generate next random value.
  * Uses Xorshift128+ algorithm (fast, parallel-safe on single thread).
  */
-__device__ float rng_next_float(gpu_rng_state * state) {
+static __device__ __forceinline__ float rng_next_float(gpu_rng_state * state) {
     uint64_t t = ((uint64_t)state->state_a << 32) | state->state_b;
     uint64_t s = ((uint64_t)state->state_c << 32) | state->state_d;
 

@@ -1517,3 +1517,15 @@ struct ggml_cuda_mm_fusion_args_device {
     ggml_glu_op  glu_op;
     ggml_unary_op act_op = GGML_UNARY_OP_COUNT;
 };
+
+inline __device__ __host__ ggml_cuda_mm_fusion_args_device ggml_cuda_mm_fusion_args_device_from_host(const ggml_cuda_mm_fusion_args_host & host) {
+    ggml_cuda_mm_fusion_args_device device;
+    device.x_bias = host.x_bias ? host.x_bias->data : nullptr;
+    device.gate = host.gate ? host.gate->data : nullptr;
+    device.gate_bias = host.gate_bias ? host.gate_bias->data : nullptr;
+    device.rms_w = host.rms_w ? host.rms_w->data : nullptr;
+    device.rms_eps = host.rms_eps;
+    device.glu_op = host.glu_op;
+    device.act_op = host.act_op;
+    return device;
+}

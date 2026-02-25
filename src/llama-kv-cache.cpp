@@ -1408,7 +1408,7 @@ void llama_kv_cache::set_input_k_idxs(ggml_tensor * dst, const llama_ubatch * ub
         fflush(stderr);
     }
     if (n_tokens != (int64_t) sinfo.size()*sinfo.n_stream()) {
-        fprintf(stderr, "\n[DEBUG] set_input_k_idxs mismatch: n_tokens=%u, sinfo.size()=%zu, sinfo.n_stream()=%u, sinfo.idxs.size()=%zu, sinfo.strm.size()=%zu\n",
+        fprintf(stderr, "\n[DEBUG] set_input_k_idxs mismatch: n_tokens=%u, sinfo.size()=%zu, sinfo.n_stream()=%zu, sinfo.idxs.size()=%zu, sinfo.strm.size()=%zu\n",
             n_tokens, sinfo.size(), sinfo.n_stream(), sinfo.idxs.size(), sinfo.strm.size());
     }
     GGML_ASSERT(n_tokens == (int64_t) sinfo.size()*sinfo.n_stream());
