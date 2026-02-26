@@ -44,6 +44,10 @@ static __global__ void mm_ids_helper(
             int iex_used = -1; // The index at which the expert is used, if any.
             for (int iex = threadIdx.x; iex < n_expert_used; iex += warp_size) {
                 const int expert_used = ids[it*si1 + iex];
+                // Skip padding positions marked with INT_MAX
+                if (expert_used == INT_MAX) {
+                    continue;
+                }
                 nex_prev += expert_used < expert;
                 if (expert_used == expert) {
                     iex_used = iex;
@@ -67,10 +71,16 @@ static __global__ void mm_ids_helper(
 
             const int iex = threadIdx.x % neu_padded; // The index at which the expert is used, if any.
             // ISSUE #10 FIX: Only process valid expert positions, skip padding (INT_MAX markers)
-            // Valid positions: iex < n_expert_used
-            // Padding positions: iex >= n_expert_used (marked with INT_MAX in input, must be skipped)
-            const int expert_used = (iex < n_expert_used && it < n_tokens) ?
-                ids[it*si1 + iex] : -1;  // Use -1 for padding positions (never use INT_MAX values)
+            // Valid positions: iex < n_expert_used AND value is not INT_MAX
+            // Padding positions: marked with INT_MAX in input, must be skipped
+            int expert_used = -1;
+            if (iex < n_expert_used && it < n_tokens) {
+                expert_used = ids[it*si1 + iex];
+                // Skip padding values marked with INT_MAX
+                if (expert_used == INT_MAX) {
+                    expert_used = -1;
+                }
+            }
             const int iex_used = expert_used >= 0 && expert_used == expert ? iex : -1;
             nex_prev += expert_used >= 0 && expert_used < expert;
 
