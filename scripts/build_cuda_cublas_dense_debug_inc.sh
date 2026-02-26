@@ -60,12 +60,16 @@ if [ $NEEDS_CONFIG -eq 1 ] || [ ! -f "CMakeCache.txt" ] || [ "../CMakeLists.txt"
     CUDA_FLAGS="-lineinfo -g -O0"
 
     # CMake Configure
+    # CRITICAL: -DBUILD_SHARED_LIBS=ON enables backend symbol export
+    # This fixes: "failed to find ggml_backend_init in libggml-cuda.so"
     cmake .. \
         -DCMAKE_BUILD_TYPE=Debug \
         -DCMAKE_CXX_FLAGS="${COMMON_CXX_FLAGS}" \
         -DCMAKE_CUDA_FLAGS="${CUDA_FLAGS}" \
         -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
         -DCMAKE_CUDA_ARCHITECTURES=89 \
+        \
+        -DBUILD_SHARED_LIBS=ON \
         \
         -DGGML_CUDA=ON \
         -DGGML_CUDA_FORCE_MMQ=ON \

@@ -42,6 +42,8 @@ if [ ! -f "CMakeCache.txt" ]; then
         -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
         -DCMAKE_CUDA_ARCHITECTURES=89 \
         \
+        -DBUILD_SHARED_LIBS=ON \
+        \
         -DGGML_CUDA=ON \
         \
         -DGGML_CUDA_FORCE_MMQ=ON \
