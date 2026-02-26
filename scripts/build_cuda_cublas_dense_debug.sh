@@ -77,12 +77,13 @@ cmake .. \
     \
     -DLLAMA_BUILD_TESTS=OFF \
     -DLLAMA_BUILD_EXAMPLES=ON \
-    -DGGML_CPU_ALL=ON
+    -DGGML_CPU_ALL=ON \
+    -DGGML_BACKEND_DL=OFF
 
 # ------------------------------------------------------------
 # Build
 # ------------------------------------------------------------
-cmake --build . --config Debug -j 4
+cmake --build . --config Debug -j 12
 
 # ------------------------------------------------------------
 # Verify invariants
@@ -105,5 +106,5 @@ echo "export GGML_SCHED_DEBUG=1"
 echo "export CUDA_LAUNCH_BLOCKING=1"
 echo "export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
 echo ""
-echo "./bin/llama-server -m /path/to/model.gguf --verbose --dump-timing"
+echo "./bin/llama-server -m /path/to/model.gguf --verbose"
 echo "---------------------------------------------------"
