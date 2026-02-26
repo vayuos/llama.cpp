@@ -1273,10 +1273,9 @@ ggml_tensor * llm_graph_context::build_moe_ffn(ggml_tensor *                 cur
         ggml_argsort_top_k(ctx0, selection_probs, n_expert_used);  // [n_expert_used, n_tokens]
     cb(selected_experts->src[0], "ffn_moe_argsort", il);
 
-    // ISSUE #10 FIX: Clamp expert indices to valid range [0, n_expert)
-    // The argsort may produce invalid indices (-1 for padding), which would cause
-    // out-of-bounds access in expert operations. Clamp to [0, n_expert-1] range.
-    selected_experts = ggml_clamp(ctx0, selected_experts, 0, n_expert - 1);
+    // ISSUE #10 FIX: Padding indices initialized to -1 in argsort (see ggml-cuda/argsort.cu)
+    // Invalid indices are handled by bitonic sort comparisons and moved to end of array
+    // Backend validation (ggml-backend.cpp) will catch any remaining invalid indices
     cb(selected_experts, "ffn_moe_topk", il);
 
     if (arch == LLM_ARCH_GROVEMOE && n_expert != hparams.n_expert) {
