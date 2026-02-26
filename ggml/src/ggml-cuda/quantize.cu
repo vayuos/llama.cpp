@@ -163,6 +163,12 @@ static __global__ void quantize_mmq_mxfp4(const float * __restrict__ x,
     const int64_t i3 = blockIdx.z / ne2;
 
     const int64_t i01 = ids ? ids[i1] : i1;
+
+    // Skip padding positions (INT_MAX indicates padding in MoE expert routing)
+    if (ids != nullptr && i01 == INT_MAX) {
+        return;
+    }
+
     const int64_t i02 = i2;
     const int64_t i03 = i3;
 
@@ -255,6 +261,12 @@ static __global__ void quantize_mmq_q8_1(
 
     const int64_t i00 = i0;
     const int64_t i01 = ids ? ids[i1] : i1;
+
+    // Skip padding positions (INT_MAX indicates padding in MoE expert routing)
+    if (ids != nullptr && i01 == INT_MAX) {
+        return;
+    }
+
     const int64_t i02 = i2;
     const int64_t i03 = i3;
 
@@ -350,6 +362,12 @@ static __global__ void quantize_mmq_q8_1_rms(
     const int64_t i3 = blockIdx.z / ne2;
 
     const int64_t i01 = ids ? ids[i1] : i1;
+
+    // Skip padding positions (INT_MAX indicates padding in MoE expert routing)
+    if (ids != nullptr && i01 == INT_MAX) {
+        return;
+    }
+
     const int64_t i02 = i2;
     const int64_t i03 = i3;
 
