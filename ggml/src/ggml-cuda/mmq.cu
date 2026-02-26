@@ -285,7 +285,7 @@ void ggml_cuda_mul_mat_q(
                 (size_t)src1->nb[0], (size_t)src1->nb[1], (size_t)src1->nb[2], (size_t)src1->nb[3],
                 (long long)src1->ne[0], (long long)src1->ne[1], (long long)src1->ne[2], (long long)src1->ne[3],
                 src1->data, (int)((uintptr_t)src1->data % 16),
-                max_id, (long long)max_id * s11 + ne10 - 1, src1_total_floats,
+                max_id, (long long)max_id * s11 + ne10 - 1, (long long)src1_total_floats,
                 ((long long)max_id * s11 + ne10 - 1 >= src1_total_floats) ? "YES!" : "no");
             fprintf(stderr, "  ids_src1[0..%lld]:", (long long)ne_get_rows);
             for (int i = 0; i < (int)ne_get_rows; i++) {

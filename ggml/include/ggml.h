@@ -793,6 +793,24 @@ GGML_API bool ggml_are_same_stride(const struct ggml_tensor * t0, const struct g
 
 GGML_API bool ggml_can_repeat(const struct ggml_tensor * t0, const struct ggml_tensor * t1);
 
+GGML_API struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value);
+GGML_API struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value);
+
+GGML_API struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value);
+GGML_API struct ggml_tensor * ggml_set_f32 (struct ggml_tensor * tensor, float value);
+
+GGML_API int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i);
+GGML_API void    ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value);
+
+GGML_API int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
+GGML_API void    ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, int32_t value);
+
+GGML_API float   ggml_get_f32_1d(const struct ggml_tensor * tensor, int i);
+GGML_API void    ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value);
+
+GGML_API float   ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
+GGML_API void    ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, float value);
+
 // use this to compute the memory overhead of a tensor
 GGML_API size_t ggml_tensor_overhead(void);
 
