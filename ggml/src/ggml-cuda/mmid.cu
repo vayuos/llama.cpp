@@ -66,11 +66,12 @@ static __global__ void mm_ids_helper(
             const int it = it0 + threadIdx.x / neu_padded;
 
             const int iex = threadIdx.x % neu_padded; // The index at which the expert is used, if any.
-            // ISSUE #10 FIX: Handle padding positions properly (iex >= n_expert_used)
-            // Only read expert indices for valid positions (iex < n_expert_used), use -1 for padding
-            const int expert_used = (neu_padded == n_expert_used || iex < n_expert_used) && it < n_tokens ?
-                ids[it*si1 + iex] : -1;
-            const int iex_used = expert_used == expert ? iex : -1;
+            // ISSUE #10 FIX: Only process valid expert positions, skip padding (INT_MAX markers)
+            // Valid positions: iex < n_expert_used
+            // Padding positions: iex >= n_expert_used (marked with INT_MAX in input, must be skipped)
+            const int expert_used = (iex < n_expert_used && it < n_tokens) ?
+                ids[it*si1 + iex] : -1;  // Use -1 for padding positions (never use INT_MAX values)
+            const int iex_used = expert_used >= 0 && expert_used == expert ? iex : -1;
             nex_prev += expert_used >= 0 && expert_used < expert;
 
             // Whether the threads at this token position have used the expert:
