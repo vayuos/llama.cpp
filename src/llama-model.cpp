@@ -2799,7 +2799,7 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             auto * buft_dev = ggml_backend_buft_get_device(buft);
             if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev)) {
                 // Check if this is a critical tensor that should stay on GPU
-                std::string tensor_name(tensor->name);
+                std::string tensor_name = tn.str();
                 bool is_critical_tensor = (
                     tensor_name.find("embd") != std::string::npos ||      // embeddings
                     tensor_name.find("token_embd") != std::string::npos || // token embeddings
