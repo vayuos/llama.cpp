@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# CUDA Backend Symbol Export Fix - Build Script
+# Backend Symbol Export Fix - Build Script (CUDA & CPU)
 #
-# This script rebuilds the CUDA backend with proper symbol export configuration.
-# It ensures libggml-cuda.so exports ggml_backend_init and related symbols.
+# This script rebuilds backend libraries with proper symbol export configuration.
+# It ensures libggml-cuda.so and libggml-cpu.so export ggml_backend_init and related symbols.
 #
 # Usage:
 #   ./scripts/build-cuda-backend-fix.sh [options]
@@ -225,35 +225,55 @@ log_info "Library size: $(stat -f%z "$LIB_PATH" 2>/dev/null || stat -c%s "$LIB_P
 log_info "Library type: $(file "$LIB_PATH")"
 echo ""
 
-log_info "Checking for ggml_backend_init symbol..."
-if nm -D "$LIB_PATH" 2>/dev/null | grep -q "ggml_backend_init"; then
-    log_success "Symbol ggml_backend_init found!"
+log_info "Checking for ggml_backend_init symbol in all backends..."
+echo ""
+
+# Verify all backend libraries
+BACKENDS_OK=0
+BACKENDS_TOTAL=0
+
+for backend_lib in "$BUILD_DIR/bin"/libggml-*.so "$BUILD_DIR/bin"/libggml-*.dll 2>/dev/null; do
+    if [ -f "$backend_lib" ]; then
+        BACKEND_NAME=$(basename "$backend_lib" | sed 's/libggml-//g' | sed 's/\.so$//g' | sed 's/\.dll$//g' | tr '[:lower:]' '[:upper:]')
+        ((BACKENDS_TOTAL++))
+
+        if nm -D "$backend_lib" 2>/dev/null | grep -q "ggml_backend_init"; then
+            log_success "$BACKEND_NAME: Symbol ggml_backend_init found"
+            ((BACKENDS_OK++))
+        else
+            log_error "$BACKEND_NAME: Symbol ggml_backend_init NOT FOUND"
+        fi
+    fi
+done
+
+if [ $BACKENDS_TOTAL -eq 0 ]; then
+    log_error "No backend libraries found"
+fi
+
+if [ $BACKENDS_OK -ne $BACKENDS_TOTAL ]; then
     echo ""
-    log_info "Symbol details:"
-    nm -D "$LIB_PATH" | grep "ggml_backend_init"
-    echo ""
-else
-    log_error "Symbol ggml_backend_init NOT FOUND"
+    log_error "Symbol verification failed: $BACKENDS_OK/$BACKENDS_TOTAL backends OK"
 fi
 
 # Summary
 echo ""
 echo "=============================================="
-log_success "CUDA Backend Build Successful!"
+log_success "Backend Build Successful! ($BACKENDS_OK/$BACKENDS_TOTAL backends verified)"
 echo "=============================================="
 echo ""
 log_info "Build artifacts:"
-ls -lh "$BUILD_DIR/bin/libggml-cuda"* 2>/dev/null || ls -lh "$BUILD_DIR/bin/libggml-cuda"*
+ls -lh "$BUILD_DIR/bin"/libggml-*.so "$BUILD_DIR/bin"/libggml-*.dll 2>/dev/null | grep -v "\.a$" || true
 echo ""
-log_info "Other libraries built:"
+log_info "Main libraries built:"
 ls -lh "$BUILD_DIR/bin/"libllama* 2>/dev/null || true
 echo ""
 log_info "Next steps:"
 echo "1. Test with llama-server:"
 echo "   $BUILD_DIR/bin/llama-server -m model.gguf"
 echo ""
-echo "2. Verify backend initialization:"
-echo "   Check server output for 'init cuda backend' without errors"
+echo "2. Verify backend initialization in logs:"
+echo "   - Look for 'backend init' messages without symbol errors"
+echo "   - Both CPU and CUDA backends should initialize correctly"
 echo ""
 echo "3. Benchmark performance:"
 echo "   $BUILD_DIR/bin/llama-bench -m model.gguf -t 8"

@@ -1,13 +1,15 @@
-# CUDA Backend Symbol Export Fix
+# Backend Symbol Export Fix (CUDA & CPU)
 
 ## Problem
 
-Runtime error when loading CUDA backend:
+Runtime error when loading backend:
 ```
 load_backend: failed to find ggml_backend_init in libggml-cuda.so
+load_backend: failed to find ggml_backend_init in libggml-cpu.so
 ```
 
 This occurs because the `ggml_backend_init` symbol is not exported from the shared library.
+Both CUDA and CPU backends use the same mechanism and require the same fix.
 
 ## Root Cause Analysis
 
