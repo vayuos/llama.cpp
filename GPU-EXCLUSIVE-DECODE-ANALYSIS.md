@@ -2,11 +2,21 @@
 
 ## Executive Summary
 
-Analysis of runtime logs from Qwen3 MoE model on RTX 4060 Ti (16GB) identified **10 distinct GPU performance issues** affecting the GPU-exclusive decode optimization. This document provides complete categorization, impact assessment, and solutions.
+Analysis of runtime logs from Qwen3 MoE model on RTX 4060 Ti (16GB) identified **13 distinct issues** across GPU performance, diagnostics, and deployment. This document provides complete categorization, impact assessment, and solutions.
 
-**Current Performance**: ~120 tokens/sec (limited by issues)
-**Potential Performance**: ~180-220 tokens/sec (with all fixes applied)
-**Improvement Potential**: +50-80% throughput increase
+**Issues breakdown**:
+- 10 GPU performance issues (blocking and optional)
+- 1 diagnostics issue (memory observability)
+- 2 deployment/configuration issues (informational)
+
+**Current Performance**: ~120 tokens/sec (limited by GPU performance issues)
+**Potential Performance**: ~180-220 tokens/sec (with critical fixes applied)
+**Improvement Potential**: +50-80% throughput increase on GPU
+
+**Timeline**:
+- Phase 1 (critical): 1-2 hours → +300-400% performance
+- Phase 2 (optional): 1-2 hours → full diagnostics + optimizations
+- Phase 3 (deployment): As needed → production-ready setup
 
 ---
 
@@ -329,7 +339,57 @@ GPU_BUFFER=$((16384 * GPU_LAYERS / 48))  # MiB
 
 ---
 
-## Issue #10-11: MoE Expert Streaming Disabled 🧠 OPTIMIZATION
+### Issue #12: SSL Disabled 🔒 DEPLOYMENT
+
+**Severity**: LOW (local-only) to CRITICAL (if public-facing)
+
+**Problem**: llama-server runs in plain HTTP mode without TLS encryption
+
+**Assessment**:
+- ✅ Your setup (127.0.0.1 local-only): **SECURE** - no action needed
+- ❌ If exposed to 0.0.0.0 or public internet: **CRITICAL SECURITY ISSUE**
+
+**Architecture**:
+```
+Correct:  Client → HTTPS → Nginx/Caddy → HTTP → llama-server (internal)
+Wrong:    Client → HTTP → llama-server (direct, unencrypted)
+```
+
+**Impact**:
+- Local development: Safe
+- LAN access: Use Caddy for auto-HTTPS
+- Public internet: MUST use reverse proxy with Let's Encrypt
+
+**Documentation**: SSL-DEPLOYMENT-GUIDE.md
+**Git Commits**: 415145e
+**Status**: ✅ Deployment guide + setup examples provided
+
+---
+
+### Issue #13: BOS Token Is Unexpected 🎯 MODEL DESIGN
+
+**Severity**: LOW (informational)
+
+**Problem**: BOS token maps to comma (`,`) instead of special control token
+
+**Assessment**: ✅ Expected for Qwen3 architecture
+- `add_bos_token = false` (not auto-prepended)
+- Uses `<|im_start|>`/`<|im_end|>` markers instead
+- No functional impact with llama-server
+
+**Impact**:
+- ✅ llama-server: Correct (handles automatically)
+- ✅ transformers library: Correct (respects settings)
+- ❌ Manual BOS manipulation: Would break (inserts comma)
+- ❌ Assuming LLaMA compatibility: Would break
+
+**Documentation**: BOS-TOKEN-MAPPING.md
+**Git Commits**: 069a81c
+**Status**: ✅ Design explanation + usage guidance provided
+
+---
+
+## Issue #10: MoE Expert Streaming Disabled 🧠 OPTIMIZATION
 
 **Problem**: Expert streaming not active for MoE model:
 ```
@@ -463,22 +523,27 @@ Impact: Fully optimized GPU-exclusive decode
 | 9 | EOG Tokens | EOG-TOKENS-INFO.md | Control token guidance |
 | 10 | Expert Streaming | MoE-EXPERT-STREAMING.md | Future optimization |
 | 11 | Buffer Accounting | MODEL-BUFFER-ACCOUNTING-BUG.md | Diagnostics issue |
+| 12 | SSL/TLS | SSL-DEPLOYMENT-GUIDE.md | Deployment configuration |
+| 13 | BOS Token | BOS-TOKEN-MAPPING.md | Model design characteristic |
 
 ---
 
 ## Git Commits
 
 ```
-fbfd007 - Document model buffer accounting reporting bug
-6c96f1a - Document MoE expert streaming optimization
-ae8c496 - Document context window optimization
-79acba0 - Document model loading optimization
-c955928 - Fix memory accounting corruption (src/llama-context.cpp:4539)
-488e68f - Document KV cache split
-94c30db - Document GPU layer offloading
-2dff81b - Analyze tensor placement issue
-578a9f3 - Extend backend fix to CPU backend
-97f8c3a - Fix CUDA backend symbol export
+069a81c - Document BOS token mapping characteristic (Issue #13)
+415145e - Document SSL/TLS deployment configuration (Issue #12)
+9f8f97d - Update GPU analysis to include Issues #11-13
+fbfd007 - Document model buffer accounting reporting bug (Issue #11)
+6c96f1a - Document MoE expert streaming optimization (Issue #10)
+ae8c496 - Document context window optimization (Issue #8)
+79acba0 - Document model loading optimization (Issue #7)
+c955928 - Fix memory accounting corruption (Issue #6, src/llama-context.cpp:4539)
+488e68f - Document KV cache split (Issue #5)
+94c30db - Document GPU layer offloading (Issue #4)
+2dff81b - Analyze tensor placement issue (Issue #3)
+578a9f3 - Extend backend fix to CPU backend (Issue #2)
+97f8c3a - Fix CUDA backend symbol export (Issue #1)
 ```
 
 ---
@@ -516,16 +581,25 @@ nm -D build/bin/libggml-cpu.so | grep ggml_backend_init
 
 ## Conclusion
 
-**11 distinct GPU performance issues identified and addressed:**
+**13 distinct issues identified and comprehensively analyzed:**
+
+**GPU Performance Issues (10)**:
 - 2 code bugs fixed/documented (Issues #6, #11)
 - 2 critical fixes needed (Issues #1-2)
 - 2 high-priority configuration changes (Issues #3-4)
 - 1 auto-fixed by Issue #4 (Issue #5)
 - 4 optional optimizations documented (Issues #7-10)
 
-**Path to 50-80% performance improvement**:
-1. Build with backend symbol fix (1-2 hours)
-2. Change two configuration flags (`-ngl 999 --no-mmap`)
+**Diagnostics Issues (1)**:
+- 1 buffer accounting issue (Issue #11)
+
+**Deployment/Configuration Issues (2)**:
+- 1 SSL/TLS configuration (Issue #12)
+- 1 BOS token design characteristic (Issue #13)
+
+**Path to 50-80% GPU performance improvement**:
+1. Build with backend symbol fix (1-2 hours) — **CRITICAL**
+2. Change two configuration flags (`-ngl 999 --no-mmap`) — **IMMEDIATE**
 3. Apply optional optimizations as needed
 4. (Optional) Fix memory diagnostics (Issues #6 + #11)
 
@@ -533,6 +607,13 @@ nm -D build/bin/libggml-cpu.so | grep ggml_backend_init
 **Time to fix**: 1-2 hours for clean build
 **Performance gain**: +300-400% (CPU 30 tok/s → GPU 140+ tok/s)
 
-**Bonus diagnostics fixes**: Memory observability (Issues #6 + #11 combined ~1 hour)
+**Bonus improvements**:
+- Diagnostics fixes: Full memory observability (~1 hour)
+- Startup optimization: 25% faster (~30 min)
+- Context tuning: +15% with workload adjustment
 
-All 11 issues comprehensively analyzed, documented, and actionable.
+**Deployment (optional)**:
+- SSL/TLS: Add Nginx/Caddy when exposing to public
+- BOS tokens: Use official chat templates (already handled by llama-server)
+
+**All 13 issues comprehensively analyzed, documented, and actionable.**
