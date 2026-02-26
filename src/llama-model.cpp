@@ -2795,13 +2795,26 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             }
 
             // avoid using a host buffer when using mmap
+            // ISSUE #3 FIX: Preserve GPU placement for critical tensors (embeddings, etc.)
             auto * buft_dev = ggml_backend_buft_get_device(buft);
             if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev)) {
-                auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-                if (!cpu_dev) {
-                    throw std::runtime_error("no CPU backend found");
+                // Check if this is a critical tensor that should stay on GPU
+                std::string tensor_name(tensor->name);
+                bool is_critical_tensor = (
+                    tensor_name.find("embd") != std::string::npos ||      // embeddings
+                    tensor_name.find("token_embd") != std::string::npos || // token embeddings
+                    tensor_name.find("output") != std::string::npos        // output layers
+                );
+
+                if (!is_critical_tensor) {
+                    // Only move non-critical tensors to CPU
+                    auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+                    if (!cpu_dev) {
+                        throw std::runtime_error("no CPU backend found");
+                    }
+                    buft = ggml_backend_dev_buffer_type(cpu_dev);
                 }
-                buft = ggml_backend_dev_buffer_type(cpu_dev);
+                // Critical tensors keep their GPU placement
             }
 
             if (buft != buft_list->front().second) {
