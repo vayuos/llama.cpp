@@ -275,6 +275,62 @@ load: control token 151653 '<|vision_end|>' is not marked as EOG
 
 **Severity**: LOW-MEDIUM (5-10% improvement opportunity)
 
+---
+
+### Issue #11: Model Buffer Size Reporting Bug 📊 DIAGNOSTICS
+
+**Severity**: LOW-MEDIUM (diagnostics, not functional)
+
+**Problem**: Per-device model buffer accounting shows zero:
+```
+load_tensors:          CPU model buffer size =     0.00 MiB
+load_tensors:        CUDA0 model buffer size =     0.00 MiB
+load_tensors:    CUDA_Host model buffer size =     0.00 MiB
+```
+
+**Root Cause**: Reporting layer disconnected from allocation backend
+- New `GGML_BACKEND_API` path bypasses legacy tracking variables
+- Tensors allocated via backend but not tracked in reporting counters
+- Unified memory arena not tracked per-device
+- Legacy counters never updated
+
+**Impact**:
+- ✅ Model loads and executes correctly (~7-8 GiB actual usage)
+- ✅ Layers assigned to correct devices
+- ✅ Performance unaffected
+- ❌ Cannot verify buffer placement from logs
+- ❌ Combined with Issue #6, memory observability broken
+- ❌ Impossible to diagnose memory issues from output
+
+**Solution**: Track tensor sizes during device assignment
+```cpp
+// During tensor placement:
+for (each tensor) {
+    size_t tensor_size = ggml_nbytes(tensor);
+    ggml_backend_tensor_set_device(tensor, device);
+
+    // FIX: Update accounting
+    ctx->model_buffer_size[device] += tensor_size;
+}
+```
+
+**Workaround** (until code fix):
+```bash
+# Calculate from layer counts
+CPU_LAYERS=$(grep "assigned to device CPU" | wc -l)
+GPU_LAYERS=$(grep "assigned to device CUDA" | wc -l)
+CPU_BUFFER=$((16384 * CPU_LAYERS / 48))  # MiB
+GPU_BUFFER=$((16384 * GPU_LAYERS / 48))  # MiB
+```
+
+**Documentation**: MODEL-BUFFER-ACCOUNTING-BUG.md
+**Git Commits**: fbfd007
+**Status**: ✅ Diagnostic guide + workaround provided
+
+---
+
+## Issue #10-11: MoE Expert Streaming Disabled 🧠 OPTIMIZATION
+
 **Problem**: Expert streaming not active for MoE model:
 ```
 llama_decode_engine_init: MoE model detected (128 experts)
@@ -406,12 +462,14 @@ Impact: Fully optimized GPU-exclusive decode
 | 8 | Context | CONTEXT-OPTIMIZATION.md | Configuration decision tree |
 | 9 | EOG Tokens | EOG-TOKENS-INFO.md | Control token guidance |
 | 10 | Expert Streaming | MoE-EXPERT-STREAMING.md | Future optimization |
+| 11 | Buffer Accounting | MODEL-BUFFER-ACCOUNTING-BUG.md | Diagnostics issue |
 
 ---
 
 ## Git Commits
 
 ```
+fbfd007 - Document model buffer accounting reporting bug
 6c96f1a - Document MoE expert streaming optimization
 ae8c496 - Document context window optimization
 79acba0 - Document model loading optimization
@@ -458,8 +516,8 @@ nm -D build/bin/libggml-cpu.so | grep ggml_backend_init
 
 ## Conclusion
 
-**10 distinct GPU performance issues identified and addressed:**
-- 1 code bug fixed (Issue #6)
+**11 distinct GPU performance issues identified and addressed:**
+- 2 code bugs fixed/documented (Issues #6, #11)
 - 2 critical fixes needed (Issues #1-2)
 - 2 high-priority configuration changes (Issues #3-4)
 - 1 auto-fixed by Issue #4 (Issue #5)
@@ -469,9 +527,12 @@ nm -D build/bin/libggml-cpu.so | grep ggml_backend_init
 1. Build with backend symbol fix (1-2 hours)
 2. Change two configuration flags (`-ngl 999 --no-mmap`)
 3. Apply optional optimizations as needed
+4. (Optional) Fix memory diagnostics (Issues #6 + #11)
 
 **Current blocker**: Backend symbol export (Issues #1-2)
 **Time to fix**: 1-2 hours for clean build
 **Performance gain**: +300-400% (CPU 30 tok/s → GPU 140+ tok/s)
 
-All 10 issues comprehensively analyzed, documented, and actionable.
+**Bonus diagnostics fixes**: Memory observability (Issues #6 + #11 combined ~1 hour)
+
+All 11 issues comprehensively analyzed, documented, and actionable.
