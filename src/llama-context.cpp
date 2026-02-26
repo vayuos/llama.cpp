@@ -4490,6 +4490,7 @@ void llama_memory_breakdown_print(const struct llama_context * ctx) {
     std::vector<llama_memory_breakdown_data> mb_dev(devices.size());
     llama_memory_breakdown_data              mb_host;
 
+    // ISSUE #11 FIX: Add validation and logging for buffer accounting
     for (const auto & buft_mb : memory_breakdown) {
         ggml_backend_buffer_type_t          buft = buft_mb.first;
         const llama_memory_breakdown_data & mb   = buft_mb.second;
@@ -4497,6 +4498,9 @@ void llama_memory_breakdown_print(const struct llama_context * ctx) {
             mb_host.model += mb.model;
             mb_host.context += mb.context;
             mb_host.compute += mb.compute;
+            if (mb.model == 0 && mb.context == 0 && mb.compute == 0) {
+                GGML_LOG_DEBUG("Host buffer type has zero memory allocation - may indicate incomplete tensor tracking\n");
+            }
             seen_buffer_types.insert(buft);
             continue;
         }
@@ -4513,6 +4517,9 @@ void llama_memory_breakdown_print(const struct llama_context * ctx) {
                 mb_dev[i_dev].model += mb.model;
                 mb_dev[i_dev].context += mb.context;
                 mb_dev[i_dev].compute += mb.compute;
+                if (mb.model == 0) {
+                    GGML_LOG_DEBUG("Device %d model buffer has zero size - may indicate model not loaded on this device\n", i_dev);
+                }
                 seen_buffer_types.insert(buft);
                 continue;
             }

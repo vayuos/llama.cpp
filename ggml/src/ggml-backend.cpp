@@ -1715,7 +1715,11 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                             for (int64_t i0 = 0; i0 < ids_tensor->ne[0]; i0++) {
                                 int32_t id = ids[i1 * ids_tensor->nb[1] / sizeof(int32_t) +
                                                  i0 * ids_tensor->nb[0] / sizeof(int32_t)];
-                                GGML_ASSERT(id >= 0 && id < n_expert);
+                                // ISSUE #10 FIX: Validate expert IDs with informative error message
+                                if (id < 0 || id >= n_expert) {
+                                    GGML_LOG_ERROR("Invalid expert ID: %d (valid range: [0, %d))\n", id, n_expert);
+                                    GGML_ASSERT(false && "Expert ID out of bounds - see error log above");
+                                }
                                 ggml_bitset_set(used_ids.data(), id);
                             }
                         }

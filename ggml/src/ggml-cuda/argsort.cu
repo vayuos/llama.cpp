@@ -129,7 +129,9 @@ static __global__ void k_argsort_f32_i32(const float * x, int * dst, const int n
     extern __shared__ int dst_row[];
 
     // initialize indices
-    dst_row[col] = col;
+    // ISSUE #10 FIX: Initialize padding indices to -1 (invalid sentinel)
+    // This prevents invalid expert indices from reaching downstream operations
+    dst_row[col] = (col < ncols) ? col : -1;
 
     __syncthreads();
 
@@ -138,16 +140,22 @@ static __global__ void k_argsort_f32_i32(const float * x, int * dst, const int n
             int ixj = col ^ j;
             if (ixj > col) {
                 if ((col & k) == 0) {
-                    if (dst_row[col] >= ncols ||
-                        (dst_row[ixj] < ncols && (order == GGML_SORT_ORDER_ASC ?
+                    // ISSUE #10 FIX: Handle -1 (invalid/padding) sentinel values
+                    bool col_invalid = (dst_row[col] < 0);
+                    bool ixj_invalid = (dst_row[ixj] < 0);
+
+                    if (col_invalid || (!ixj_invalid && (order == GGML_SORT_ORDER_ASC ?
                             x_row[dst_row[col]] > x_row[dst_row[ixj]] :
                             x_row[dst_row[col]] < x_row[dst_row[ixj]]))
                     ) {
                         ggml_cuda_swap(dst_row[col], dst_row[ixj]);
                     }
                 } else {
-                    if (dst_row[ixj] >= ncols ||
-                        (dst_row[col] < ncols && (order == GGML_SORT_ORDER_ASC ?
+                    // ISSUE #10 FIX: Handle -1 (invalid/padding) sentinel values
+                    bool col_invalid = (dst_row[col] < 0);
+                    bool ixj_invalid = (dst_row[ixj] < 0);
+
+                    if (ixj_invalid || (!col_invalid && (order == GGML_SORT_ORDER_ASC ?
                             x_row[dst_row[col]] < x_row[dst_row[ixj]] :
                             x_row[dst_row[col]] > x_row[dst_row[ixj]]))
                     ) {
