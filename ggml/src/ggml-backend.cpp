@@ -1717,7 +1717,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
                                                  i0 * ids_tensor->nb[0] / sizeof(int32_t)];
                                 // ISSUE #10 FIX: Validate expert IDs with informative error message
                                 if (id < 0 || id >= n_expert) {
-                                    GGML_LOG_ERROR("Invalid expert ID: %d (valid range: [0, %d))\n", id, n_expert);
+                                    GGML_LOG_ERROR("Invalid expert ID: %d (valid range: [0, %ld))\n", id, n_expert);
                                     GGML_ASSERT(false && "Expert ID out of bounds - see error log above");
                                 }
                                 ggml_bitset_set(used_ids.data(), id);
