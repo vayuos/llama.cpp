@@ -36,7 +36,7 @@ cd "${BUILD_DIR}"
 # ------------------------------------------------------------
 # Host Debug Flags
 # ------------------------------------------------------------
-COMMON_CXX_FLAGS="-O0 -g3 -fno-omit-frame-pointer -fno-inline -march=native"
+COMMON_CXX_FLAGS="-O0 -g3 -fno-omit-frame-pointer -march=native"
 
 # ------------------------------------------------------------
 # CUDA Debug Flags
@@ -44,7 +44,7 @@ COMMON_CXX_FLAGS="-O0 -g3 -fno-omit-frame-pointer -fno-inline -march=native"
 # -G enables device debug
 # -lineinfo kept for profiling correlation (will be ignored by -G)
 # ------------------------------------------------------------
-CUDA_FLAGS="-G -g -O0"
+CUDA_FLAGS="-lineinfo -g -O0"
 
 # ------------------------------------------------------------
 # CMake Configure

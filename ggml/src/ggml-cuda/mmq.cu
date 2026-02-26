@@ -2,6 +2,8 @@
 #include "mmq.cuh"
 #include "quantize.cuh"
 #include "mmid.cuh"
+#include <algorithm>
+#include <vector>
 
 static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) {
     switch (args.type_x) {
@@ -91,6 +93,24 @@ void ggml_cuda_mul_mat_q(
     const char  * src0_d = (const char  *) src0->data;
     const float * src1_d = (const float *) src1->data;
     float       *  dst_d = (float       *)  dst->data;
+
+    // DEBUG: check pointer validity for ids-path illegal memory access diagnosis
+    if (ids) {
+        // Check if src1->data and ids->data are valid CUDA device pointers
+        cudaPointerAttributes src1_attr, ids_attr;
+        cudaError_t src1_err = cudaPointerGetAttributes(&src1_attr, src1->data);
+        cudaError_t ids_err  = cudaPointerGetAttributes(&ids_attr,  ids->data);
+        // Clear any error from the pointer query (cuCtxResetError unavailable, use cudaGetLastError)
+        cudaGetLastError();
+        fprintf(stderr,
+            "DEBUG mmq ids-path: ne11=%lld ne12=%lld n_expert_used=%lld\n"
+            "  src1->data=%p cudaMemType=%d err=%d\n"
+            "  ids->data=%p  cudaMemType=%d err=%d\n",
+            (long long)ne11, (long long)ne12, (long long)ids->ne[0],
+            src1->data, (int)src1_attr.type, (int)src1_err,
+            ids->data,  (int)ids_attr.type,  (int)ids_err);
+        fflush(stderr);
+    }
 
     // If src0 is a temporary compute buffer, clear any potential padding.
     if (ggml_backend_buffer_get_usage(src0->buffer) == GGML_BACKEND_BUFFER_USAGE_COMPUTE) {
@@ -193,6 +213,38 @@ void ggml_cuda_mul_mat_q(
         ggml_cuda_launch_mm_ids_helper((const int32_t *) ids->data, ids_src1.get(), ids_dst.get(), expert_bounds.get(),
             ne02, ne12, n_expert_used, ne11, si1, sis1, stream);
         CUDA_CHECK(cudaGetLastError());
+
+        // DEBUG: dump full expert_bounds to find nex_prev collisions/gaps
+        {
+            std::vector<int32_t> h_bounds(ne02 + 1);
+            CUDA_CHECK(cudaMemcpy(h_bounds.data(), expert_bounds.get(), (ne02 + 1) * sizeof(int32_t), cudaMemcpyDeviceToHost));
+            int fill_count = h_bounds[ne02];
+            fprintf(stderr, "expert_bounds total=%d (expected %lld)\n", fill_count, (long long)ne_get_rows);
+            // Print only non-trivial experts (where bounds differ from previous)
+            int prev = 0;
+            for (int e = 0; e <= (int)ne02; e++) {
+                if (h_bounds[e] != prev) {
+                    fprintf(stderr, "  expert_bounds[%d]=%d (delta=%d)\n", e, h_bounds[e], h_bounds[e]-prev);
+                    prev = h_bounds[e];
+                }
+            }
+            // Verify no gaps in the range [0, fill_count)
+            const int64_t dbg_s11 = nb11 / ts_src1;
+            const int64_t dbg_limit = (int64_t)(src1->nb[3] / ts_src1) * ne13;
+            std::vector<int32_t> h_ids_all(ne_get_rows);
+            CUDA_CHECK(cudaMemcpy(h_ids_all.data(), ids_src1.get(), ne_get_rows * sizeof(int32_t), cudaMemcpyDeviceToHost));
+            int n_oob = 0;
+            for (int i = 0; i < (int)ne_get_rows; i++) {
+                int64_t max_access = (int64_t)h_ids_all[i] * dbg_s11 + ne10 - 1;
+                if (max_access >= dbg_limit) {
+                    fprintf(stderr, "  OOB: ids_src1[%d]=%d  max_access=%lld >= limit=%lld  s11=%lld\n",
+                        i, h_ids_all[i], (long long)max_access, (long long)dbg_limit, (long long)dbg_s11);
+                    if (++n_oob >= 8) { fprintf(stderr, "  ...(more OOB)\n"); break; }
+                }
+            }
+            if (n_oob == 0) fprintf(stderr, "  All ids_src1 in bounds.\n");
+            fflush(stderr);
+        }
     }
 
     const size_t nbytes_src1_q8_1 = ne12*n_expert_used*ne10_padded * sizeof(block_q8_1)/QK8_1 +
@@ -214,6 +266,34 @@ void ggml_cuda_mul_mat_q(
         const int64_t s11 = src1->nb[1] / ts_src1;
         const int64_t s12 = src1->nb[2] / ts_src1;
         const int64_t s13 = src1->nb[3] / ts_src1;
+
+        // DEBUG: print strides and ALL ids_src1 values to find OOB source
+        {
+            std::vector<int32_t> h_ids(ne_get_rows);
+            CUDA_CHECK(cudaMemcpy(h_ids.data(), ids_src1.get(), ne_get_rows * sizeof(int32_t), cudaMemcpyDeviceToHost));
+            int32_t max_id = *std::max_element(h_ids.begin(), h_ids.end());
+            int64_t src1_total_floats = (int64_t)src1->nb[3] / 4 * src1->ne[3]; // total float elements
+            if (src1->ne[3] == 1) src1_total_floats = (int64_t)src1->nb[2] / 4 * src1->ne[2];
+            fprintf(stderr,
+                "DEBUG quantize pre: ne11=%lld ne12=%lld ne10=%lld ne10_pad=%lld\n"
+                "  s11=%lld s12=%lld s13=%lld ne11_flat=%lld\n"
+                "  src1 nb[0..3]=%zu %zu %zu %zu  ne[0..3]=%lld %lld %lld %lld\n"
+                "  src1->data=%p alignment=%d\n"
+                "  max_ids_src1=%d  max_access=(max_id*s11+ne10-1)=%lld  src1_total_floats=%lld  OOB=%s\n",
+                (long long)ne11, (long long)ne12, (long long)ne10, (long long)ne10_padded,
+                (long long)s11, (long long)s12, (long long)s13, (long long)ne11_flat,
+                (size_t)src1->nb[0], (size_t)src1->nb[1], (size_t)src1->nb[2], (size_t)src1->nb[3],
+                (long long)src1->ne[0], (long long)src1->ne[1], (long long)src1->ne[2], (long long)src1->ne[3],
+                src1->data, (int)((uintptr_t)src1->data % 16),
+                max_id, (long long)max_id * s11 + ne10 - 1, src1_total_floats,
+                ((long long)max_id * s11 + ne10 - 1 >= src1_total_floats) ? "YES!" : "no");
+            fprintf(stderr, "  ids_src1[0..%lld]:", (long long)ne_get_rows);
+            for (int i = 0; i < (int)ne_get_rows; i++) {
+                fprintf(stderr, " %d", h_ids[i]);
+            }
+            fprintf(stderr, "\n");
+            fflush(stderr);
+        }
 
         if (use_native_mxfp4) {
             quantize_mmq_mxfp4_cuda(src1_d, ids_src1.get(), src1_q8_1.get(), src0->type, ne10, s11, s12, s13,
