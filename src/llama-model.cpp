@@ -7370,11 +7370,11 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
         // FIX #2: Diagnose and recommend full GPU offloading when not all layers are on GPU
         const int actual_gpu_layers = std::min(n_gpu_layers, max_offloadable_layers);
         if (actual_gpu_layers < max_backend_supported_layers) {
-            LLAMA_LOG_WARNING("%s: Not all layers offloaded to GPU (%d/%d). For GPU-exclusive decode:\n",
+            LLAMA_LOG_WARN("%s: Not all layers offloaded to GPU (%d/%d). For GPU-exclusive decode:\n",
                 __func__, actual_gpu_layers, max_backend_supported_layers);
-            LLAMA_LOG_WARNING("%s:  - Try: --no-mmap to free GPU memory for more layers\n", __func__);
-            LLAMA_LOG_WARNING("%s:  - Or: use smaller batch size with -n flag\n", __func__);
-            LLAMA_LOG_WARNING("%s:  - Or: use quantized model with smaller quantization\n", __func__);
+            LLAMA_LOG_WARN("%s:  - Try: --no-mmap to free GPU memory for more layers\n", __func__);
+            LLAMA_LOG_WARN("%s:  - Or: use smaller batch size with -n flag\n", __func__);
+            LLAMA_LOG_WARN("%s:  - Or: use quantized model with smaller quantization\n", __func__);
         }
     }
 
