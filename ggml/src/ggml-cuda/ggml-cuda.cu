@@ -2465,8 +2465,10 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
     std::vector<int32_t> tokens_per_expert(ne02);
+    int64_t total_valid_assignments = 0;
     for (int64_t i = 0; i < ne02; ++i) {
         tokens_per_expert[i] = expert_bounds_host[i+1] - expert_bounds_host[i];
+        total_valid_assignments += tokens_per_expert[i];
     }
 
     ggml_cuda_pool_alloc<char> src1_sorted(ctx.pool(), ne12 * n_expert_used * ne10 * ts_src1_sorted);
@@ -2475,10 +2477,15 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
     const int32_t * ids_to_sorted   = ids_src1_dev.ptr;
     const int32_t * ids_from_sorted = ids_dst_dev.ptr;
 
+    // FIX: Only process valid assignments filled by mm_ids_helper
+    // mm_ids_helper fills exactly expert_bounds_host[ne02] positions
+    // Remaining positions contain uninitialized memory with INT_MAX values
+    // Only use the actual number of valid assignments, not the theoretical maximum
+    const int64_t ne_get_rows_actual = expert_bounds_host[ne02];
 
     get_rows_cuda(src1->data, src1->type, ids_to_sorted, src1_sorted.ptr, type_src1_sorted, ne10, nb11, nb12, nb13,
-                  ne_get_rows, 1, 1, sizeof(int32_t), ne_get_rows * sizeof(int32_t), ne_get_rows * sizeof(int32_t),
-                  ne10 * ts_src1_sorted, ne_get_rows * ne10 * ts_src1_sorted, ne_get_rows * ne10 * ts_src1_sorted,
+                  ne_get_rows_actual, 1, 1, sizeof(int32_t), ne_get_rows_actual * sizeof(int32_t), ne_get_rows_actual * sizeof(int32_t),
+                  ne10 * ts_src1_sorted, ne_get_rows_actual * ne10 * ts_src1_sorted, ne_get_rows_actual * ne10 * ts_src1_sorted,
                   stream);
     CUDA_CHECK(cudaGetLastError());
 
@@ -2531,9 +2538,10 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
         dst_data_cur += dst_slice.nb[2];
     }
 
+    // FIX: Use actual number of valid assignments, not theoretical maximum
     get_rows_cuda(dst_sorted.ptr, type_dst_sorted, ids_from_sorted, dst->data, dst->type, ne0, ne0 * ts_dst_sorted,
-                  ne_get_rows * ne0 * ts_dst_sorted, ne_get_rows * ne0 * ts_dst_sorted, ne_get_rows, 1, 1,
-                  sizeof(int32_t), ne_get_rows * sizeof(int32_t), ne_get_rows * sizeof(int32_t), nb1, nb2, nb3, stream);
+                  ne_get_rows_actual * ne0 * ts_dst_sorted, ne_get_rows_actual * ne0 * ts_dst_sorted, ne_get_rows_actual, 1, 1,
+                  sizeof(int32_t), ne_get_rows_actual * sizeof(int32_t), ne_get_rows_actual * sizeof(int32_t), nb1, nb2, nb3, stream);
 }
 
 static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct ggml_tensor * dst) {

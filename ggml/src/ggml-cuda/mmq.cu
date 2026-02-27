@@ -228,13 +228,14 @@ void ggml_cuda_mul_mat_q(
                     prev = h_bounds[e];
                 }
             }
-            // Verify no gaps in the range [0, fill_count)
+            // FIX: Only verify valid positions filled by mm_ids_helper (first fill_count positions)
+            // Remaining positions in ids_src1 contain uninitialized memory with INT_MAX values
             const int64_t dbg_s11 = nb11 / ts_src1;
             const int64_t dbg_limit = (int64_t)(src1->nb[3] / ts_src1) * ne13;
-            std::vector<int32_t> h_ids_all(ne_get_rows);
-            CUDA_CHECK(cudaMemcpy(h_ids_all.data(), ids_src1.get(), ne_get_rows * sizeof(int32_t), cudaMemcpyDeviceToHost));
+            std::vector<int32_t> h_ids_all(fill_count);
+            CUDA_CHECK(cudaMemcpy(h_ids_all.data(), ids_src1.get(), fill_count * sizeof(int32_t), cudaMemcpyDeviceToHost));
             int n_oob = 0;
-            for (int i = 0; i < (int)ne_get_rows; i++) {
+            for (int i = 0; i < fill_count; i++) {
                 int64_t max_access = (int64_t)h_ids_all[i] * dbg_s11 + ne10 - 1;
                 if (max_access >= dbg_limit) {
                     fprintf(stderr, "  OOB: ids_src1[%d]=%d  max_access=%lld >= limit=%lld  s11=%lld\n",
@@ -267,11 +268,16 @@ void ggml_cuda_mul_mat_q(
         const int64_t s12 = src1->nb[2] / ts_src1;
         const int64_t s13 = src1->nb[3] / ts_src1;
 
-        // DEBUG: print strides and ALL ids_src1 values to find OOB source
+        // DEBUG: print strides and valid ids_src1 values to find OOB source
+        // FIX: Only read valid positions, not uninitialized memory positions
         {
-            std::vector<int32_t> h_ids(ne_get_rows);
-            CUDA_CHECK(cudaMemcpy(h_ids.data(), ids_src1.get(), ne_get_rows * sizeof(int32_t), cudaMemcpyDeviceToHost));
-            int32_t max_id = *std::max_element(h_ids.begin(), h_ids.end());
+            std::vector<int32_t> h_bounds_for_count(ne02 + 1);
+            CUDA_CHECK(cudaMemcpy(h_bounds_for_count.data(), expert_bounds.get(), (ne02 + 1) * sizeof(int32_t), cudaMemcpyDeviceToHost));
+            int fill_count = h_bounds_for_count[ne02];
+
+            std::vector<int32_t> h_ids(fill_count);
+            CUDA_CHECK(cudaMemcpy(h_ids.data(), ids_src1.get(), fill_count * sizeof(int32_t), cudaMemcpyDeviceToHost));
+            int32_t max_id = fill_count > 0 ? *std::max_element(h_ids.begin(), h_ids.end()) : -1;
             int64_t src1_total_floats = (int64_t)src1->nb[3] / 4 * src1->ne[3]; // total float elements
             if (src1->ne[3] == 1) src1_total_floats = (int64_t)src1->nb[2] / 4 * src1->ne[2];
             fprintf(stderr,
@@ -285,10 +291,10 @@ void ggml_cuda_mul_mat_q(
                 (size_t)src1->nb[0], (size_t)src1->nb[1], (size_t)src1->nb[2], (size_t)src1->nb[3],
                 (long long)src1->ne[0], (long long)src1->ne[1], (long long)src1->ne[2], (long long)src1->ne[3],
                 src1->data, (int)((uintptr_t)src1->data % 16),
-                max_id, (long long)max_id * s11 + ne10 - 1, (long long)src1_total_floats,
-                ((long long)max_id * s11 + ne10 - 1 >= src1_total_floats) ? "YES!" : "no");
-            fprintf(stderr, "  ids_src1[0..%lld]:", (long long)ne_get_rows);
-            for (int i = 0; i < (int)ne_get_rows; i++) {
+                max_id, (long long)(max_id >= 0 ? max_id * s11 + ne10 - 1 : -1), (long long)src1_total_floats,
+                (max_id >= 0 && (long long)max_id * s11 + ne10 - 1 >= src1_total_floats) ? "YES!" : "no");
+            fprintf(stderr, "  ids_src1[0..%d] (valid positions only):", fill_count);
+            for (int i = 0; i < fill_count; i++) {
                 fprintf(stderr, " %d", h_ids[i]);
             }
             fprintf(stderr, "\n");
