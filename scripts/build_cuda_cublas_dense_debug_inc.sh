@@ -90,6 +90,12 @@ if [ $NEEDS_CONFIG -eq 1 ] || [ ! -f "CMakeCache.txt" ] || [ "../CMakeLists.txt"
         -DGGML_DEBUG=ON \
         -DGGML_DEBUG_CUDA=ON \
         \
+        -DGGML_CUDA_SAMPLING=ON \
+        \
+        -DLLAMA_GPU_EXCLUSIVE_DECODE=ON \
+        -DLLAMA_CPU_SAMPLING_EXCLUDED=ON \
+        -DLLAMA_KV_HYBRID_EXCLUDED=ON \
+        \
         -DLLAMA_BUILD_TESTS=OFF \
         -DLLAMA_BUILD_EXAMPLES=ON \
         -DGGML_CPU_ALL=ON \

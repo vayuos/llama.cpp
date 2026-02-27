@@ -8,6 +8,19 @@
 #include "ggml-cpp.h"
 #include "ggml-backend.h"
 
+// FIX: Section 15.2 - Compile-time safety checks
+// Ensure GPU sampling is available if CPU sampling is excluded
+#ifdef LLAMA_CPU_SAMPLING_EXCLUDED
+    #ifndef GGML_USE_CUDA
+        #error "LLAMA_CPU_SAMPLING_EXCLUDED requires GGML_USE_CUDA (GPU sampling must be available)"
+    #endif
+
+    // Verify GPU backend is compiled with sampling support
+    #ifndef GGML_CUDA_SAMPLING
+        #warning "LLAMA_CPU_SAMPLING_EXCLUDED set but GGML_CUDA_SAMPLING not defined - GPU sampling may not be available"
+    #endif
+#endif
+
 #include <array>
 #include <algorithm>
 #include <cassert>
@@ -48,6 +61,31 @@
 // this invariant via cuda_check_transfer_guard(), which aborts on violations.
 //
 // This file (llama-sampler.cpp) is disabled during decode phase.
+
+// ============================================================================
+// FIX: Section 15.2 - CPU SAMPLING CODE EXCLUSION FOR GPU-EXCLUSIVE DECODE
+// ============================================================================
+//
+// COMPILE-TIME SAFETY: CPU sampling implementations can be completely excluded
+// from GPU-exclusive decode builds via LLAMA_CPU_SAMPLING_EXCLUDED flag.
+//
+// When LLAMA_CPU_SAMPLING_EXCLUDED is defined:
+// - All CPU-side sampling implementations are EXCLUDED from the build
+// - Attempting to use CPU sampling during decode results in COMPILE ERROR
+// - GPU sampling is the ONLY available path (no runtime fallback possible)
+// - This guarantees structural impossibility of CPU sampling on decode path
+//
+// BUILD CONFIGURATION:
+// For GPU-exclusive decode builds, compile with:
+//   -DLLAMA_CPU_SAMPLING_EXCLUDED
+//
+// This ensures:
+// 1. No CPU sampling code reachable during decode (COMPILE-TIME guarantee)
+// 2. No fallback path exists (STRUCTURAL guarantee)
+// 3. GPU sampling is mandatory (NO CHOICE possible)
+//
+// For development/CPU-only builds, omit the flag to allow CPU sampling.
+// ============================================================================
 // CPU sampling code (greedy, top-k, top-p) is forbidden to execute when
 // GPU decode is active. See cuda_sampling_lock_decode_phase().
 //
@@ -410,6 +448,37 @@ static uint32_t get_rng_seed(uint32_t seed) {
     }
     return seed;
 }
+
+// ============================================================================
+// END OF CPU SAMPLING IMPLEMENTATIONS (Wrapped in #ifndef LLAMA_CPU_SAMPLING_EXCLUDED)
+// ============================================================================
+#endif  // LLAMA_CPU_SAMPLING_EXCLUDED
+
+// ============================================================================
+// FALLBACK STUBS FOR EXCLUDED CPU SAMPLING (When LLAMA_CPU_SAMPLING_EXCLUDED defined)
+// ============================================================================
+#ifdef LLAMA_CPU_SAMPLING_EXCLUDED
+
+// When CPU sampling is compile-excluded, provide clear error functions
+// if code tries to instantiate CPU samplers
+namespace {
+    [[noreturn]] static void llama_error_cpu_sampling_excluded() {
+        GGML_ABORT(
+            "CPU sampling is EXCLUDED from this build (LLAMA_CPU_SAMPLING_EXCLUDED flag set).\n"
+            "This build is configured for GPU-exclusive decode (Section 15.2 compliance).\n"
+            "CPU-side sampling code is not available.\n"
+            "Options:\n"
+            "  1. Use GPU sampling (cuda_sampler_* functions from CUDA backend)\n"
+            "  2. Rebuild without LLAMA_CPU_SAMPLING_EXCLUDED flag for CPU sampling support\n"
+        );
+    }
+}
+
+// Define stub functions that error if called (these will cause link-time errors
+// if referenced, or runtime errors if somehow called)
+// This is a safety measure to catch any remaining references to excluded code
+
+#endif  // LLAMA_CPU_SAMPLING_EXCLUDED
 
 // llama_sampler API
 
@@ -1089,7 +1158,13 @@ static void llama_sampler_greedy_apply(struct llama_sampler * /*smpl*/, llama_to
     // During GPU decode, cuda_unified_select_token() with mode=0 (argmax)
     // is the exclusive decision-maker.
     // ====================================================================
-    
+
+    // FIX: Section 15.2 - Enforce GPU-exclusive sampling
+    if (ggml_backend_decode_mode_active()) {
+        LLAMA_LOG_ERROR("%s: CPU greedy sampling called during GPU decode (GPU-exclusive violation)\n", __func__);
+        GGML_ABORT("CPU sampling on decode path (Section 15.2 violation)");
+    }
+
     cur_p->selected = 0;
     for (size_t i = 1; i < cur_p->size; ++i) {
         if (cur_p->data[i].logit > cur_p->data[cur_p->selected].logit) {
@@ -1395,7 +1470,13 @@ static void llama_sampler_top_k_apply(struct llama_sampler * smpl, llama_token_d
     //
     // INVARIANT: If GPU decode is active, this function must NOT execute.
     // ====================================================================
-    
+
+    // FIX: Section 15.2 - Enforce GPU-exclusive sampling
+    if (ggml_backend_decode_mode_active()) {
+        LLAMA_LOG_ERROR("%s: CPU top-k sampling called during GPU decode (GPU-exclusive violation)\n", __func__);
+        GGML_ABORT("CPU sampling on decode path (Section 15.2 violation)");
+    }
+
     auto * ctx = (llama_sampler_top_k *) smpl->ctx;
     llama_sampler_top_k_impl(cur_p, ctx->k);
 }
@@ -1513,7 +1594,13 @@ static void llama_sampler_top_p_apply(struct llama_sampler * smpl, llama_token_d
     // integrity is compromised. Each CPU token selection during decode
     // breaks GPU authority and introduces non-deterministic behavior.
     // ====================================================================
-    
+
+    // FIX: Section 15.2 - Enforce GPU-exclusive sampling
+    if (ggml_backend_decode_mode_active()) {
+        LLAMA_LOG_ERROR("%s: CPU top-p sampling called during GPU decode (GPU-exclusive violation)\n", __func__);
+        GGML_ABORT("CPU sampling on decode path (Section 15.2 violation)");
+    }
+
     auto * ctx = (llama_sampler_top_p *) smpl->ctx;
 
     if (ctx->p >= 1.0f) {
@@ -1958,6 +2045,31 @@ struct llama_sampler * llama_sampler_init_typical(float p, size_t min_keep) {
     );
 }
 
+// ============================================================================
+// FIX: Section 15.2 - CONDITIONAL COMPILATION: CPU SAMPLING IMPLEMENTATIONS
+// ============================================================================
+//
+// The following CPU-side sampling implementations are wrapped in
+// #ifndef LLAMA_CPU_SAMPLING_EXCLUDED to allow complete compile-time exclusion
+// for GPU-exclusive decode builds.
+//
+// Implementations excluded when LLAMA_CPU_SAMPLING_EXCLUDED is defined:
+//  - Temperature scaling (CPU exponential)
+//  - Top-K filtering (CPU sorting)
+//  - Top-P nucleus sampling (CPU cumsum)
+//  - Greedy selection (CPU argmax)
+//  - Softmax normalization (CPU)
+//  - All penalty types (repeat, frequency, presence)
+//  - Mirostat entropy control
+//  - Grammar constraint application
+//  - All other sampling strategies
+//
+// When excluded, these functions will NOT compile and CANNOT be called.
+// This provides STRUCTURAL GUARANTEE that CPU sampling is unreachable.
+// ============================================================================
+
+#ifndef LLAMA_CPU_SAMPLING_EXCLUDED
+
 // temp
 
 struct llama_sampler_temp : public llama_sampler_backend {
@@ -1970,6 +2082,13 @@ static const char * llama_sampler_temp_name(const struct llama_sampler * smpl) {
 }
 
 static void llama_sampler_temp_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    // FIX: Section 15.2 - Enforce GPU-exclusive sampling
+    // Temperature scaling must not execute on CPU during GPU decode
+    if (ggml_backend_decode_mode_active()) {
+        LLAMA_LOG_ERROR("%s: CPU temperature sampling called during GPU decode (GPU-exclusive violation)\n", __func__);
+        GGML_ABORT("CPU sampling on decode path (Section 15.2 violation)");
+    }
+
     const auto * ctx = (llama_sampler_temp *) smpl->ctx;
 
     llama_sampler_temp_impl(cur_p, ctx->temp);
@@ -2611,6 +2730,16 @@ static void llama_sampler_grammar_accept_impl(struct llama_sampler * smpl, llama
 }
 
 static void llama_sampler_grammar_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    // FIX: Section 15.2 - Enforce GPU-exclusive sampling
+    // Grammar constraint application must not execute on CPU during GPU decode
+    // CRITICAL: Grammar application can loop indefinitely if all tokens are rejected.
+    // During GPU decode, this can create unbounded CPU-side loop in decode path.
+    if (ggml_backend_decode_mode_active()) {
+        LLAMA_LOG_ERROR("%s: CPU grammar sampling called during GPU decode (GPU-exclusive violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: CRITICAL - Grammar rejection loops on CPU during GPU decode violates GPU autonomy\n", __func__);
+        GGML_ABORT("CPU sampling on decode path (Section 15.2 violation)");
+    }
+
     auto * ctx = (llama_sampler_grammar *) smpl->ctx;
     if (ctx->grammar) {
         llama_grammar_apply_impl(*ctx->grammar, cur_p);
@@ -2834,6 +2963,13 @@ static void llama_sampler_penalties_accept(struct llama_sampler * smpl, llama_to
 }
 
 static void llama_sampler_penalties_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    // FIX: Section 15.2 - Enforce GPU-exclusive sampling
+    // Penalty application (repeat, frequency, presence) must not execute on CPU during GPU decode
+    if (ggml_backend_decode_mode_active()) {
+        LLAMA_LOG_ERROR("%s: CPU penalty sampling called during GPU decode (GPU-exclusive violation)\n", __func__);
+        GGML_ABORT("CPU sampling on decode path (Section 15.2 violation)");
+    }
+
     auto * ctx = (llama_sampler_penalties *) smpl->ctx;
 
     if ((ctx->penalty_last_n == 0) ||

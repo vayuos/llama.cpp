@@ -1,3 +1,29 @@
+// ============================================================================
+// FIX: Section 11.3 - GPU-EXCLUSIVE KV CACHE IMPLEMENTATION
+// ============================================================================
+//
+// This file implements the KV cache management system with mandatory GPU-only
+// enforcement during decode phase.
+//
+// DESIGN PRINCIPLE:
+// - During prefill: KV can be CPU, GPU, or hybrid (flexible)
+// - During decode: KV MUST be GPU-resident ONLY (hard requirement)
+//
+// ENFORCEMENT MECHANISM:
+// 1. enforce_gpu_only_kv() called at decode start
+// 2. Verifies ALL KV buffers are GPU-resident (calls is_offloaded())
+// 3. Sets kv_gpu_only_locked flag if successful
+// 4. If CPU KV detected: returns -1, decode cannot proceed
+// 5. All CPU KV path guards check kv_gpu_only_locked flag
+// 6. If flag set and CPU path attempted: ABORT with error
+//
+// COMPILE-TIME CONFIGURATION:
+// For GPU-exclusive decode builds, define:
+//   -DLLAMA_KV_HYBRID_EXCLUDED
+// This excludes hybrid memory allocation paths entirely.
+//
+// ============================================================================
+
 #include "llama-kv-cache.h"
 
 #include "llama-impl.h"
@@ -226,9 +252,13 @@ void llama_kv_cache::clear(bool data) {
     // ====================================================================
     // GPU-ONLY KV RESIDENCY ENFORCEMENT
     // ====================================================================
+    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
+        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
+        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
     }
 
     for (uint32_t s = 0; s < n_stream; ++s) {
@@ -260,9 +290,11 @@ bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
     // are not accessed. CPU KV paths are forbidden when GPU-only is locked.
     // ====================================================================
     if (kv_gpu_only_locked) {
-        // During GPU-only decode: additional hybrid mode check
+        // FIX: Section 11.3 - During GPU-only decode: additional hybrid mode check
         // All KV operations must be GPU-native (no CPU paths)
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: ensure no CPU KV paths executed");
+        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but hybrid KV operation attempted (Section 11.3 violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: No CPU KV paths are permitted during decode\n", __func__);
+        GGML_ABORT("Hybrid KV operation during GPU-exclusive decode - architecture violation");
     }
 
     GGML_ASSERT(seq_id == -1 || (seq_id >= 0 && (size_t) seq_id < seq_to_stream.size()));
@@ -338,9 +370,13 @@ void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, ll
     // ====================================================================
     // GPU-ONLY KV RESIDENCY ENFORCEMENT
     // ====================================================================
+    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
+        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
+        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
     }
 
     GGML_ASSERT(seq_id_src >= 0 && (size_t) seq_id_src < seq_to_stream.size());
@@ -475,9 +511,13 @@ void llama_kv_cache::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, ll
     // ====================================================================
     // GPU-ONLY KV RESIDENCY ENFORCEMENT
     // ====================================================================
+    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
+        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
+        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
     }
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
@@ -537,9 +577,13 @@ void llama_kv_cache::seq_div(llama_seq_id seq_id, llama_pos p0, llama_pos p1, in
     // ====================================================================
     // GPU-ONLY KV RESIDENCY ENFORCEMENT
     // ====================================================================
+    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
+        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
+        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
     }
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
@@ -827,9 +871,13 @@ bool llama_kv_cache::update(llama_context * lctx, bool do_shift, const stream_co
     // ====================================================================
     // GPU-ONLY KV RESIDENCY ENFORCEMENT
     // ====================================================================
+    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
     // If GPU-only mode is locked: no CPU KV path access permitted
     if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
+        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
+        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
+        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
+        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
     }
 
     bool updated = false;

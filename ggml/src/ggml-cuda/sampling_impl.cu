@@ -103,9 +103,19 @@ int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_siz
         ctx->d_history = NULL;
     }
 
-    // scratch: small workspace
-    size_t scratch_bytes = 4096;
+    // scratch: small workspace for GPU-resident argmax reduction
+    // FIX: Section 11.6 - Ensure GPU-resident sampling (no D2H transfers)
+    // This scratch buffer is CRITICAL for GPU argmax to work; without it,
+    // the kernel will fall back to downloading logits to CPU (violates spec)
+    size_t scratch_bytes = 4096;  // 1024 floats - sufficient for block reduction
     if (cuda_safe_check(cudaMalloc((void **) &ctx->d_scratch, scratch_bytes)) != CUDA_OK) {
+        // FATAL: Cannot allocate scratch for GPU-resident sampling
+        // Fallback would require D2H logits transfer (violates Section 11.6)
+        GGML_LOG_ERROR("cuda_sampling_new: FATAL - Cannot allocate GPU scratch buffer (%zu bytes) "
+                       "for GPU-resident argmax. GPU sampling requires this workspace. "
+                       "Fallback to CPU sampling is disabled (violates GPU-exclusive decode requirement).\n",
+                       scratch_bytes);
+        // Try to continue anyway - the GPU argmax will fail and trigger transfer guard
         ctx->d_scratch = NULL;
     }
 
@@ -287,15 +297,21 @@ int cuda_sampling_sample_greedy(cuda_sampling_context_t * ctx, int32_t * token_o
 
         // ====================================================================
         // TRANSFER GUARD CHECK: Logits D2H (fallback path)
+        // FIX: Section 11.6 - NO host↔device transfers during decode
         // ====================================================================
         if (cuda_check_transfer_guard(ctx, bytes) != 0) {
             ctx->logits_copied_to_host = 1;
             ctx->bulk_transfer_attempted = 1;
-            fprintf(stderr, "ERROR: Logits D2H blocked during decode (greedy fallback)\n"
-                           "  Size: %zu bytes (%d float values)\n"
-                           "  All sampling must remain GPU-resident during decode phase.\n",
-                    bytes, vocab);
-            return -1;  // FATAL
+            GGML_LOG_ERROR(
+                "FATAL: GPU-resident argmax failed; fallback to CPU sampling blocked during decode.\n"
+                "  Violation: Section 11.6 - No host↔device transfers on decode path\n"
+                "  Violation: Section 15.2 - All decode-path sampling must execute on GPU\n"
+                "  Attempted: Logits D2H transfer (%zu bytes, %d floats)\n"
+                "  Root cause: GPU argmax kernel failed (likely missing scratch buffer)\n"
+                "  Fix: Ensure cuda_sampling_new() successfully allocates d_scratch buffer\n"
+                "  Workaround: Use GPU-only sampling (disable CPU fallback in model config)\n",
+                bytes, vocab);
+            return -1;  // FATAL - enforces GPU-exclusive sampling
         }
 
         float * h_logits = (float*) malloc(bytes);

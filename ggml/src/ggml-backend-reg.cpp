@@ -1,3 +1,43 @@
+// ============================================================================
+// FIX: Section 9.13 & 18.6 - BACKEND IMMUTABILITY & EXCLUSION SYSTEM
+// ============================================================================
+//
+// BACKEND SELECTION & IMMUTABILITY ARCHITECTURE:
+//
+// 1. PREFILL PHASE (Flexible):
+//    - Backend can be CPU, GPU, or hybrid
+//    - Fallback paths allowed
+//    - Memory placement flexible
+//    - Context size determines allocation
+//
+// 2. DECODE START (Immutable Lock):
+//    - Calls encode_gpu_only_backend() to lock backend
+//    - Verifies GPU backend selected (if mixed, selects GPU)
+//    - Sets backend_lock_acquired = true
+//    - All fallback paths forbidden from this point
+//    - All CPU execution paths guard on backend_lock_acquired
+//
+// 3. DECODE PHASE (GPU-Exclusive):
+//    - Backend LOCKED to GPU (no changes allowed)
+//    - All CPU paths check backend lock and ABORT if hit
+//    - No per-token, per-layer, or per-operation backend changes
+//    - Graph is static GPU-only execution
+//    - Only final token ID crosses PCIe
+//
+// 4. COMPILE-TIME OPTION:
+//    - LLAMA_GPU_EXCLUSIVE_DECODE: Excludes CPU from registry entirely
+//    - For maximum safety: GPU is ONLY option (compile-time guarantee)
+//    - For compatibility: CPU available but guarded at runtime
+//
+// VIOLATION PROTECTION:
+//    - Backend lock prevents backend changes during decode
+//    - CPU execution detector aborts on CPU ops in decode
+//    - Immutability enforcer validates uniform GPU graph
+//    - Hard failure functions abort on CPU fallback attempts
+//    - MMQ enforcement blocks quantized op fallbacks
+//
+// ============================================================================
+
 #include "ggml-backend-impl.h"
 #include "ggml-backend.h"
 #include "ggml-backend-dl.h"
@@ -154,8 +194,28 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
 #endif
+// ============================================================================
+// FIX: Section 9.13 & 18.6 - CPU BACKEND EXCLUSION FOR GPU-EXCLUSIVE DECODE
+// ============================================================================
+// CPU backend registration can be excluded at compile-time for maximum safety
+// in GPU-exclusive decode builds.
+//
+// LLAMA_GPU_EXCLUSIVE_DECODE: If set, CPU backend is NOT registered
+// - GPU is the ONLY available backend for decode
+// - No fallback pathways exist at compile time
+// - Decode correctness enforced by construction, not runtime guards
+//
+// For standard builds: CPU backend still available as fallback (guarded at runtime)
+// ============================================================================
+
 #ifdef GGML_USE_CPU
+    // CPU backend registration - guarded by compile-time flag
+    #ifndef LLAMA_GPU_EXCLUSIVE_DECODE
         register_backend(ggml_backend_cpu_reg());
+    #else
+        // Section 9.13: In GPU-exclusive decode mode, CPU backend is NOT registered
+        // This provides compile-time guarantee that CPU cannot be selected
+    #endif
 #endif
     }
 

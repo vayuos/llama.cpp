@@ -86,6 +86,7 @@ cmake .. \
     \
     -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128 \
     -DGGML_CUDA_NO_VMM=OFF \
+    -DGGML_CUDA_SAMPLING=ON \
     \
     -DGGML_SCHED_MAX_COPIES=1 \
     \
@@ -93,6 +94,11 @@ cmake .. \
     -DGGML_BLAS=OFF \
     -DGGML_OPENMP=OFF \
     -DGGML_CCACHE=OFF \
+    \
+    -DLLAMA_GPU_EXCLUSIVE_DECODE=ON \
+    -DLLAMA_CPU_SAMPLING_EXCLUDED=ON \
+    -DLLAMA_KV_HYBRID_EXCLUDED=ON \
+    \
     -DLLAMA_BUILD_TESTS=OFF \
     -DLLAMA_BUILD_EXAMPLES=OFF \
     -DLLAMA_SERVER_VERBOSE=OFF \
@@ -144,3 +150,75 @@ fi
 echo "[OK] MMQ + FA + CUDA Graphs + fast-math kernels + single-copy sched verified"
 echo "---------------------------------------------------"
 echo "FINAL build_cuda_mmq_moe completed successfully"
+echo ""
+echo "==================================================="
+echo "MAXIMUM VERBOSITY RUNTIME CONFIGURATION"
+echo "==================================================="
+echo ""
+echo "To run with MAXIMUM VERBOSE OUTPUT during model inference:"
+echo ""
+echo "1. STANDARD VERBOSE RUN:"
+echo "   export LLAMA_LOG_LEVEL=DEBUG"
+echo "   export GGML_LOG_LEVEL=DEBUG"
+echo "   export GGML_SCHED_DEBUG=1"
+echo "   export CUDA_LAUNCH_BLOCKING=1"
+echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
+echo "   ./bin/llama-server -m /path/to/model.gguf --verbose"
+echo ""
+echo "2. WITH GPU-EXCLUSIVE DECODE DIAGNOSTICS:"
+echo "   export LLAMA_LOG_LEVEL=DEBUG"
+echo "   export GGML_LOG_LEVEL=DEBUG"
+echo "   export GGML_SCHED_DEBUG=1"
+echo "   export GGML_CUDA_DEBUG=1"
+echo "   export GGML_BACKEND_DEBUG=1"
+echo "   export CUDA_LAUNCH_BLOCKING=1"
+echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
+echo "   export CUDA_VERBOSE_API_TRACE=1"
+echo "   ./bin/llama-server -m /path/to/model.gguf --verbose"
+echo ""
+echo "3. MINIMAL VERBOSITY (PRODUCTION):"
+echo "   export LLAMA_LOG_LEVEL=INFO"
+echo "   export GGML_LOG_LEVEL=WARN"
+echo "   ./bin/llama-server -m /path/to/model.gguf"
+echo ""
+echo "4. FOR DETAILED KV CACHE & SAMPLING DEBUGGING:"
+echo "   export LLAMA_LOG_LEVEL=DEBUG"
+echo "   export GGML_LOG_LEVEL=DEBUG"
+echo "   export GGML_SCHED_DEBUG=1"
+echo "   export GGML_CUDA_DEBUG=1"
+echo "   export CUDA_LAUNCH_BLOCKING=1"
+echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
+echo "   export CUDA_VERBOSE_API_TRACE=1"
+echo "   ./bin/llama-server -m /path/to/model.gguf --verbose 2>&1 | tee inference.log"
+echo ""
+echo "==================================================="
+echo "ENVIRONMENT VARIABLES EXPLANATION"
+echo "==================================================="
+echo ""
+echo "LLAMA_LOG_LEVEL=DEBUG"
+echo "  → Enable debug-level logging from llama.cpp core"
+echo ""
+echo "GGML_LOG_LEVEL=DEBUG"
+echo "  → Enable debug-level logging from GGML backend"
+echo ""
+echo "GGML_SCHED_DEBUG=1"
+echo "  → Enable scheduler debug output (GPU task scheduling)"
+echo ""
+echo "GGML_CUDA_DEBUG=1"
+echo "  → Enable CUDA backend debug output"
+echo ""
+echo "GGML_BACKEND_DEBUG=1"
+echo "  → Enable general backend debug output"
+echo ""
+echo "CUDA_LAUNCH_BLOCKING=1"
+echo "  → Make CUDA operations synchronous (useful for debugging)"
+echo ""
+echo "CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
+echo "  → GPU waits for exceptions (catches GPU errors immediately)"
+echo ""
+echo "CUDA_VERBOSE_API_TRACE=1"
+echo "  → Log every CUDA API call (very verbose!)"
+echo ""
+echo "---------------------------------------------------"
+echo "BUILD COMPLETE - Ready for GPU-exclusive decode testing"
+echo "---------------------------------------------------"
