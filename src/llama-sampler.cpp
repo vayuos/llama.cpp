@@ -383,6 +383,7 @@ static void llama_sampler_temp_impl(llama_token_data_array * cur_p, float temp) 
     }
 }
 
+#endif  // LLAMA_CPU_SAMPLING_EXCLUDED
 static void llama_sampler_softmax_impl(llama_token_data_array * cur_p, bool do_sort) {
     GGML_ASSERT(cur_p->size > 0);
 
@@ -448,11 +449,6 @@ static uint32_t get_rng_seed(uint32_t seed) {
     }
     return seed;
 }
-
-// ============================================================================
-// END OF CPU SAMPLING IMPLEMENTATIONS (Wrapped in #ifndef LLAMA_CPU_SAMPLING_EXCLUDED)
-// ============================================================================
-#endif  // LLAMA_CPU_SAMPLING_EXCLUDED
 
 // ============================================================================
 // FALLBACK STUBS FOR EXCLUDED CPU SAMPLING (When LLAMA_CPU_SAMPLING_EXCLUDED defined)
@@ -4307,3 +4303,5 @@ void llama_sampler_get_gpu_params(const struct llama_sampler * smpl, struct llam
         params->penalty_present = ctx->penalty_present;
     }
 }
+
+#endif  // LLAMA_CPU_SAMPLING_EXCLUDED
