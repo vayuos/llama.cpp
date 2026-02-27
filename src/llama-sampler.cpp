@@ -383,7 +383,6 @@ static void llama_sampler_temp_impl(llama_token_data_array * cur_p, float temp) 
     }
 }
 
-#endif  // LLAMA_CPU_SAMPLING_EXCLUDED
 static void llama_sampler_softmax_impl(llama_token_data_array * cur_p, bool do_sort) {
     GGML_ASSERT(cur_p->size > 0);
 
