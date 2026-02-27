@@ -2805,10 +2805,9 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             // For critical tensors: force GPU placement, never allow CPU/Host
             if (is_critical_tensor) {
                 auto * buft_dev = ggml_backend_buft_get_device(buft);
-                ggml_backend_device_type device_type = buft_dev ? ggml_backend_dev_type(buft_dev) : GGML_BACKEND_DEVICE_TYPE_CPU;
 
                 // If critical tensor is not on GPU device, move it to GPU
-                if (device_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+                if (!buft_dev || ggml_backend_dev_type(buft_dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
                     // Find the first GPU device in buft_list and use it
                     for (const auto& [dev, buf_type] : *buft_list) {
                         if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_CPU) {
