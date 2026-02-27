@@ -2794,28 +2794,26 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                 }
             }
 
-            // avoid using a host buffer when using mmap
-            // ISSUE #3 FIX: Preserve GPU placement for critical tensors (embeddings, etc.)
-            auto * buft_dev = ggml_backend_buft_get_device(buft);
-            if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev)) {
-                // Check if this is a critical tensor that should stay on GPU
-                std::string tensor_name = tn.str();
-                bool is_critical_tensor = (
-                    tensor_name.find("embd") != std::string::npos ||      // embeddings
-                    tensor_name.find("token_embd") != std::string::npos || // token embeddings
-                    tensor_name.find("output") != std::string::npos        // output layers
-                );
+            // avoid using a host buffer when using mmap, but preserve GPU placement for critical tensors
+            // ISSUE #3 FIX: Keep embeddings on GPU for GPU-exclusive decode performance
+            std::string tensor_name = tn.str();
+            bool is_critical_tensor = (
+                tensor_name.find("token_embd") != std::string::npos ||  // token embeddings - critical for decode
+                tensor_name.find("output") != std::string::npos         // output layers - critical for logits
+            );
 
-                if (!is_critical_tensor) {
-                    // Only move non-critical tensors to CPU
+            if (ml.use_mmap && !is_critical_tensor) {
+                // For non-critical tensors with MMAP, prefer CPU buffers to avoid host buffer overhead
+                auto * buft_dev = ggml_backend_buft_get_device(buft);
+                if (buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev)) {
+                    // Move host buffers to CPU for better MMAP compatibility
                     auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-                    if (!cpu_dev) {
-                        throw std::runtime_error("no CPU backend found");
+                    if (cpu_dev) {
+                        buft = ggml_backend_dev_buffer_type(cpu_dev);
                     }
-                    buft = ggml_backend_dev_buffer_type(cpu_dev);
                 }
-                // Critical tensors keep their GPU placement
             }
+            // Critical tensors (embeddings, output) always keep their GPU placement
 
             if (buft != buft_list->front().second) {
                 n_moved_tensors++;
@@ -7368,6 +7366,16 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
         const int max_offloadable_layers       = hparams.n_layer + 1;
 
         LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
+
+        // FIX #2: Diagnose and recommend full GPU offloading when not all layers are on GPU
+        const int actual_gpu_layers = std::min(n_gpu_layers, max_offloadable_layers);
+        if (actual_gpu_layers < max_backend_supported_layers) {
+            LLAMA_LOG_WARNING("%s: Not all layers offloaded to GPU (%d/%d). For GPU-exclusive decode:\n",
+                __func__, actual_gpu_layers, max_backend_supported_layers);
+            LLAMA_LOG_WARNING("%s:  - Try: --no-mmap to free GPU memory for more layers\n", __func__);
+            LLAMA_LOG_WARNING("%s:  - Or: use smaller batch size with -n flag\n", __func__);
+            LLAMA_LOG_WARNING("%s:  - Or: use quantized model with smaller quantization\n", __func__);
+        }
     }
 
     // print memory requirements per buffer type
