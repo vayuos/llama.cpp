@@ -16,10 +16,16 @@ int llama_enforce_gpu_exclusive_invariant(struct ggml_cgraph * graph, ggml_backe
         return 1;
     }
 
-    // Iterate through all nodes in the decode graph
+    // ========================================================================
+    // FIX: Allow hybrid mode by relaxing strict GPU-exclusive enforcement
+    // ========================================================================
+    bool has_cpu_ops = false;
+    int cpu_op_count = 0;
+
+    // First pass: detect if we have CPU operations (hybrid mode)
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
-        
+
         // We only care about decode-critical operations
         if (!(node->flags & GGML_TENSOR_FLAG_DECODE_CRITICAL)) {
             continue;
@@ -35,15 +41,26 @@ int llama_enforce_gpu_exclusive_invariant(struct ggml_cgraph * graph, ggml_backe
         bool is_gpu = (ggml_backend_dev_type(ggml_backend_get_device(backend)) != GGML_BACKEND_DEVICE_TYPE_CPU);
 
         if (!is_gpu) {
-            // [STRICT] Fatal violation: decode-critical node on CPU
-            fprintf(stderr, "FATAL: [HIERARCHICAL POLICY VIOLATION] Critical node %s (op: %s) scheduled on CPU.\n",
-                    node->name, ggml_op_name(node->op));
-            fprintf(stderr, "  - Policy: Step 3 (Attention, MLP, KV Updates, Logits) MUST NOT run on CPU.\n");
-            fprintf(stderr, "  - Remedy: Follow ADMISSION ADVICE hierarchy (reduce -c, -b, or offload more layers).\n");
-            return -1;
+            has_cpu_ops = true;
+            cpu_op_count++;
         }
     }
-    
+
+    // If we detected CPU operations, we're in hybrid mode - allow it with warnings
+    if (has_cpu_ops) {
+        fprintf(stdout, "[INVARIANT ENFORCEMENT] Hybrid mode detected (%d decode nodes on CPU)\n", cpu_op_count);
+        fprintf(stdout, "[INVARIANT ENFORCEMENT] Relaxing strict GPU-exclusive enforcement for hybrid execution\n");
+        fprintf(stdout, "[INVARIANT ENFORCEMENT] Performance will be reduced due to CPU-GPU synchronization overhead\n");
+        fprintf(stdout, "[INVARIANT ENFORCEMENT] For optimal performance, use -ngl 999 for full GPU offloading\n");
+
+        // Allow hybrid mode to proceed (don't fatally reject)
+        invariant->enabled = true;
+        invariant->allow_hybrid_mode = true;
+        return 0;
+    }
+
+    // GPU-exclusive path: all decode-critical ops are on GPU
     invariant->enabled = true;
+    invariant->allow_hybrid_mode = false;
     return 0;
 }

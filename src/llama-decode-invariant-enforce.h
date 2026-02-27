@@ -14,6 +14,7 @@ extern "C" {
 
 struct llama_decode_invariant {
     bool enabled;
+    bool allow_hybrid_mode;  // FIX: Allow hybrid CPU/GPU mode in addition to GPU-exclusive
     // Add additional state fields as needed
 };
 

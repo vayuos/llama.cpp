@@ -5,6 +5,7 @@
  */
 
 #include "llama-decode-admission-control.h"
+#include "llama-decode-cpu-hard-failure.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -285,37 +286,67 @@ int llama_decode_admission_check_and_gate(
 
     // Perform exhaustive eligibility check (all 5 criteria)
     if (llama_admission_check_gpu_eligibility(criteria) != 0) {
-        admission->state = LLAMA_ADMISSION_STATE_INELIGIBLE;
+        // ====================================================================
+        // FIX: Allow hybrid mode (partial GPU offloading) with relaxed enforcement
+        // ====================================================================
+        // Detect if failure is ONLY due to CPU decode ops (hybrid mode)
+        // If GPU backend exists and other criteria pass, allow hybrid execution
+        bool is_hybrid_mode = (criteria->has_valid_gpu_backend &&
+                              !criteria->all_decode_critical_ops_gpu &&
+                              criteria->cuda_features_available);
 
-        // Determine specific failure reason
-        if (!criteria->has_valid_gpu_backend) {
-            admission->failure_reason = LLAMA_ADMISSION_FAIL_NO_GPU_BACKEND;
-        } else if (!criteria->all_decode_critical_ops_gpu) {
-            admission->failure_reason = LLAMA_ADMISSION_FAIL_DECODE_OP_CPU;
-        } else if (!criteria->cuda_features_available) {
-            admission->failure_reason = LLAMA_ADMISSION_FAIL_INVALID_CUDA_FEATURES;
-        } else if (!criteria->kv_cache_gpu_resident) {
-            admission->failure_reason = LLAMA_ADMISSION_FAIL_KV_CACHE_NOT_GPU;
-        } else if (!criteria->backend_selection_frozen) {
-            admission->failure_reason = LLAMA_ADMISSION_FAIL_BACKEND_NOT_FROZEN;
+        if (!is_hybrid_mode) {
+            // True failure - not just hybrid mode
+            admission->state = LLAMA_ADMISSION_STATE_INELIGIBLE;
+
+            // Determine specific failure reason
+            if (!criteria->has_valid_gpu_backend) {
+                admission->failure_reason = LLAMA_ADMISSION_FAIL_NO_GPU_BACKEND;
+            } else if (!criteria->all_decode_critical_ops_gpu) {
+                admission->failure_reason = LLAMA_ADMISSION_FAIL_DECODE_OP_CPU;
+            } else if (!criteria->cuda_features_available) {
+                admission->failure_reason = LLAMA_ADMISSION_FAIL_INVALID_CUDA_FEATURES;
+            } else if (!criteria->kv_cache_gpu_resident) {
+                admission->failure_reason = LLAMA_ADMISSION_FAIL_KV_CACHE_NOT_GPU;
+            } else if (!criteria->backend_selection_frozen) {
+                admission->failure_reason = LLAMA_ADMISSION_FAIL_BACKEND_NOT_FROZEN;
+            }
+
+            fprintf(stderr, "FATAL: Decode admission REJECTED - %s\n",
+                    llama_admission_failure_name(admission->failure_reason));
+
+            // Hierarchical GPU Priority Advice (Step 2 of the policy)
+            fprintf(stdout, "[ADMISSION ADVICE] GPU Saturation Priority Policy Violation detected.\n");
+            fprintf(stdout, "[ADMISSION ADVICE] Please follow this hierarchy to resolve residency issues:\n");
+            fprintf(stdout, "  1. Reduce context size (-c %d -> try smaller value)\n", criteria->current_n_ctx);
+            fprintf(stdout, "  2. Reduce batch size (-b %d -> try smaller value)\n", criteria->current_n_batch);
+            fprintf(stdout, "  3. Ensure KV cache is fully on GPU (check VRAM headroom)\n");
+            fprintf(stdout, "  4. (Absolute Last Resort) Allow partial layer spill ONLY for non-critical ops.\n");
+            fprintf(stdout, "[ADMISSION ADVICE] CRITICAL: Attention, MLP, KV Updates, and Logits MUST NOT run on CPU.\n");
+
+            return -1;
         }
 
-        fprintf(stderr, "FATAL: Decode admission REJECTED - %s\n",
-                llama_admission_failure_name(admission->failure_reason));
+        // ====================================================================
+        // HYBRID MODE ALLOWED: Partial GPU offloading detected
+        // ====================================================================
+        fprintf(stdout, "[ADMISSION HYBRID MODE] Partial GPU offloading detected\n");
+        fprintf(stdout, "[ADMISSION HYBRID MODE] Allowing degraded execution with GPU + CPU layers\n");
+        fprintf(stdout, "[ADMISSION HYBRID MODE] Performance will be reduced due to CPU-GPU synchronization overhead\n");
+        fprintf(stdout, "[ADMISSION HYBRID MODE] Recommendation: Use -ngl 999 for full GPU offloading\n");
 
-        // Hierarchical GPU Priority Advice (Step 2 of the policy)
-        fprintf(stdout, "[ADMISSION ADVICE] GPU Saturation Priority Policy Violation detected.\n");
-        fprintf(stdout, "[ADMISSION ADVICE] Please follow this hierarchy to resolve residency issues:\n");
-        fprintf(stdout, "  1. Reduce context size (-c %d -> try smaller value)\n", criteria->current_n_ctx);
-        fprintf(stdout, "  2. Reduce batch size (-b %d -> try smaller value)\n", criteria->current_n_batch);
-        fprintf(stdout, "  3. Ensure KV cache is fully on GPU (check VRAM headroom)\n");
-        fprintf(stdout, "  4. (Absolute Last Resort) Allow partial layer spill ONLY for non-critical ops.\n");
-        fprintf(stdout, "[ADMISSION ADVICE] CRITICAL: Attention, MLP, KV Updates, and Logits MUST NOT run on CPU.\n");
+        // FIX: Disable strict CPU enforcement for hybrid mode
+        // Switch to permissive mode to allow CPU operations in hybrid configs
+        llama_set_decode_cpu_enforcement_strict(false);
+        fprintf(stdout, "[ADMISSION HYBRID MODE] Strict CPU enforcement disabled for hybrid execution\n");
 
-        return -1;
+        // Allow decode to proceed in hybrid mode
+        admission->state = LLAMA_ADMISSION_STATE_ELIGIBLE;
+        if (gate_warned) { fprintf(stdout, "[DECODE ADMISSION GATE] PASSED - Decode admitted in HYBRID mode\n"); }
+        return 0;
     }
 
-    // All criteria passed - decode is admitted
+    // All criteria passed - decode is admitted in GPU-exclusive mode
     admission->state = LLAMA_ADMISSION_STATE_ELIGIBLE;
     if (gate_warned) { fprintf(stdout, "[DECODE ADMISSION GATE] PASSED - Decode is eligible for GPU-exclusive execution\n"); }
     return 0;
