@@ -29,7 +29,7 @@
  */
 extern "C" {
 
-int llama_verify_decode_memory_residency(const struct llama_context * ctx) {
+LLAMA_API int llama_verify_decode_memory_residency(const struct llama_context * ctx) {
     (void)ctx;  // Unused in stub
     // Phase 2.3: Assume success (all tensors OK)
     // Phase 2.4: Actually verify tensor placement on GPU
@@ -41,7 +41,7 @@ int llama_verify_decode_memory_residency(const struct llama_context * ctx) {
  * Phase 2.3: Stub (silent)
  * Phase 2.4+: Real implementation printing residency report
  */
-void llama_residency_print_report() {
+LLAMA_API void llama_residency_print_report() {
     // Phase 2.3: Silent (no diagnostics yet)
     // Phase 2.4: Print actual residency statistics
 }
@@ -55,7 +55,7 @@ void llama_residency_print_report() {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real implementation setting up persistent kernels
  */
-int llama_persistent_kernel_init(int max_tokens) {
+LLAMA_API int llama_persistent_kernel_init(int max_tokens) {
     (void)max_tokens;  // Unused in stub
     // Phase 2.3: Not implemented
     // Phase 2.4: Initialize persistent kernel context
@@ -67,7 +67,7 @@ int llama_persistent_kernel_init(int max_tokens) {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real implementation launching GPU kernels
  */
-int llama_persistent_kernel_launch(const struct llama_context * ctx, int max_tokens) {
+LLAMA_API int llama_persistent_kernel_launch(const struct llama_context * ctx, int max_tokens) {
     (void)ctx;
     (void)max_tokens;  // Unused in stub
     // Phase 2.3: Not implemented
@@ -80,7 +80,7 @@ int llama_persistent_kernel_launch(const struct llama_context * ctx, int max_tok
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real implementation stopping kernels
  */
-int llama_persistent_kernel_stop() {
+LLAMA_API int llama_persistent_kernel_stop() {
     // Phase 2.3: Not implemented
     // Phase 2.4: Stop GPU kernel execution
     return 0;
@@ -91,7 +91,7 @@ int llama_persistent_kernel_stop() {
  * Phase 2.3: Stub (immediate return)
  * Phase 2.4+: Real implementation with timeout handling
  */
-int llama_persistent_kernel_wait(int timeout_ms) {
+LLAMA_API int llama_persistent_kernel_wait(int timeout_ms) {
     (void)timeout_ms;  // Unused in stub
     // Phase 2.3: Immediate return (no kernels running)
     // Phase 2.4: Actually wait with timeout
@@ -103,7 +103,7 @@ int llama_persistent_kernel_wait(int timeout_ms) {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real implementation cleaning up resources
  */
-void llama_persistent_kernel_cleanup() {
+LLAMA_API void llama_persistent_kernel_cleanup() {
     // Phase 2.3: Not implemented
     // Phase 2.4: Clean up persistent kernel resources
 }
@@ -117,7 +117,7 @@ void llama_persistent_kernel_cleanup() {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real CUDA RNG initialization
  */
-int ggml_cuda_rng_init(uint32_t seed) {
+LLAMA_API int ggml_cuda_rng_init(uint32_t seed) {
     (void)seed;  // Unused in stub
     // Phase 2.3: Not implemented
     // Phase 2.4: Initialize cuRNG or CUDA RNG state
@@ -129,7 +129,7 @@ int ggml_cuda_rng_init(uint32_t seed) {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real CUDA RNG cleanup
  */
-int ggml_cuda_rng_cleanup() {
+LLAMA_API int ggml_cuda_rng_cleanup() {
     // Phase 2.3: Not implemented
     // Phase 2.4: Clean up cuRNG state
     return 0;
@@ -140,7 +140,7 @@ int ggml_cuda_rng_cleanup() {
  * Phase 2.3: Stub (always false)
  * Phase 2.4+: Real status check
  */
-bool ggml_cuda_rng_is_initialized() {
+LLAMA_API bool ggml_cuda_rng_is_initialized() {
     // Phase 2.3: Not initialized yet
     // Phase 2.4: Return actual RNG status
     return false;
@@ -155,7 +155,7 @@ bool ggml_cuda_rng_is_initialized() {
  * Phase 2.3: Stub (returns dummy ID)
  * Phase 2.4+: Real graph capture
  */
-uint64_t ggml_cuda_graph_capture_begin(void * stream) {
+LLAMA_API uint64_t ggml_cuda_graph_capture_begin(void * stream) {
     (void)stream;  // Unused in stub
     // Phase 2.3: Return dummy graph ID
     // Phase 2.4: Start actual graph capture
@@ -167,7 +167,7 @@ uint64_t ggml_cuda_graph_capture_begin(void * stream) {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real graph capture completion
  */
-int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
+LLAMA_API int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
     (void)graph_id;
     (void)stream;  // Unused in stub
     // Phase 2.3: Not implemented
@@ -180,7 +180,7 @@ int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real graph instantiation
  */
-int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
+LLAMA_API int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
     (void)graph_id;
     (void)stream;  // Unused in stub
     // Phase 2.3: Not implemented
@@ -193,7 +193,7 @@ int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
  * Phase 2.3: Stub (no-op)
  * Phase 2.4+: Real graph launch
  */
-int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
+LLAMA_API int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
     (void)graph_id;
     (void)stream;  // Unused in stub
     // Phase 2.3: Not implemented
@@ -206,7 +206,7 @@ int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
  * Phase 2.3: Stub (always false)
  * Phase 2.4+: Real capability check
  */
-bool ggml_cuda_graph_is_enabled() {
+LLAMA_API bool ggml_cuda_graph_is_enabled() {
     // Phase 2.3: Graph support not enabled yet
     // Phase 2.4: Return actual CUDA graph capability
     return false;
