@@ -19,17 +19,8 @@
 #include <cstdint>
 
 // Forward declarations of all stub functions from the decode engine header
+// (includes llama.h which provides LLAMA_API macro definition)
 #include "llama-gpu-exclusive-decode-engine.h"
-
-// ============================================================================
-// API VISIBILITY MACRO
-// ============================================================================
-
-#if defined(_WIN32)
-#define LLAMA_API __declspec(dllexport)
-#else
-#define LLAMA_API __attribute__((visibility("default")))
-#endif
 
 // ============================================================================
 // MEMORY RESIDENCY VERIFICATION STUBS
