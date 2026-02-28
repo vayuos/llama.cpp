@@ -133,6 +133,12 @@ struct llama_gpu_engine_stats {
     uint64_t total_tokens;
     uint64_t total_time_ns;
     int total_errors;
+
+    // Per-token timing (Phase B4+)
+    uint64_t last_token_time_ns;   // Most recent token latency
+    uint64_t min_token_time_ns;    // Minimum token latency
+    uint64_t max_token_time_ns;    // Maximum token latency
+    uint64_t avg_token_time_ns;    // Average token latency (total_time_ns / total_tokens)
 };
 
 /**

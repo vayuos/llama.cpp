@@ -60,6 +60,45 @@ extern int ggml_cuda_graph_launch(uint64_t graph_id, cudaStream_t stream);
 extern bool ggml_cuda_graph_is_enabled();
 
 // ============================================================================
+// STATE TRANSITION VALIDATION (Phase B4+)
+// ============================================================================
+
+/**
+ * Validate state machine transitions
+ * Returns true if transition is valid, false otherwise
+ */
+static bool is_valid_state_transition(int current, int next) {
+    // Allow transitions to ERROR state from any state
+    if (next == GPU_ENGINE_ERROR) {
+        return true;
+    }
+
+    // Define valid transitions
+    switch (current) {
+        case GPU_ENGINE_UNINITIALIZED:
+            return next == GPU_ENGINE_INITIALIZED;
+
+        case GPU_ENGINE_INITIALIZED:
+            return next == GPU_ENGINE_GRAPH_CAPTURING || next == GPU_ENGINE_UNINITIALIZED;
+
+        case GPU_ENGINE_GRAPH_CAPTURING:
+            return next == GPU_ENGINE_GRAPH_READY;
+
+        case GPU_ENGINE_GRAPH_READY:
+            return next == GPU_ENGINE_DECODING || next == GPU_ENGINE_INITIALIZED;
+
+        case GPU_ENGINE_DECODING:
+            return next == GPU_ENGINE_GRAPH_READY;
+
+        case GPU_ENGINE_ERROR:
+            return next == GPU_ENGINE_UNINITIALIZED;  // Recovery path
+
+        default:
+            return false;
+    }
+}
+
+// ============================================================================
 // ASYNC PIPELINING STREAM SCHEDULER
 // ============================================================================
 
@@ -110,27 +149,37 @@ struct llama_gpu_exclusive_engine {
     uint64_t total_tokens;
     uint64_t total_time_ns;
     int total_errors;
+
+    // Per-token timing (Phase B4+)
+    std::chrono::high_resolution_clock::time_point decode_start_time;
+    std::chrono::high_resolution_clock::time_point last_token_time;
+    uint64_t last_token_time_ns;
+    uint64_t min_token_time_ns;
+    uint64_t max_token_time_ns;
 };
 
 static llama_gpu_exclusive_engine g_gpu_engine = {
     GPU_ENGINE_UNINITIALIZED,
-    0,
-    false,
-    false,
-    0,
-    false,
-    0,
-    false,
-    false,
-    false,
-    0,
-    0,
-    0,
-    0,
-    0
+    // Graph management
+    0, false, false, 0,
+    // RNG management
+    false, 0,
+    // Memory management
+    false, false,
+    // Persistent kernel
+    false, 0,
+    // Statistics
+    0, 0, 0, 0,
+    // Timing
+    std::chrono::high_resolution_clock::now(),
+    std::chrono::high_resolution_clock::now(),
+    0, UINT64_MAX, 0
 };
 
 static bool g_gpu_engine_enabled = true;
+
+// Thread-safe state transitions (Phase B4+)
+static std::atomic<int> g_gpu_engine_state(GPU_ENGINE_UNINITIALIZED);
 
 // ============================================================================
 // INITIALIZATION
@@ -154,8 +203,9 @@ LLAMA_API int llama_gpu_exclusive_engine_init(
         return 0;
     }
 
-    if (g_gpu_engine.state != GPU_ENGINE_UNINITIALIZED) {
-        fprintf(stderr, "GPU_ENGINE: Already initialized\n");
+    int current_state = g_gpu_engine_state.load();
+    if (current_state != GPU_ENGINE_UNINITIALIZED) {
+        fprintf(stderr, "GPU_ENGINE: Already initialized (state=%d)\n", current_state);
         return 0;
     }
 
@@ -169,6 +219,8 @@ LLAMA_API int llama_gpu_exclusive_engine_init(
 
     g_gpu_engine.rng_initialized = true;
     g_gpu_engine.rng_seed = rng_seed;
+    g_gpu_engine.decode_start_time = std::chrono::high_resolution_clock::now();
+    g_gpu_engine.last_token_time = g_gpu_engine.decode_start_time;
 
     // Initialize async pipelining scheduler
     // Allows CPU and GPU to process different tokens concurrently
@@ -176,6 +228,7 @@ LLAMA_API int llama_gpu_exclusive_engine_init(
     if (!g_stream_scheduler) {
         fprintf(stderr, "GPU_ENGINE: Failed to initialize stream scheduler\n");
         ggml_cuda_rng_cleanup();
+        g_gpu_engine_state.store(GPU_ENGINE_ERROR);
         g_gpu_engine.state = GPU_ENGINE_ERROR;
         return -1;
     }
@@ -193,7 +246,17 @@ LLAMA_API int llama_gpu_exclusive_engine_init(
         }
     }
 
-    g_gpu_engine.state = GPU_ENGINE_INITIALIZED;
+    // Transition to INITIALIZED state (with validation)
+    int next_state = GPU_ENGINE_INITIALIZED;
+    if (!is_valid_state_transition(current_state, next_state)) {
+        fprintf(stderr, "GPU_ENGINE: Invalid state transition %d -> %d\n", current_state, next_state);
+        g_gpu_engine_state.store(GPU_ENGINE_ERROR);
+        g_gpu_engine.state = GPU_ENGINE_ERROR;
+        return -1;
+    }
+    g_gpu_engine_state.store(next_state);
+    g_gpu_engine.state = next_state;
+
     fprintf(stderr, "GPU_ENGINE: Initialized (RNG seed=%u)\n", rng_seed);
 
     return 0;
@@ -209,8 +272,9 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
 
     (void)ctx;  // Unused in Phase 2.3 (will be used in Phase 2.4+ for tensor inspection)
 
-    if (g_gpu_engine.state != GPU_ENGINE_INITIALIZED) {
-        fprintf(stderr, "GPU_ENGINE: Not in initialized state\n");
+    int current_state = g_gpu_engine_state.load();
+    if (current_state != GPU_ENGINE_INITIALIZED) {
+        fprintf(stderr, "GPU_ENGINE: Not in initialized state (state=%d)\n", current_state);
         return -1;
     }
 
@@ -219,8 +283,14 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
         return -1;
     }
 
-    // Graph capture phase
-    g_gpu_engine.state = GPU_ENGINE_GRAPH_CAPTURING;
+    // Transition to GRAPH_CAPTURING (with validation)
+    int next_state = GPU_ENGINE_GRAPH_CAPTURING;
+    if (!is_valid_state_transition(current_state, next_state)) {
+        fprintf(stderr, "GPU_ENGINE: Invalid state transition %d -> %d\n", current_state, next_state);
+        return -1;
+    }
+    g_gpu_engine_state.store(next_state);
+    g_gpu_engine.state = next_state;
     g_gpu_engine.graph_token_capacity = max_tokens;
 
     // Begin graph capture
@@ -228,7 +298,16 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
     // g_gpu_engine.active_graph_id = ggml_cuda_graph_capture_begin(stream);
 
     g_gpu_engine.graph_captured = true;
-    g_gpu_engine.state = GPU_ENGINE_GRAPH_READY;
+
+    // Transition to GRAPH_READY
+    current_state = g_gpu_engine_state.load();
+    next_state = GPU_ENGINE_GRAPH_READY;
+    if (!is_valid_state_transition(current_state, next_state)) {
+        fprintf(stderr, "GPU_ENGINE: Invalid state transition %d -> %d\n", current_state, next_state);
+        return -1;
+    }
+    g_gpu_engine_state.store(next_state);
+    g_gpu_engine.state = next_state;
 
     fprintf(stderr, "GPU_ENGINE: Graph prepared for %d tokens\n", max_tokens);
 
@@ -239,16 +318,23 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
  * Begin GPU-exclusive decode with captured graph.
  */
 LLAMA_API int llama_gpu_exclusive_engine_start_decode() {
-    if (g_gpu_engine.state != GPU_ENGINE_GRAPH_READY) {
-        fprintf(stderr, "GPU_ENGINE: Graph not ready for decode\n");
+    int current_state = g_gpu_engine_state.load();
+    if (current_state != GPU_ENGINE_GRAPH_READY) {
+        fprintf(stderr, "GPU_ENGINE: Graph not ready for decode (state=%d)\n", current_state);
         return -1;
     }
 
-    g_gpu_engine.state = GPU_ENGINE_DECODING;
+    // Transition to DECODING (with validation)
+    int next_state = GPU_ENGINE_DECODING;
+    if (!is_valid_state_transition(current_state, next_state)) {
+        fprintf(stderr, "GPU_ENGINE: Invalid state transition %d -> %d\n", current_state, next_state);
+        return -1;
+    }
+    g_gpu_engine_state.store(next_state);
+    g_gpu_engine.state = next_state;
     g_gpu_engine.total_decodes++;
-
-    // Phase 2.3: Timing statistics placeholder for future implementation
-    // Phase 2.4+: Will capture high_resolution_clock::now() for decode latency tracking
+    g_gpu_engine.decode_start_time = std::chrono::high_resolution_clock::now();
+    g_gpu_engine.last_token_time = g_gpu_engine.decode_start_time;
 
     fprintf(stderr, "GPU_ENGINE: Decode started\n");
     return 0;
@@ -258,12 +344,20 @@ LLAMA_API int llama_gpu_exclusive_engine_start_decode() {
  * End GPU-exclusive decode session.
  */
 LLAMA_API int llama_gpu_exclusive_engine_stop_decode() {
-    if (g_gpu_engine.state != GPU_ENGINE_DECODING) {
-        fprintf(stderr, "GPU_ENGINE: Not currently decoding\n");
+    int current_state = g_gpu_engine_state.load();
+    if (current_state != GPU_ENGINE_DECODING) {
+        fprintf(stderr, "GPU_ENGINE: Not currently decoding (state=%d)\n", current_state);
         return 0;
     }
 
-    g_gpu_engine.state = GPU_ENGINE_GRAPH_READY;
+    // Transition back to GRAPH_READY
+    int next_state = GPU_ENGINE_GRAPH_READY;
+    if (!is_valid_state_transition(current_state, next_state)) {
+        fprintf(stderr, "GPU_ENGINE: Invalid state transition %d -> %d\n", current_state, next_state);
+        return -1;
+    }
+    g_gpu_engine_state.store(next_state);
+    g_gpu_engine.state = next_state;
 
     fprintf(stderr, "GPU_ENGINE: Decode stopped\n");
     return 0;
@@ -274,7 +368,8 @@ LLAMA_API int llama_gpu_exclusive_engine_stop_decode() {
  * Called at shutdown.
  */
 LLAMA_API void llama_gpu_exclusive_engine_cleanup() {
-    if (g_gpu_engine.state == GPU_ENGINE_UNINITIALIZED) {
+    int current_state = g_gpu_engine_state.load();
+    if (current_state == GPU_ENGINE_UNINITIALIZED) {
         return;
     }
 
@@ -297,7 +392,10 @@ LLAMA_API void llama_gpu_exclusive_engine_cleanup() {
         g_gpu_engine.using_persistent_kernel = false;
     }
 
-    g_gpu_engine.state = GPU_ENGINE_UNINITIALIZED;
+    // Transition to UNINITIALIZED
+    int next_state = GPU_ENGINE_UNINITIALIZED;
+    g_gpu_engine_state.store(next_state);
+    g_gpu_engine.state = next_state;
 
     fprintf(stderr, "GPU_ENGINE: Cleanup complete\n");
 }
@@ -321,8 +419,9 @@ LLAMA_API void llama_gpu_exclusive_engine_cleanup() {
 LLAMA_API int llama_gpu_exclusive_engine_decode_step(
     int token) {
 
-    if (g_gpu_engine.state != GPU_ENGINE_DECODING) {
-        fprintf(stderr, "GPU_ENGINE: Not in decode state\n");
+    int current_state = g_gpu_engine_state.load();
+    if (current_state != GPU_ENGINE_DECODING) {
+        fprintf(stderr, "GPU_ENGINE: Not in decode state (state=%d)\n", current_state);
         return -1;
     }
 
@@ -330,6 +429,9 @@ LLAMA_API int llama_gpu_exclusive_engine_decode_step(
         fprintf(stderr, "GPU_ENGINE: Stream scheduler not initialized\n");
         return -1;
     }
+
+    // Capture timing for this step (Phase B4+)
+    auto step_start = std::chrono::high_resolution_clock::now();
 
     // STEP 1: Enqueue current token for processing
     // Transitions to CPU_PENDING state, will be scheduled on CPU_COMPUTE stream
@@ -362,11 +464,28 @@ LLAMA_API int llama_gpu_exclusive_engine_decode_step(
         // GPU_COMPUTE stream dependencies ensure GPU compute finishes before output retrieval
         // This avoids serialization bottleneck that caused -10% performance regression
 
+        // Collect per-token timing (Phase B4+)
+        auto step_end = std::chrono::high_resolution_clock::now();
+        uint64_t step_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(step_end - step_start).count();
+        g_gpu_engine.last_token_time_ns = step_time_ns;
+        g_gpu_engine.total_time_ns += step_time_ns;
+
+        // Update min/max token times
+        if (step_time_ns < g_gpu_engine.min_token_time_ns) {
+            g_gpu_engine.min_token_time_ns = step_time_ns;
+        }
+        if (step_time_ns > g_gpu_engine.max_token_time_ns) {
+            g_gpu_engine.max_token_time_ns = step_time_ns;
+        }
+
         g_gpu_engine.total_tokens++;
         return output_token;  // Return next token to user
     }
 
     // No output token ready yet (still processing in pipeline)
+    auto step_end = std::chrono::high_resolution_clock::now();
+    uint64_t step_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(step_end - step_start).count();
+    g_gpu_engine.total_time_ns += step_time_ns;
     g_gpu_engine.total_tokens++;
     return -2;  // Special code: no output yet, continue polling
 }
@@ -422,7 +541,7 @@ LLAMA_API void llama_gpu_exclusive_engine_print_scheduler_diagnostics() {
 
 LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
     struct llama_gpu_engine_stats stats;
-    stats.state = g_gpu_engine.state;
+    stats.state = g_gpu_engine_state.load();  // Read atomic state
     stats.rng_initialized = g_gpu_engine.rng_initialized;
     stats.memory_verified = g_gpu_engine.memory_verified;
     stats.graph_ready = g_gpu_engine.graph_instantiated;
@@ -430,6 +549,15 @@ LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
     stats.total_tokens = g_gpu_engine.total_tokens;
     stats.total_time_ns = g_gpu_engine.total_time_ns;
     stats.total_errors = g_gpu_engine.total_errors;
+
+    // Per-token timing (Phase B4+)
+    stats.last_token_time_ns = g_gpu_engine.last_token_time_ns;
+    stats.min_token_time_ns = g_gpu_engine.min_token_time_ns;
+    stats.max_token_time_ns = g_gpu_engine.max_token_time_ns;
+    stats.avg_token_time_ns = (g_gpu_engine.total_tokens > 0)
+        ? g_gpu_engine.total_time_ns / g_gpu_engine.total_tokens
+        : 0;
+
     return stats;
 }
 
@@ -437,16 +565,29 @@ LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
  * Print comprehensive engine diagnostics.
  */
 LLAMA_API void llama_gpu_exclusive_engine_print_diagnostics() {
+    int current_state = g_gpu_engine_state.load();
     fprintf(stderr, "\n========== GPU-EXCLUSIVE DECODE ENGINE ==========\n");
-    fprintf(stderr, "State: %d\n", (int)g_gpu_engine.state);
+    fprintf(stderr, "State: %d (atomic: %d)\n", (int)g_gpu_engine.state, current_state);
     fprintf(stderr, "RNG initialized: %s\n", g_gpu_engine.rng_initialized ? "yes" : "no");
     fprintf(stderr, "Memory verified: %s\n", g_gpu_engine.memory_verified ? "yes" : "no");
     fprintf(stderr, "Residency OK: %s\n", g_gpu_engine.residency_ok ? "yes" : "no");
     fprintf(stderr, "Graph ready: %s\n", g_gpu_engine.graph_instantiated ? "yes" : "no");
     fprintf(stderr, "Total decodes: %lu\n", g_gpu_engine.total_decodes);
     fprintf(stderr, "Total tokens: %lu\n", g_gpu_engine.total_tokens);
-    fprintf(stderr, "Total time: %lu ns\n", g_gpu_engine.total_time_ns);
+    fprintf(stderr, "Total time: %lu ns (%.3f ms)\n", g_gpu_engine.total_time_ns, g_gpu_engine.total_time_ns / 1e6);
     fprintf(stderr, "Total errors: %d\n", g_gpu_engine.total_errors);
+
+    // Per-token timing statistics (Phase B4+)
+    if (g_gpu_engine.total_tokens > 0) {
+        uint64_t avg_ns = g_gpu_engine.total_time_ns / g_gpu_engine.total_tokens;
+        fprintf(stderr, "\n--- Per-Token Timing ---\n");
+        fprintf(stderr, "Last token:    %lu ns (%.3f ms)\n", g_gpu_engine.last_token_time_ns, g_gpu_engine.last_token_time_ns / 1e6);
+        fprintf(stderr, "Min token:     %lu ns (%.3f ms)\n", g_gpu_engine.min_token_time_ns, g_gpu_engine.min_token_time_ns / 1e6);
+        fprintf(stderr, "Max token:     %lu ns (%.3f ms)\n", g_gpu_engine.max_token_time_ns, g_gpu_engine.max_token_time_ns / 1e6);
+        fprintf(stderr, "Avg token:     %lu ns (%.3f ms)\n", avg_ns, avg_ns / 1e6);
+        fprintf(stderr, "Throughput:    %.2f tokens/sec\n", 1e9 / (double)avg_ns);
+    }
+
     fprintf(stderr, "================================================\n\n");
 
     // Print residency report
