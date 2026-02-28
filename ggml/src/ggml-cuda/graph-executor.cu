@@ -1,234 +1,194 @@
 /**
- * SECTION 5: Persistent CUDA Graph Execution
- * Implementation: CUDA Graph Capture and Replay
+ * CUDA Graph Executor: Capture-Replay for GPU-Exclusive Decode
  *
- * Replaces per-token graph construction with single-time capture and replay.
- * Eliminates per-op launch overhead, reducing kernel call latency to ~100ns.
+ * Phase 2.4: Graph capture/replay reduces kernel overhead from ~1-10µs to ~100ns
  */
 
 #include "graph-executor.cuh"
 #include "common.cuh"
 #include <cuda_runtime.h>
-#include <cstring>
-#include <map>
-#include <vector>
+#include <unordered_map>
+#include <mutex>
 
-// ============================================================================
-// CUDA GRAPH STATE MANAGEMENT
-// ============================================================================
-
-struct cudagraph_exec_state {
+struct cuda_graph_state {
     cudaGraph_t graph;
     cudaGraphExec_t graph_exec;
     bool is_captured;
     bool is_instantiated;
     size_t graph_nodes;
-    uint64_t capture_time_ns;
-    uint64_t instantiate_time_ns;
     uint64_t launch_count;
-    uint64_t total_launch_time_ns;
 };
 
-static std::map<uint64_t, cudagraph_exec_state> g_graph_cache;
-static uint64_t g_graph_id_counter = 1;
-static bool g_cuda_graph_enabled = true;
+static std::unordered_map<uint64_t, cuda_graph_state> g_graphs;
+static std::mutex g_graph_mutex;
+static uint64_t g_next_graph_id = 1;
+static bool g_graphs_enabled = true;
 
-// ============================================================================
-// GRAPH CAPTURE
-// ============================================================================
-
-uint64_t ggml_cuda_graph_capture_begin(cudaStream_t stream) {
-    if (!g_cuda_graph_enabled) {
+uint64_t ggml_cuda_graph_capture_begin(void * stream) {
+    if (!g_graphs_enabled) return 0;
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    
+    cudaStream_t s = (cudaStream_t)stream;
+    if (!s) return 0;
+    
+    cudaError_t err = cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal);
+    if (err != cudaSuccess) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_capture_begin failed: %s\n", cudaGetErrorString(err));
         return 0;
     }
-
-    uint64_t graph_id = g_graph_id_counter++;
-    cudagraph_exec_state & state = g_graph_cache[graph_id];
-
-    // Create empty graph
-    CUDA_CHECK(cudaGraphCreate(&state.graph, 0));
-
-    // Begin capture in default/row-wide mode
-    // Stream-capture mode: captures all work from stream
-    CUDA_CHECK(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
-
+    
+    uint64_t graph_id = g_next_graph_id++;
+    cuda_graph_state state = {};
+    state.graph = nullptr;
+    state.graph_exec = nullptr;
     state.is_captured = false;
     state.is_instantiated = false;
     state.graph_nodes = 0;
     state.launch_count = 0;
-    state.total_launch_time_ns = 0;
-
+    
+    g_graphs[graph_id] = state;
+    LLAMA_LOG_DEBUG("ggml_cuda_graph_capture_begin: graph_id=%llu\n", (unsigned long long)graph_id);
+    
     return graph_id;
 }
 
-int ggml_cuda_graph_capture_end(uint64_t graph_id, cudaStream_t stream) {
-    if (!g_cuda_graph_enabled || graph_id == 0) {
+int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    
+    if (g_graphs.find(graph_id) == g_graphs.end()) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_capture_end: graph_id %llu not found\n", (unsigned long long)graph_id);
         return -1;
     }
-
-    auto it = g_graph_cache.find(graph_id);
-    if (it == g_graph_cache.end()) {
+    
+    cudaStream_t s = (cudaStream_t)stream;
+    cudaGraph_t graph;
+    cudaError_t err = cudaStreamEndCapture(s, &graph);
+    
+    if (err != cudaSuccess) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_capture_end failed: %s\n", cudaGetErrorString(err));
         return -1;
     }
-
-    cudagraph_exec_state & state = it->second;
-
-    // End capture - graph is now populated
-    CUDA_CHECK(cudaStreamEndCapture(stream, &state.graph));
-    state.is_captured = true;
-
-    // Query graph properties
-    CUDA_CHECK(cudaGraphGetNodes(state.graph, NULL, &state.graph_nodes));
-
-    // Record capture time
-    auto now = std::chrono::high_resolution_clock::now();
-    state.capture_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        now.time_since_epoch()).count();
-
+    
+    g_graphs[graph_id].graph = graph;
+    g_graphs[graph_id].is_captured = true;
+    
+    size_t num_nodes = 0;
+    cudaGraphGetNodes(graph, nullptr, &num_nodes);
+    g_graphs[graph_id].graph_nodes = num_nodes;
+    LLAMA_LOG_DEBUG("ggml_cuda_graph_capture_end: graph_id=%llu, nodes=%zu\n", (unsigned long long)graph_id, num_nodes);
+    
     return 0;
 }
 
-// ============================================================================
-// GRAPH INSTANTIATION
-// ============================================================================
-
-int ggml_cuda_graph_instantiate(uint64_t graph_id, cudaStream_t stream) {
-    GGML_UNUSED(stream);
-    if (!g_cuda_graph_enabled || graph_id == 0) {
+int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    
+    if (g_graphs.find(graph_id) == g_graphs.end()) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_instantiate: graph_id %llu not found\n", (unsigned long long)graph_id);
         return -1;
     }
-
-    auto it = g_graph_cache.find(graph_id);
-    if (it == g_graph_cache.end()) {
+    
+    cuda_graph_state & state = g_graphs[graph_id];
+    
+    if (!state.is_captured || !state.graph) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_instantiate: graph not captured\n");
         return -1;
     }
-
-    cudagraph_exec_state & state = it->second;
-
-    if (!state.is_captured) {
+    
+    cudaGraphExec_t exec;
+    cudaError_t err = cudaGraphInstantiate(&exec, state.graph, nullptr, nullptr, 0);
+    
+    if (err != cudaSuccess) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_instantiate failed: %s\n", cudaGetErrorString(err));
         return -1;
     }
-
-    if (state.is_instantiated) {
-        // Already instantiated
-        return 0;
-    }
-
-    // Instantiate executable graph
-    CUDA_CHECK(cudaGraphInstantiateWithFlags(&state.graph_exec, state.graph, 0));
+    
+    state.graph_exec = exec;
     state.is_instantiated = true;
-
-    // Record instantiation time
-    auto now = std::chrono::high_resolution_clock::now();
-    state.instantiate_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        now.time_since_epoch()).count();
-
+    
+    LLAMA_LOG_DEBUG("ggml_cuda_graph_instantiate: graph_id=%llu instantiated\n", (unsigned long long)graph_id);
+    
     return 0;
 }
 
-// ============================================================================
-// GRAPH LAUNCH (ZERO-OVERHEAD REPLAY)
-// ============================================================================
-
-int ggml_cuda_graph_launch(uint64_t graph_id, cudaStream_t stream) {
-    if (!g_cuda_graph_enabled || graph_id == 0) {
+int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    
+    if (g_graphs.find(graph_id) == g_graphs.end()) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_launch: graph_id %llu not found\n", (unsigned long long)graph_id);
         return -1;
     }
-
-    auto it = g_graph_cache.find(graph_id);
-    if (it == g_graph_cache.end()) {
+    
+    cuda_graph_state & state = g_graphs[graph_id];
+    
+    if (!state.is_instantiated || !state.graph_exec) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_launch: graph not instantiated\n");
         return -1;
     }
-
-    cudagraph_exec_state & state = it->second;
-
-    if (!state.is_instantiated) {
+    
+    cudaStream_t s = (cudaStream_t)stream;
+    cudaError_t err = cudaGraphLaunch(state.graph_exec, s);
+    
+    if (err != cudaSuccess) {
+        LLAMA_LOG_ERROR("ggml_cuda_graph_launch failed: %s\n", cudaGetErrorString(err));
         return -1;
     }
-
-    // Single cudaGraphLaunch call - equivalent to launching N kernels in sequence
-    // but with massively reduced CPU overhead (100ns vs ~1-5µs per kernel)
-    auto t0 = std::chrono::high_resolution_clock::now();
-    CUDA_CHECK(cudaGraphLaunch(state.graph_exec, stream));
-    auto t1 = std::chrono::high_resolution_clock::now();
-
+    
     state.launch_count++;
-    state.total_launch_time_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
-        t1 - t0).count();
-
     return 0;
-}
-
-// ============================================================================
-// GRAPH CLEANUP
-// ============================================================================
-
-int ggml_cuda_graph_destroy(uint64_t graph_id) {
-    auto it = g_graph_cache.find(graph_id);
-    if (it == g_graph_cache.end()) {
-        return -1;
-    }
-
-    cudagraph_exec_state & state = it->second;
-
-    if (state.is_instantiated) {
-        CUDA_CHECK(cudaGraphExecDestroy(state.graph_exec));
-    }
-
-    if (state.is_captured) {
-        CUDA_CHECK(cudaGraphDestroy(state.graph));
-    }
-
-    g_graph_cache.erase(it);
-    return 0;
-}
-
-// ============================================================================
-// GRAPH STATISTICS
-// ============================================================================
-
-struct ggml_cuda_graph_stats ggml_cuda_graph_get_stats(uint64_t graph_id) {
-    struct ggml_cuda_graph_stats stats;
-    memset(&stats, 0, sizeof(stats));
-
-    auto it = g_graph_cache.find(graph_id);
-    if (it == g_graph_cache.end()) {
-        return stats;
-    }
-
-    const cudagraph_exec_state & state = it->second;
-    stats.graph_id = graph_id;
-    stats.is_captured = state.is_captured;
-    stats.is_instantiated = state.is_instantiated;
-    stats.graph_nodes = state.graph_nodes;
-    stats.capture_time_ns = state.capture_time_ns;
-    stats.instantiate_time_ns = state.instantiate_time_ns;
-    stats.launch_count = state.launch_count;
-    stats.avg_launch_time_ns = state.launch_count > 0 ?
-        state.total_launch_time_ns / state.launch_count : 0;
-
-    return stats;
-}
-
-// ============================================================================
-// GLOBAL CONTROL
-// ============================================================================
-
-void ggml_cuda_graph_set_enabled(bool enabled) {
-    g_cuda_graph_enabled = enabled;
 }
 
 bool ggml_cuda_graph_is_enabled() {
-    return g_cuda_graph_enabled;
+    return g_graphs_enabled;
 }
 
-void ggml_cuda_graph_cleanup_all() {
-    std::vector<uint64_t> to_destroy;
-    for (auto & p : g_graph_cache) {
-        to_destroy.push_back(p.first);
+int ggml_cuda_graph_destroy(uint64_t graph_id) {
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    
+    if (g_graphs.find(graph_id) == g_graphs.end()) {
+        return -1;
     }
-    for (uint64_t graph_id : to_destroy) {
-        ggml_cuda_graph_destroy(graph_id);
+    
+    cuda_graph_state & state = g_graphs[graph_id];
+    
+    if (state.is_instantiated && state.graph_exec) {
+        cudaGraphExecDestroy(state.graph_exec);
+        state.graph_exec = nullptr;
     }
-    g_graph_cache.clear();
+    
+    if (state.is_captured && state.graph) {
+        cudaGraphDestroy(state.graph);
+        state.graph = nullptr;
+    }
+    
+    g_graphs.erase(graph_id);
+    LLAMA_LOG_DEBUG("ggml_cuda_graph_destroy: graph_id=%llu destroyed\n", (unsigned long long)graph_id);
+    
+    return 0;
+}
+
+int ggml_cuda_graph_cleanup_all() {
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    
+    for (auto & pair : g_graphs) {
+        cuda_graph_state & state = pair.second;
+        if (state.is_instantiated && state.graph_exec) {
+            cudaGraphExecDestroy(state.graph_exec);
+        }
+        if (state.is_captured && state.graph) {
+            cudaGraphDestroy(state.graph);
+        }
+    }
+    
+    g_graphs.clear();
+    g_next_graph_id = 1;
+    
+    LLAMA_LOG_DEBUG("ggml_cuda_graph_cleanup_all: all graphs destroyed\n");
+    
+    return 0;
+}
+
+int ggml_cuda_graph_get_count() {
+    std::lock_guard<std::mutex> lock(g_graph_mutex);
+    return g_graphs.size();
 }
