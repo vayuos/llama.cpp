@@ -140,38 +140,7 @@ LLAMA_API bool ggml_cuda_rng_is_initialized() {
 // ============================================================================
 // CUDA GRAPH MANAGEMENT - PHASE 2.4 REAL IMPLEMENTATIONS
 // ============================================================================
-
-LLAMA_API uint64_t ggml_cuda_graph_capture_begin(void * stream) {
-    return ::ggml_cuda_graph_capture_begin(stream);
-}
-
-LLAMA_API int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
-    return ::ggml_cuda_graph_capture_end(graph_id, stream);
-}
-
-LLAMA_API int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
-    return ::ggml_cuda_graph_instantiate(graph_id, stream);
-}
-
-LLAMA_API int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
-    return ::ggml_cuda_graph_launch(graph_id, stream);
-}
-
-LLAMA_API bool ggml_cuda_graph_is_enabled() {
-    return ::ggml_cuda_graph_is_enabled();
-}
-
-LLAMA_API int ggml_cuda_graph_destroy(uint64_t graph_id) {
-    return ::ggml_cuda_graph_destroy(graph_id);
-}
-
-LLAMA_API int ggml_cuda_graph_cleanup_all() {
-    return ::ggml_cuda_graph_cleanup_all();
-}
-
-LLAMA_API int ggml_cuda_graph_get_count() {
-    return ::ggml_cuda_graph_get_count();
-}
+// Forward declarations are sufficient - real implementations linked from graph-executor.cu
 
 // ============================================================================
 // C2: GPU SAMPLING FUNCTIONS
