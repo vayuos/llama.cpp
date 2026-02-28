@@ -35,6 +35,9 @@ add_library(llama
             llama-stream-scheduler.cpp
             llama-gpu-exclusive-decode-engine.cpp
             llama-gpu-exclusive-stubs.cpp
+            llama-bias-activation-fusion.cpp
+            llama-kernel-fusion-enforce.cpp
+            llama-rnorm-matmul-fusion.cpp
             llama-pipeline-validator.cpp
             llama-vocab.cpp
             unicode-data.cpp
