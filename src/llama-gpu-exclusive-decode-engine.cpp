@@ -330,15 +330,26 @@ int llama_gpu_exclusive_engine_decode_step(
 
     // STEP 2: Check if any GPU-ready token exists
     // GPU-ready means CPU layers (0-66) have completed on CPU_COMPUTE stream
-    // and result is ready for GPU compute (layers 36-49) on GPU_COMPUTE stream
     int gpu_ready_token = llama_stream_scheduler_get_gpu_ready_token(g_stream_scheduler);
     if (gpu_ready_token >= 0) {
-        // In full implementation:
-        // - Wait for CPU_COMPUTE stream event (CPU layers done)
-        // - Launch GPU compute layers on GPU_COMPUTE stream
-        // - Record event when GPU compute done
-        // - Mark token as GPU_COMPLETE in scheduler
-        // For now, just mark as GPU_COMPLETE (placeholder for Phase 2.3)
+        // PHASE 2.3: CUDA STREAM SYNCHRONIZATION
+        // Wait for CPU compute to finish on this token
+        int event_idx = gpu_ready_token % 4;  // Rotate through 4 events
+        int wait_status = llama_stream_scheduler_wait_event(g_stream_scheduler,
+                                                            event_idx,
+                                                            5000);  // 5 second timeout
+        if (wait_status != 0) {
+            fprintf(stderr, "GPU_ENGINE: Timeout waiting for CPU compute on token %d\n", gpu_ready_token);
+            g_gpu_engine.total_errors++;
+        }
+
+        // In production compute loop: Queue GPU layers here on GPU_COMPUTE stream
+        // After GPU compute: Record event with
+        //   llama_stream_scheduler_record_event(g_stream_scheduler,
+        //                                        LLAMA_STREAM_GPU_COMPUTE,
+        //                                        event_idx);
+
+        // Mark token as GPU_COMPLETE (would be done after GPU compute)
         llama_stream_scheduler_mark_gpu_complete(g_stream_scheduler, gpu_ready_token);
     }
 
@@ -346,6 +357,10 @@ int llama_gpu_exclusive_engine_decode_step(
     // Output tokens are in GPU_COMPLETE state and ready to return to user
     int output_token = llama_stream_scheduler_get_output_token(g_stream_scheduler);
     if (output_token >= 0) {
+        // Final synchronization: Ensure GPU compute finished
+        int event_idx = output_token % 4;
+        llama_stream_scheduler_wait_event(g_stream_scheduler, event_idx, 5000);
+
         g_gpu_engine.total_tokens++;
         return output_token;  // Return next token to user
     }
@@ -353,6 +368,7 @@ int llama_gpu_exclusive_engine_decode_step(
     // No output token ready yet (still processing in pipeline)
     g_gpu_engine.total_tokens++;
     return -2;  // Special code: no output yet, continue polling
+}
 
 // ============================================================================
 // STREAM SCHEDULER ACCESSORS

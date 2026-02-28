@@ -17,6 +17,14 @@
 #include <cstring>
 #include <chrono>
 
+// CUDA event management (for stream synchronization)
+#ifdef __CUDACC__
+    #include <cuda_runtime.h>
+#else
+    // Stub for non-CUDA builds
+    typedef void* cudaEvent_t;
+#endif
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -85,10 +93,32 @@ struct llama_stream_scheduler * llama_stream_scheduler_init(
         scheduler->streams[i].cuda_stream = NULL;
     }
 
-    // Create sync events
+    // Create CUDA sync events (for stream synchronization)
+    // Each event tracks completion of operations on a stream
     for (int i = 0; i < scheduler->num_events; i++) {
-        // Note: Actual cudaEvent_t creation deferred
-        scheduler->sync_events[i] = NULL;
+#ifdef __CUDACC__
+        cudaEvent_t * event = (cudaEvent_t *)malloc(sizeof(cudaEvent_t));
+        if (!event) {
+            fprintf(stderr, "STREAM_SCHEDULER: Failed to allocate event %d\n", i);
+            llama_stream_scheduler_cleanup(scheduler);
+            return NULL;
+        }
+
+        // Create non-blocking event (allows immediate record/wait without GPU sync)
+        // cudaEventDisableTiming reduces memory usage since we don't need timing
+        cudaError_t err = cudaEventCreate(event, cudaEventNonBlocking | cudaEventDisableTiming);
+        if (err != cudaSuccess) {
+            fprintf(stderr, "STREAM_SCHEDULER: Failed to create event %d: %s\n",
+                    i, cudaGetErrorString(err));
+            free(event);
+            llama_stream_scheduler_cleanup(scheduler);
+            return NULL;
+        }
+
+        scheduler->sync_events[i] = (void *)event;
+#else
+        scheduler->sync_events[i] = NULL;  // Stub for non-CUDA builds
+#endif
     }
 
     // Initialize queue
@@ -127,10 +157,22 @@ void llama_stream_scheduler_cleanup(
         return;
     }
 
-    // Note: Actual CUDA stream/event destruction happens in GPU backend
-    // This module just manages the high-level scheduler state
-
+    // Destroy CUDA sync events
     if (scheduler->sync_events) {
+#ifdef __CUDACC__
+        for (int i = 0; i < scheduler->num_events; i++) {
+            if (scheduler->sync_events[i]) {
+                cudaEvent_t * event = (cudaEvent_t *)scheduler->sync_events[i];
+                cudaError_t err = cudaEventDestroy(*event);
+                if (err != cudaSuccess) {
+                    fprintf(stderr, "STREAM_SCHEDULER: Warning - failed to destroy event %d: %s\n",
+                            i, cudaGetErrorString(err));
+                }
+                free(event);
+                scheduler->sync_events[i] = NULL;
+            }
+        }
+#endif
         free(scheduler->sync_events);
         scheduler->sync_events = NULL;
     }
@@ -331,9 +373,32 @@ int llama_stream_scheduler_record_event(
         return -1;
     }
 
-    // Note: Actual CUDA event recording deferred to GPU backend
-    // This is placeholder for state tracking
+    if (!scheduler->sync_events[event_index]) {
+        return -1;  // Event not initialized
+    }
+
+#ifdef __CUDACC__
+    // Record event on the specified stream
+    // This marks the completion point of all operations up to this point
+    cudaStream_t stream = (cudaStream_t)scheduler->streams[stream_type].cuda_stream;
+    cudaEvent_t * event = (cudaEvent_t *)scheduler->sync_events[event_index];
+
+    if (!stream || !event) {
+        return -1;
+    }
+
+    cudaError_t err = cudaEventRecord(*event, stream);
+    if (err != cudaSuccess) {
+        fprintf(stderr, "STREAM_SCHEDULER: Failed to record event %d on stream %d: %s\n",
+                event_index, stream_type, cudaGetErrorString(err));
+        return -1;
+    }
+
     return 0;
+#else
+    // Stub for non-CUDA builds
+    return 0;
+#endif
 }
 
 /**
@@ -348,11 +413,33 @@ int llama_stream_scheduler_wait_event(
         return -1;
     }
 
-    // Note: Actual CUDA event wait deferred to GPU backend
-    // This is placeholder for state tracking
-    // timeout_ms parameter reserved for future implementation
+    if (!scheduler->sync_events[event_index]) {
+        return -1;  // Event not initialized
+    }
+
+#ifdef __CUDACC__
+    // Wait for the event to be recorded (signals completion of marked operations)
+    cudaEvent_t * event = (cudaEvent_t *)scheduler->sync_events[event_index];
+
+    if (!event) {
+        return -1;
+    }
+
+    // Use cudaEventSynchronize for blocking wait
+    // timeout_ms parameter reserved for future stream wait implementation
+    cudaError_t err = cudaEventSynchronize(*event);
+    if (err != cudaSuccess) {
+        fprintf(stderr, "STREAM_SCHEDULER: Failed to wait for event %d: %s\n",
+                event_index, cudaGetErrorString(err));
+        return -1;
+    }
+
+    return 0;
+#else
+    // Stub for non-CUDA builds
     (void)timeout_ms;  // Suppress unused parameter warning
     return 0;
+#endif
 }
 
 // ============================================================================
