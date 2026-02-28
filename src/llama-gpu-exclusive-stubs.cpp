@@ -39,16 +39,16 @@ extern "C" {
 
 LLAMA_API int llama_verify_decode_memory_residency(const struct llama_context * ctx) {
     if (!ctx) {
-        LLAMA_LOG_WARN("llama_verify_decode_memory_residency: null context\n");
+        fprintf(stderr, "llama_verify_decode_memory_residency: null context\n");
         return -1;
     }
     
-    LLAMA_LOG_DEBUG("llama_verify_decode_memory_residency: all critical tensors verified\n");
+    // Debug: all critical tensors verified
     return 0;
 }
 
 LLAMA_API void llama_residency_print_report() {
-    LLAMA_LOG_INFO("Memory Residency Report:\n");
+    fprintf(stderr, "Memory Residency Report:\n");
     LLAMA_LOG_INFO("  - Token embeddings: GPU\n");
     LLAMA_LOG_INFO("  - Layer tensors: GPU\n");
     LLAMA_LOG_INFO("  - KV cache: GPU\n");
@@ -60,28 +60,28 @@ LLAMA_API void llama_residency_print_report() {
 // ============================================================================
 
 LLAMA_API int llama_persistent_kernel_init(int max_tokens) {
-    LLAMA_LOG_DEBUG("llama_persistent_kernel_init: max_tokens=%d\n", max_tokens);
+    // Debug: persistent kernel init with max_tokens
     return 0;
 }
 
 LLAMA_API int llama_persistent_kernel_launch(const struct llama_context * ctx, int max_tokens) {
     if (!ctx) return -1;
-    LLAMA_LOG_DEBUG("llama_persistent_kernel_launch: max_tokens=%d\n", max_tokens);
+    // Debug: persistent kernel launch
     return 0;
 }
 
 LLAMA_API int llama_persistent_kernel_stop() {
-    LLAMA_LOG_DEBUG("llama_persistent_kernel_stop\n");
+    // Debug: persistent kernel stop
     return 0;
 }
 
 LLAMA_API int llama_persistent_kernel_wait(int timeout_ms) {
-    LLAMA_LOG_DEBUG("llama_persistent_kernel_wait: timeout_ms=%d\n", timeout_ms);
+    // Debug: persistent kernel wait
     return 0;
 }
 
 LLAMA_API void llama_persistent_kernel_cleanup() {
-    LLAMA_LOG_DEBUG("llama_persistent_kernel_cleanup\n");
+    // Debug: persistent kernel cleanup
 }
 
 // ============================================================================
@@ -89,29 +89,29 @@ LLAMA_API void llama_persistent_kernel_cleanup() {
 // ============================================================================
 
 LLAMA_API int check_gpu_backend_available() {
-    LLAMA_LOG_DEBUG("check_gpu_backend_available\n");
+    // Debug: GPU backend check
     return 0;
 }
 
 LLAMA_API int check_no_cpu_decode_ops(const struct llama_context * ctx) {
     if (!ctx) return -1;
-    LLAMA_LOG_DEBUG("check_no_cpu_decode_ops\n");
+    // Debug: CPU decode ops check
     return 0;
 }
 
 LLAMA_API int check_cuda_features() {
-    LLAMA_LOG_DEBUG("check_cuda_features: checking graphs, events, RNG\n");
+    // Debug: CUDA features check
     return 0;
 }
 
 LLAMA_API int check_kv_cache_gpu_resident(const struct llama_context * ctx) {
     if (!ctx) return -1;
-    LLAMA_LOG_DEBUG("check_kv_cache_gpu_resident\n");
+    // Debug: KV cache GPU residency check
     return 0;
 }
 
 LLAMA_API int check_backend_frozen() {
-    LLAMA_LOG_DEBUG("check_backend_frozen\n");
+    // Debug: backend frozen check
     return 0;
 }
 
@@ -120,12 +120,12 @@ LLAMA_API int check_backend_frozen() {
 // ============================================================================
 
 LLAMA_API int ggml_cuda_rng_init(uint32_t seed) {
-    LLAMA_LOG_DEBUG("ggml_cuda_rng_init: seed=%u\n", seed);
+    // Debug: CUDA RNG init
     return 0;
 }
 
 LLAMA_API int ggml_cuda_rng_cleanup() {
-    LLAMA_LOG_DEBUG("ggml_cuda_rng_cleanup\n");
+    // Debug: CUDA RNG cleanup
     return 0;
 }
 
@@ -178,10 +178,11 @@ LLAMA_API int ggml_cuda_sample_argmax(
     int vocab_size,
     void * stream,
     int * output) {
-    
+    (void)stream;  // stream parameter unused - kept for API consistency
+
     if (!logits || !output) return -1;
     
-    LLAMA_LOG_DEBUG("ggml_cuda_sample_argmax: vocab_size=%d\n", vocab_size);
+    // Debug: argmax sampling
     *output = 0;
     return 0;
 }
@@ -192,10 +193,11 @@ LLAMA_API int ggml_cuda_sample_categorical(
     uint32_t seed,
     void * stream,
     int * output) {
-    
+    (void)stream;  // stream parameter unused - kept for API consistency
+
     if (!logits || !output) return -1;
     
-    LLAMA_LOG_DEBUG("ggml_cuda_sample_categorical: vocab_size=%d, seed=%u\n", vocab_size, seed);
+    // Debug: categorical sampling
     *output = 0;
     return 0;
 }

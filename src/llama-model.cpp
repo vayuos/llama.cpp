@@ -2951,8 +2951,8 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             // - LLM_TENSOR_OUTPUT: output layer logits (final tensor before sampling)
             // - LLM_TENSOR_LAYER_INPUT: explicitly marked input tensors
             auto * buft_dev = ggml_backend_buft_get_device(buft);
-            bool is_critical_gpu_tensor = (info.tensor == LLM_TENSOR_TOKEN_EMBD ||
-                                           info.tensor == LLM_TENSOR_OUTPUT ||
+            bool is_critical_gpu_tensor = (tn_tensor == LLM_TENSOR_TOKEN_EMBD ||
+                                           tn_tensor == LLM_TENSOR_OUTPUT ||
                                            info.layer == LLM_TENSOR_LAYER_INPUT);
             if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev) &&
                 !is_critical_gpu_tensor) {
