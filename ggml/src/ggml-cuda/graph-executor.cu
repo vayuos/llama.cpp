@@ -25,6 +25,13 @@ static std::mutex g_graph_mutex;
 static uint64_t g_next_graph_id = 1;
 static bool g_graphs_enabled = true;
 
+// Forward declarations for all exported functions
+uint64_t ggml_cuda_graph_capture_begin(void * stream);
+int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream);
+int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream);
+int ggml_cuda_graph_launch(uint64_t graph_id, void * stream);
+int ggml_cuda_graph_get_count();
+
 uint64_t ggml_cuda_graph_capture_begin(void * stream) {
     if (!g_graphs_enabled) return 0;
     std::lock_guard<std::mutex> lock(g_graph_mutex);
