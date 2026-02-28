@@ -13,6 +13,7 @@
 #pragma once
 
 #include "llama.h"
+#include "llama-kernel-fusion-enforce.h"
 #include <cstdint>
 
 // Use LLAMA_API macro for proper symbol export on all platforms
@@ -145,6 +146,12 @@ struct llama_gpu_engine_stats {
  * Get engine statistics.
  */
 LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats();
+
+/**
+ * Get kernel fusion metrics (Phase C5+).
+ * Returns current kernel fusion enforcement status and metrics.
+ */
+LLAMA_API llama_kernel_metrics llama_gpu_exclusive_engine_get_fusion_metrics();
 
 /**
  * Print comprehensive diagnostics (for debugging).

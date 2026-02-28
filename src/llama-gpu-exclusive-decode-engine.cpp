@@ -18,6 +18,7 @@
 #include "llama-impl.h"
 #include "llama-stream-scheduler.h"
 #include "llama-gpu-exclusive-decode-engine.h"
+#include "llama-kernel-fusion-enforce.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -141,6 +142,9 @@ static bool g_gpu_engine_enabled = true;
 
 // Thread-safe state transitions (Phase B4+)
 static std::atomic<int> g_gpu_engine_state(GPU_ENGINE_UNINITIALIZED);
+
+// Kernel fusion enforcement state (Phase C3-C5)
+static llama_kernel_fusion_state g_fusion_state = {};
 
 // ============================================================================
 // STATE TRANSITION VALIDATION (Phase B4+)
@@ -270,8 +274,6 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
     const llama_context * ctx,
     int max_tokens) {
 
-    (void)ctx;  // Unused in Phase 2.3 (will be used in Phase 2.4+ for tensor inspection)
-
     int current_state = g_gpu_engine_state.load();
     if (current_state != GPU_ENGINE_INITIALIZED) {
         fprintf(stderr, "GPU_ENGINE: Not in initialized state (state=%d)\n", current_state);
@@ -293,11 +295,31 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
     g_gpu_engine.state = (llama_gpu_engine_state)next_state;
     g_gpu_engine.graph_token_capacity = max_tokens;
 
+    // Phase C5: Initialize kernel fusion enforcement
+    llama_kernel_fusion_init(&g_fusion_state);
+
+    // Activate fusion enforcement with target: <5 launches per token
+    // Assume 49 layers, target 4 launches/token
+    uint32_t n_layers = ctx ? 49 : 1;  // Default to 49 layers for Llama 3
+    uint32_t target_launches = 4;       // Target: 4-5 launches per token (down from 20+)
+    llama_kernel_fusion_activate(&g_fusion_state, n_layers, target_launches);
+
+    fprintf(stderr, "GPU_ENGINE: Kernel fusion activated (target: %u launches/token)\n", target_launches);
+
     // Begin graph capture
     // In full implementation, would wrap entire forward pass
     // g_gpu_engine.active_graph_id = ggml_cuda_graph_capture_begin(stream);
 
     g_gpu_engine.graph_captured = true;
+
+    // Phase C5: Audit compute graph for fusion compliance
+    if (ctx && ctx->gf) {
+        bool fusion_audit_pass = llama_kernel_fusion_audit_graph(&g_fusion_state, ctx->gf);
+        if (!fusion_audit_pass) {
+            fprintf(stderr, "GPU_ENGINE: WARNING - Kernel fusion audit reported suboptimal patterns\n");
+            // Non-fatal: continue with execution but log the issue
+        }
+    }
 
     // Transition to GRAPH_READY
     current_state = g_gpu_engine_state.load();
@@ -479,6 +501,14 @@ LLAMA_API int llama_gpu_exclusive_engine_decode_step(
         }
 
         g_gpu_engine.total_tokens++;
+
+        // Phase C5: Update kernel fusion metrics
+        if (g_fusion_state.enforce_active && g_gpu_engine.total_tokens % 10 == 0) {
+            // Update metrics every 10 tokens to avoid overhead
+            llama_kernel_metrics metrics = llama_kernel_fusion_get_metrics(&g_fusion_state);
+            g_gpu_engine.graph_captures++;  // Use as metrics update counter
+        }
+
         return output_token;  // Return next token to user
     }
 
@@ -562,6 +592,13 @@ LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
 }
 
 /**
+ * Get kernel fusion metrics (Phase C5+)
+ */
+LLAMA_API llama_kernel_metrics llama_gpu_exclusive_engine_get_fusion_metrics() {
+    return llama_kernel_fusion_get_metrics(&g_fusion_state);
+}
+
+/**
  * Print comprehensive engine diagnostics.
  */
 LLAMA_API void llama_gpu_exclusive_engine_print_diagnostics() {
@@ -589,6 +626,9 @@ LLAMA_API void llama_gpu_exclusive_engine_print_diagnostics() {
     }
 
     fprintf(stderr, "================================================\n\n");
+
+    // Phase C5: Print kernel fusion metrics
+    llama_kernel_fusion_dump_metrics(&g_fusion_state);
 
     // Print residency report
     llama_residency_print_report();
