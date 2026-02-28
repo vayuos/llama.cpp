@@ -312,15 +312,6 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
 
     g_gpu_engine.graph_captured = true;
 
-    // Phase C5: Audit compute graph for fusion compliance
-    if (ctx && ctx->gf) {
-        bool fusion_audit_pass = llama_kernel_fusion_audit_graph(&g_fusion_state, ctx->gf);
-        if (!fusion_audit_pass) {
-            fprintf(stderr, "GPU_ENGINE: WARNING - Kernel fusion audit reported suboptimal patterns\n");
-            // Non-fatal: continue with execution but log the issue
-        }
-    }
-
     // Transition to GRAPH_READY
     current_state = g_gpu_engine_state.load();
     next_state = GPU_ENGINE_GRAPH_READY;
@@ -504,9 +495,9 @@ LLAMA_API int llama_gpu_exclusive_engine_decode_step(
 
         // Phase C5: Update kernel fusion metrics
         if (g_fusion_state.enforce_active && g_gpu_engine.total_tokens % 10 == 0) {
-            // Update metrics every 10 tokens to avoid overhead
+            // Query metrics every 10 tokens to avoid overhead
             llama_kernel_metrics metrics = llama_kernel_fusion_get_metrics(&g_fusion_state);
-            g_gpu_engine.graph_captures++;  // Use as metrics update counter
+            (void)metrics;  // Use metrics for potential future enhancements
         }
 
         return output_token;  // Return next token to user
