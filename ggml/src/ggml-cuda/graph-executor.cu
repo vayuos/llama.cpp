@@ -25,10 +25,6 @@ static std::mutex g_graph_mutex;
 static uint64_t g_next_graph_id = 1;
 static bool g_graphs_enabled = true;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 uint64_t ggml_cuda_graph_capture_begin(void * stream) {
     if (!g_graphs_enabled) return 0;
     std::lock_guard<std::mutex> lock(g_graph_mutex);
@@ -198,7 +194,3 @@ int ggml_cuda_graph_get_count() {
     std::lock_guard<std::mutex> lock(g_graph_mutex);
     return g_graphs.size();
 }
-
-#ifdef __cplusplus
-}
-#endif
