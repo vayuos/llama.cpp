@@ -88,7 +88,7 @@ bool ggml_cuda_graph_is_enabled();
 /**
  * Cleanup all cached graphs (called at shutdown).
  */
-void ggml_cuda_graph_cleanup_all();
+int ggml_cuda_graph_cleanup_all();
 
 #ifdef __cplusplus
 }

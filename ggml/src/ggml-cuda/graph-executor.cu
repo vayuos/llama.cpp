@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 #include <unordered_map>
 #include <mutex>
+#include <cstdio>
 
 struct cuda_graph_state {
     cudaGraph_t graph;
@@ -33,7 +34,7 @@ uint64_t ggml_cuda_graph_capture_begin(void * stream) {
     
     cudaError_t err = cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal);
     if (err != cudaSuccess) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_capture_begin failed: %s\n", cudaGetErrorString(err));
+        fprintf(stderr, "ggml_cuda_graph_capture_begin failed: %s\n", cudaGetErrorString(err));
         return 0;
     }
     
@@ -47,8 +48,8 @@ uint64_t ggml_cuda_graph_capture_begin(void * stream) {
     state.launch_count = 0;
     
     g_graphs[graph_id] = state;
-    LLAMA_LOG_DEBUG("ggml_cuda_graph_capture_begin: graph_id=%llu\n", (unsigned long long)graph_id);
-    
+    // Debug: ggml_cuda_graph_capture_begin: graph_id created
+
     return graph_id;
 }
 
@@ -56,16 +57,16 @@ int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
     std::lock_guard<std::mutex> lock(g_graph_mutex);
     
     if (g_graphs.find(graph_id) == g_graphs.end()) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_capture_end: graph_id %llu not found\n", (unsigned long long)graph_id);
+        fprintf(stderr, "ggml_cuda_graph_capture_end: graph_id %llu not found\n", (unsigned long long)graph_id);
         return -1;
     }
     
     cudaStream_t s = (cudaStream_t)stream;
     cudaGraph_t graph;
     cudaError_t err = cudaStreamEndCapture(s, &graph);
-    
+
     if (err != cudaSuccess) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_capture_end failed: %s\n", cudaGetErrorString(err));
+        fprintf(stderr, "ggml_cuda_graph_capture_end failed: %s\n", cudaGetErrorString(err));
         return -1;
     }
     
@@ -75,8 +76,8 @@ int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
     size_t num_nodes = 0;
     cudaGraphGetNodes(graph, nullptr, &num_nodes);
     g_graphs[graph_id].graph_nodes = num_nodes;
-    LLAMA_LOG_DEBUG("ggml_cuda_graph_capture_end: graph_id=%llu, nodes=%zu\n", (unsigned long long)graph_id, num_nodes);
-    
+    // Debug: ggml_cuda_graph_capture_end: graph captured with node count
+
     return 0;
 }
 
@@ -84,53 +85,53 @@ int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
     std::lock_guard<std::mutex> lock(g_graph_mutex);
     
     if (g_graphs.find(graph_id) == g_graphs.end()) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_instantiate: graph_id %llu not found\n", (unsigned long long)graph_id);
+        fprintf(stderr, "ggml_cuda_graph_instantiate: graph_id %llu not found\n", (unsigned long long)graph_id);
         return -1;
     }
-    
+
     cuda_graph_state & state = g_graphs[graph_id];
-    
+
     if (!state.is_captured || !state.graph) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_instantiate: graph not captured\n");
+        fprintf(stderr, "ggml_cuda_graph_instantiate: graph not captured\n");
         return -1;
     }
     
     cudaGraphExec_t exec;
     cudaError_t err = cudaGraphInstantiate(&exec, state.graph, nullptr, nullptr, 0);
-    
+
     if (err != cudaSuccess) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_instantiate failed: %s\n", cudaGetErrorString(err));
+        fprintf(stderr, "ggml_cuda_graph_instantiate failed: %s\n", cudaGetErrorString(err));
         return -1;
     }
     
     state.graph_exec = exec;
     state.is_instantiated = true;
-    
-    LLAMA_LOG_DEBUG("ggml_cuda_graph_instantiate: graph_id=%llu instantiated\n", (unsigned long long)graph_id);
-    
+
+    // Debug: ggml_cuda_graph_instantiate: graph instantiated
+
     return 0;
 }
 
 int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
     std::lock_guard<std::mutex> lock(g_graph_mutex);
-    
+
     if (g_graphs.find(graph_id) == g_graphs.end()) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_launch: graph_id %llu not found\n", (unsigned long long)graph_id);
+        fprintf(stderr, "ggml_cuda_graph_launch: graph_id %llu not found\n", (unsigned long long)graph_id);
         return -1;
     }
-    
+
     cuda_graph_state & state = g_graphs[graph_id];
-    
+
     if (!state.is_instantiated || !state.graph_exec) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_launch: graph not instantiated\n");
+        fprintf(stderr, "ggml_cuda_graph_launch: graph not instantiated\n");
         return -1;
     }
     
     cudaStream_t s = (cudaStream_t)stream;
     cudaError_t err = cudaGraphLaunch(state.graph_exec, s);
-    
+
     if (err != cudaSuccess) {
-        LLAMA_LOG_ERROR("ggml_cuda_graph_launch failed: %s\n", cudaGetErrorString(err));
+        fprintf(stderr, "ggml_cuda_graph_launch failed: %s\n", cudaGetErrorString(err));
         return -1;
     }
     
@@ -162,8 +163,8 @@ int ggml_cuda_graph_destroy(uint64_t graph_id) {
     }
     
     g_graphs.erase(graph_id);
-    LLAMA_LOG_DEBUG("ggml_cuda_graph_destroy: graph_id=%llu destroyed\n", (unsigned long long)graph_id);
-    
+    // Debug: ggml_cuda_graph_destroy: graph_id destroyed
+
     return 0;
 }
 
@@ -182,9 +183,9 @@ int ggml_cuda_graph_cleanup_all() {
     
     g_graphs.clear();
     g_next_graph_id = 1;
-    
-    LLAMA_LOG_DEBUG("ggml_cuda_graph_cleanup_all: all graphs destroyed\n");
-    
+
+    // Debug: ggml_cuda_graph_cleanup_all: all graphs destroyed
+
     return 0;
 }
 
