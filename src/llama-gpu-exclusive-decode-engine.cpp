@@ -207,6 +207,8 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
     const llama_context * ctx,
     int max_tokens) {
 
+    (void)ctx;  // Unused in Phase 2.3 (will be used in Phase 2.4+ for tensor inspection)
+
     if (g_gpu_engine.state != GPU_ENGINE_INITIALIZED) {
         fprintf(stderr, "GPU_ENGINE: Not in initialized state\n");
         return -1;
@@ -245,8 +247,8 @@ LLAMA_API int llama_gpu_exclusive_engine_start_decode() {
     g_gpu_engine.state = GPU_ENGINE_DECODING;
     g_gpu_engine.total_decodes++;
 
-    auto now = std::chrono::high_resolution_clock::now();
-    // Store decode start time for statistics
+    // Phase 2.3: Timing statistics placeholder for future implementation
+    // Phase 2.4+: Will capture high_resolution_clock::now() for decode latency tracking
 
     fprintf(stderr, "GPU_ENGINE: Decode started\n");
     return 0;
