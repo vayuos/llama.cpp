@@ -49,10 +49,10 @@ LLAMA_API int llama_verify_decode_memory_residency(const struct llama_context * 
 
 LLAMA_API void llama_residency_print_report() {
     fprintf(stderr, "Memory Residency Report:\n");
-    LLAMA_LOG_INFO("  - Token embeddings: GPU\n");
-    LLAMA_LOG_INFO("  - Layer tensors: GPU\n");
-    LLAMA_LOG_INFO("  - KV cache: GPU\n");
-    LLAMA_LOG_INFO("  - Output layer: GPU\n");
+    fprintf(stderr, "  - Token embeddings: GPU\n");
+    fprintf(stderr, "  - Layer tensors: GPU\n");
+    fprintf(stderr, "  - KV cache: GPU\n");
+    fprintf(stderr, "  - Output layer: GPU\n");
 }
 
 // ============================================================================
@@ -60,11 +60,13 @@ LLAMA_API void llama_residency_print_report() {
 // ============================================================================
 
 LLAMA_API int llama_persistent_kernel_init(int max_tokens) {
+    (void)max_tokens;  // unused - kept for API consistency
     // Debug: persistent kernel init with max_tokens
     return 0;
 }
 
 LLAMA_API int llama_persistent_kernel_launch(const struct llama_context * ctx, int max_tokens) {
+    (void)max_tokens;  // unused - kept for API consistency
     if (!ctx) return -1;
     // Debug: persistent kernel launch
     return 0;
@@ -76,6 +78,7 @@ LLAMA_API int llama_persistent_kernel_stop() {
 }
 
 LLAMA_API int llama_persistent_kernel_wait(int timeout_ms) {
+    (void)timeout_ms;  // unused - kept for API consistency
     // Debug: persistent kernel wait
     return 0;
 }
@@ -120,6 +123,7 @@ LLAMA_API int check_backend_frozen() {
 // ============================================================================
 
 LLAMA_API int ggml_cuda_rng_init(uint32_t seed) {
+    (void)seed;  // unused - kept for API consistency
     // Debug: CUDA RNG init
     return 0;
 }
@@ -178,10 +182,10 @@ LLAMA_API int ggml_cuda_sample_argmax(
     int vocab_size,
     void * stream,
     int * output) {
-    (void)stream;  // stream parameter unused - kept for API consistency
+    (void)vocab_size;  (void)stream;  // unused - kept for API consistency
 
     if (!logits || !output) return -1;
-    
+
     // Debug: argmax sampling
     *output = 0;
     return 0;
@@ -193,10 +197,10 @@ LLAMA_API int ggml_cuda_sample_categorical(
     uint32_t seed,
     void * stream,
     int * output) {
-    (void)stream;  // stream parameter unused - kept for API consistency
+    (void)vocab_size;  (void)seed;  (void)stream;  // unused - kept for API consistency
 
     if (!logits || !output) return -1;
-    
+
     // Debug: categorical sampling
     *output = 0;
     return 0;
