@@ -2946,8 +2946,10 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             }
 
             // avoid using a host buffer when using mmap
+            // EXCEPTION: Keep input layer tensors (embeddings) on GPU for GPU-exclusive decoding
             auto * buft_dev = ggml_backend_buft_get_device(buft);
-            if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev)) {
+            if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev) &&
+                info.layer != LLM_TENSOR_LAYER_INPUT) {
                 auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
                 if (!cpu_dev) {
                     throw std::runtime_error("no CPU backend found");
