@@ -15,6 +15,9 @@
 #include "llama.h"
 #include <cstdint>
 
+// Forward declaration for async pipelining scheduler
+struct llama_stream_scheduler;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -70,11 +73,40 @@ void llama_gpu_exclusive_engine_cleanup();
 /**
  * Execute single decode step.
  * Updates GPU-resident state, launches CUDA graph, retrieves output token.
+ * Uses async pipelining: CPU and GPU process different tokens concurrently.
  *
  * @param token Current token to process
- * @return 0 on success, -1 on error
+ * @return >=0 output token ready, -1 error, -2 no output yet (still in pipeline)
  */
 int llama_gpu_exclusive_engine_decode_step(int token);
+
+// ============================================================================
+// STREAM SCHEDULER ACCESSORS (Async Pipelining)
+// ============================================================================
+
+/**
+ * Get the global stream scheduler instance.
+ * Used for CPU-GPU async pipelining coordination.
+ * Returns NULL if not initialized.
+ */
+struct llama_stream_scheduler * llama_gpu_exclusive_engine_get_scheduler();
+
+/**
+ * Get CPU compute stream from scheduler.
+ * Used to queue layer 0-66 compute on CPU_COMPUTE stream.
+ */
+void * llama_gpu_exclusive_engine_get_cpu_stream();
+
+/**
+ * Get GPU compute stream from scheduler.
+ * Used to queue layer 36-49 compute on GPU_COMPUTE stream.
+ */
+void * llama_gpu_exclusive_engine_get_gpu_stream();
+
+/**
+ * Print stream scheduler diagnostics for debugging async pipelining.
+ */
+void llama_gpu_exclusive_engine_print_scheduler_diagnostics();
 
 // ============================================================================
 // STATISTICS AND DIAGNOSTICS
