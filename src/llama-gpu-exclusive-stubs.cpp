@@ -31,6 +31,17 @@ extern "C" {
     extern bool ggml_cuda_graph_is_enabled();
 }
 
+// Forward declarations for admission control helper functions
+extern "C" {
+    int check_gpu_backend_available();
+    int check_no_cpu_decode_ops(const struct llama_context * ctx);
+    int check_cuda_features();
+    int check_kv_cache_gpu_resident(const struct llama_context * ctx);
+    int check_backend_frozen();
+    int ggml_cuda_sample_argmax(const struct ggml_tensor * logits, int vocab_size, void * stream, int * output);
+    int ggml_cuda_sample_categorical(const struct ggml_tensor * logits, int vocab_size, uint32_t seed, void * stream, int * output);
+}
+
 extern "C" {
 
 // ============================================================================
