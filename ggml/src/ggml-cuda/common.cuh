@@ -186,6 +186,11 @@ void ggml_cuda_error(const char * stmt, const char * func, const char * file, in
 
 #define CUBLAS_CHECK(err) CUDA_CHECK_GEN(err, CUBLAS_STATUS_SUCCESS, cublas_get_error_str)
 
+// GPU-exclusive decode stream management
+#define GGML_CUDA_WARN_STREAM_SYNC_DECODE() ((void)0)  // No-op: decode stream sync doesn't warn
+#define GGML_CUDA_ASSERT_SAME_STREAM(s) ((void)0)      // No-op: stream assertion for debugging
+extern cudaStream_t * ggml_cuda_decode_stream;         // GPU-exclusive decode stream (may be nullptr)
+
 #if !defined(GGML_USE_HIP) && !defined(GGML_CUDA_NO_VMM)
 static const char * cu_get_error_str(CUresult err) {
     const char * err_str;

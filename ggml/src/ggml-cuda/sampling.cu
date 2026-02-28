@@ -4,6 +4,9 @@
 #include <device_launch_parameters.h>
 #include <cub/cub.cuh>
 
+// GPU-exclusive decode stream (nullptr when not in use)
+cudaStream_t * ggml_cuda_decode_stream = nullptr;
+
 // ============================================================================
 // State Management Kernels
 // ============================================================================
