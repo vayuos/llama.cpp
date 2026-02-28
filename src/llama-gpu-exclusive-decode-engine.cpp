@@ -25,6 +25,14 @@
 #include <chrono>
 #include <vector>
 
+// CUDA headers for stream types and graph operations
+#ifdef __CUDACC__
+#include <cuda_runtime.h>
+#else
+// Stub for non-CUDA builds
+typedef void* cudaStream_t;
+#endif
+
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
@@ -419,17 +427,6 @@ LLAMA_API void llama_gpu_exclusive_engine_print_scheduler_diagnostics() {
 // ============================================================================
 // STATISTICS AND DIAGNOSTICS
 // ============================================================================
-
-struct llama_gpu_engine_stats {
-    enum llama_gpu_engine_state state;
-    bool rng_initialized;
-    bool memory_verified;
-    bool graph_ready;
-    uint64_t total_decodes;
-    uint64_t total_tokens;
-    uint64_t total_time_ns;
-    int total_errors;
-};
 
 LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
     struct llama_gpu_engine_stats stats;
