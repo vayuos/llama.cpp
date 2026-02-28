@@ -17,6 +17,7 @@
 #include "llama-context.h"
 #include "llama-impl.h"
 #include "llama-stream-scheduler.h"
+#include "llama-gpu-exclusive-decode-engine.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -137,7 +138,7 @@ static bool g_gpu_engine_enabled = true;
  * - Graph caching infrastructure
  * - Persistent kernel framework
  */
-int llama_gpu_exclusive_engine_init(
+LLAMA_API int llama_gpu_exclusive_engine_init(
     const llama_context * ctx,
     uint32_t rng_seed) {
 
@@ -194,7 +195,7 @@ int llama_gpu_exclusive_engine_init(
  * Prepare GPU-exclusive decode (graph capture phase).
  * Should be called once per context before decoding begins.
  */
-int llama_gpu_exclusive_engine_prepare_decode(
+LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
     const llama_context * ctx,
     int max_tokens) {
 
@@ -227,7 +228,7 @@ int llama_gpu_exclusive_engine_prepare_decode(
 /**
  * Begin GPU-exclusive decode with captured graph.
  */
-int llama_gpu_exclusive_engine_start_decode() {
+LLAMA_API int llama_gpu_exclusive_engine_start_decode() {
     if (g_gpu_engine.state != GPU_ENGINE_GRAPH_READY) {
         fprintf(stderr, "GPU_ENGINE: Graph not ready for decode\n");
         return -1;
@@ -246,7 +247,7 @@ int llama_gpu_exclusive_engine_start_decode() {
 /**
  * End GPU-exclusive decode session.
  */
-int llama_gpu_exclusive_engine_stop_decode() {
+LLAMA_API int llama_gpu_exclusive_engine_stop_decode() {
     if (g_gpu_engine.state != GPU_ENGINE_DECODING) {
         fprintf(stderr, "GPU_ENGINE: Not currently decoding\n");
         return 0;
@@ -262,7 +263,7 @@ int llama_gpu_exclusive_engine_stop_decode() {
  * Cleanup GPU-exclusive engine.
  * Called at shutdown.
  */
-void llama_gpu_exclusive_engine_cleanup() {
+LLAMA_API void llama_gpu_exclusive_engine_cleanup() {
     if (g_gpu_engine.state == GPU_ENGINE_UNINITIALIZED) {
         return;
     }
@@ -307,7 +308,7 @@ void llama_gpu_exclusive_engine_cleanup() {
  *
  * Result: Reduced GPU idle time, ~15-25% throughput improvement.
  */
-int llama_gpu_exclusive_engine_decode_step(
+LLAMA_API int llama_gpu_exclusive_engine_decode_step(
     int token) {
 
     if (g_gpu_engine.state != GPU_ENGINE_DECODING) {
@@ -378,7 +379,7 @@ int llama_gpu_exclusive_engine_decode_step(
  * Get the global stream scheduler instance.
  * Used by compute loop to coordinate async pipelining.
  */
-struct llama_stream_scheduler * llama_gpu_exclusive_engine_get_scheduler() {
+LLAMA_API struct llama_stream_scheduler * llama_gpu_exclusive_engine_get_scheduler() {
     return g_stream_scheduler;
 }
 
@@ -386,7 +387,7 @@ struct llama_stream_scheduler * llama_gpu_exclusive_engine_get_scheduler() {
  * Get CPU compute stream from scheduler.
  * Compute loop uses this stream for layer 0-66 execution.
  */
-void * llama_gpu_exclusive_engine_get_cpu_stream() {
+LLAMA_API void * llama_gpu_exclusive_engine_get_cpu_stream() {
     if (!g_stream_scheduler) {
         return NULL;
     }
@@ -397,7 +398,7 @@ void * llama_gpu_exclusive_engine_get_cpu_stream() {
  * Get GPU compute stream from scheduler.
  * Compute loop uses this stream for layer 36-49 execution.
  */
-void * llama_gpu_exclusive_engine_get_gpu_stream() {
+LLAMA_API void * llama_gpu_exclusive_engine_get_gpu_stream() {
     if (!g_stream_scheduler) {
         return NULL;
     }
@@ -407,7 +408,7 @@ void * llama_gpu_exclusive_engine_get_gpu_stream() {
 /**
  * Print scheduler diagnostics for debugging.
  */
-void llama_gpu_exclusive_engine_print_scheduler_diagnostics() {
+LLAMA_API void llama_gpu_exclusive_engine_print_scheduler_diagnostics() {
     if (!g_stream_scheduler) {
         fprintf(stderr, "GPU_ENGINE: Scheduler not initialized\n");
         return;
@@ -430,7 +431,7 @@ struct llama_gpu_engine_stats {
     int total_errors;
 };
 
-struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
+LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
     struct llama_gpu_engine_stats stats;
     stats.state = g_gpu_engine.state;
     stats.rng_initialized = g_gpu_engine.rng_initialized;
@@ -446,7 +447,7 @@ struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats() {
 /**
  * Print comprehensive engine diagnostics.
  */
-void llama_gpu_exclusive_engine_print_diagnostics() {
+LLAMA_API void llama_gpu_exclusive_engine_print_diagnostics() {
     fprintf(stderr, "\n========== GPU-EXCLUSIVE DECODE ENGINE ==========\n");
     fprintf(stderr, "State: %d\n", (int)g_gpu_engine.state);
     fprintf(stderr, "RNG initialized: %s\n", g_gpu_engine.rng_initialized ? "yes" : "no");
@@ -467,10 +468,10 @@ void llama_gpu_exclusive_engine_print_diagnostics() {
 // GLOBAL CONTROL
 // ============================================================================
 
-void llama_gpu_exclusive_engine_set_enabled(bool enabled) {
+LLAMA_API void llama_gpu_exclusive_engine_set_enabled(bool enabled) {
     g_gpu_engine_enabled = enabled;
 }
 
-bool llama_gpu_exclusive_engine_is_enabled() {
+LLAMA_API bool llama_gpu_exclusive_engine_is_enabled() {
     return g_gpu_engine_enabled;
 }
