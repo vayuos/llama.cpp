@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.18) # for add_link_options, implicit target directories, and CUDA support
-project("ggml" C CXX ASM CUDA)
+cmake_minimum_required(VERSION 3.14...3.28) # for add_link_options and implicit target directories.
+project("ggml" C CXX ASM)
 
 ### GGML Version
 set(GGML_VERSION_MAJOR 0)
 set(GGML_VERSION_MINOR 9)
-set(GGML_VERSION_PATCH 5)
+set(GGML_VERSION_PATCH 7)
 set(GGML_VERSION_BASE "${GGML_VERSION_MAJOR}.${GGML_VERSION_MINOR}.${GGML_VERSION_PATCH}")
 
 find_program(GIT_EXE NAMES git git.exe NO_CMAKE_FIND_ROOT_PATH)
@@ -118,7 +118,7 @@ endif()
 # general
 option(GGML_STATIC "ggml: static link libraries"                     OFF)
 option(GGML_NATIVE "ggml: optimize the build for the current system" ${GGML_NATIVE_DEFAULT})
-option(GGML_LTO    "ggml: enable link time optimization"             ON)
+option(GGML_LTO    "ggml: enable link time optimization"             OFF)
 option(GGML_CCACHE "ggml: use ccache if available"                   ON)
 
 # debug
@@ -194,7 +194,7 @@ option(GGML_LLAMAFILE                       "ggml: use LLAMAFILE"               
 
 option(GGML_CUDA                            "ggml: use CUDA"                                  OFF)
 option(GGML_MUSA                            "ggml: use MUSA"                                  OFF)
-option(GGML_CUDA_FORCE_MMQ                  "ggml: use mmq kernels instead of cuBLAS"         ON)
+option(GGML_CUDA_FORCE_MMQ                  "ggml: use mmq kernels instead of cuBLAS"         OFF)
 option(GGML_CUDA_FORCE_CUBLAS               "ggml: always use cuBLAS instead of mmq kernels"  OFF)
 set   (GGML_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                             "ggml: max. batch size for using peer access")
@@ -202,15 +202,10 @@ option(GGML_CUDA_NO_PEER_COPY               "ggml: do not use peer to peer copie
 option(GGML_CUDA_NO_VMM                     "ggml: do not try to use CUDA VMM"                OFF)
 option(GGML_CUDA_FA                         "ggml: compile ggml FlashAttention CUDA kernels"  ON)
 option(GGML_CUDA_FA_ALL_QUANTS              "ggml: compile all quants for FlashAttention"     OFF)
-option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ON)
+option(GGML_CUDA_GRAPHS                     "ggml: use CUDA graphs (llama.cpp only)"          ${GGML_CUDA_GRAPHS_DEFAULT})
 set   (GGML_CUDA_COMPRESSION_MODE "size" CACHE STRING
                                             "ggml: cuda link binary compression mode; requires cuda 12.8+")
 set_property(CACHE GGML_CUDA_COMPRESSION_MODE PROPERTY STRINGS "none;speed;balance;size")
-option(GGML_CUDA_GPU_ONLY "ggml: build for GPU-exclusive decode, disabling CPU fallback compute" OFF)
-
-if (GGML_CUDA_GPU_ONLY)
-    add_compile_definitions(GGML_CUDA_GPU_ONLY)
-endif()
 
 option(GGML_HIP                             "ggml: use HIP"                                   OFF)
 option(GGML_HIP_GRAPHS                      "ggml: use HIP graph, experimental, slow"         OFF)
@@ -270,8 +265,8 @@ option(GGML_ZENDNN                          "ggml: use ZenDNN"                  
 option(ZENDNN_ROOT                          "ggml: path to ZenDNN installation"               "")
 
 # extra artifacts
-option(GGML_BUILD_TESTS    "ggml: build tests"    OFF)
-option(GGML_BUILD_EXAMPLES "ggml: build examples" OFF)
+option(GGML_BUILD_TESTS    "ggml: build tests"    ${GGML_STANDALONE})
+option(GGML_BUILD_EXAMPLES "ggml: build examples" ${GGML_STANDALONE})
 
 #
 # dependencies

@@ -5,7 +5,6 @@ find_package(CUDAToolkit)
 if (CUDAToolkit_FOUND)
     message(STATUS "CUDA Toolkit found")
 
-    # Configure CMAKE_CUDA_ARCHITECTURES BEFORE enabling CUDA language
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         # native == GPUs available at build time
         # 50     == Maxwell, lowest CUDA 12 standard
@@ -25,19 +24,16 @@ if (CUDAToolkit_FOUND)
         # The default behavior for a non-native is to build virtual architectures as needed to cover all features needed
         #     for best performance and to also build real architectures for the most commonly used GPUs.
         if (GGML_NATIVE AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.6" AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
-            set(CMAKE_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures")
+            set(CMAKE_CUDA_ARCHITECTURES "native")
         else()
-            # Build architecture list as a CMake list (not a semicolon string)
-            unset(CUDA_ARCHS)
-
             if (CUDAToolkit_VERSION VERSION_LESS "13")
-                list(APPEND CUDA_ARCHS 50-virtual 61-virtual 70-virtual)
+                list(APPEND CMAKE_CUDA_ARCHITECTURES 50-virtual 61-virtual 70-virtual)
             endif ()
 
-            list(APPEND CUDA_ARCHS 75-virtual 80-virtual 86-real)
+            list(APPEND CMAKE_CUDA_ARCHITECTURES 75-virtual 80-virtual 86-real)
 
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "11.8")
-                list(APPEND CUDA_ARCHS 89-real)
+                list(APPEND CMAKE_CUDA_ARCHITECTURES 89-real)
             endif()
 
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.8")
@@ -51,29 +47,15 @@ if (CUDAToolkit_FOUND)
                 #     check Modules/Internal/CMakeCUDAArchitecturesValidate.cmake in the CMake git repository instead.
                 # However, the architectures 120a-real and 121a-real should work with basically any CMake version and
                 #     until the release of e.g. Rubin there is no benefit to shipping virtual architectures for Blackwell.
-                list(APPEND CUDA_ARCHS 120a-real)
+                list(APPEND CMAKE_CUDA_ARCHITECTURES 120a-real)
             endif()
             if (CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.9")
-                list(APPEND CUDA_ARCHS 121a-real)
+                list(APPEND CMAKE_CUDA_ARCHITECTURES 121a-real)
             endif()
-
-            # Store the architecture list for later setting after enable_language(CUDA)
-            # enable_language(CUDA) resets CMAKE_CUDA_ARCHITECTURES, so we must set it AFTER
-            string(JOIN ";" GGML_CUDA_ARCHITECTURES_LIST ${CUDA_ARCHS})
-            message(STATUS "DEBUG: GGML_CUDA_ARCHITECTURES_LIST=${GGML_CUDA_ARCHITECTURES_LIST}")
         endif()
     endif()
 
     enable_language(CUDA)
-
-    # CRITICAL FIX: Set CMAKE_CUDA_ARCHITECTURES AFTER enable_language(CUDA)
-    # The enable_language(CUDA) call resets/overrides CMAKE_CUDA_ARCHITECTURES to native
-    # So we MUST set our custom architecture list AFTER enable_language, not before!
-    if (DEFINED GGML_CUDA_ARCHITECTURES_LIST)
-        message(STATUS "DEBUG: Setting CMAKE_CUDA_ARCHITECTURES AFTER enable_language(CUDA)")
-        set(CMAKE_CUDA_ARCHITECTURES "${GGML_CUDA_ARCHITECTURES_LIST}" CACHE STRING "CUDA architectures" FORCE)
-        message(STATUS "DEBUG: CMAKE_CUDA_ARCHITECTURES now=${CMAKE_CUDA_ARCHITECTURES}")
-    endif()
 
     # TODO: Remove once CCCL 3.2 has been released and bundled with CUDA Toolkit
     if (GGML_CUDA_CUB_3DOT2)
@@ -82,7 +64,7 @@ if (CUDAToolkit_FOUND)
         FetchContent_Declare(
             CCCL
             GIT_REPOSITORY https://github.com/nvidia/cccl.git
-            GIT_TAG        v3.2.0-rc2
+            GIT_TAG        v3.2.0
             GIT_SHALLOW    TRUE
         )
 
@@ -111,11 +93,7 @@ if (CUDAToolkit_FOUND)
     # If we try to compile a "native" build it will use the 12X architectures and fail.
     # So we should instead use the native architectures as determined by CMake after replacing 12X with 12Xa.
     # But if at the time of the build no GPUs are connected at all CMAKE_CUDA_ARCHITECTURES will contain garbage that we should not use.
-    # IMPORTANT: Only override if CMAKE_CUDA_ARCHITECTURES is literally "native" (the keyword, not our list)
-    # Do NOT override if we've already set a full architecture list (e.g., "75-virtual;80-virtual;86-real;89-real")
-    message(STATUS "DEBUG: Before native check, CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
     if (CMAKE_CUDA_ARCHITECTURES STREQUAL "native" AND CMAKE_CUDA_ARCHITECTURES_NATIVE MATCHES "^[0-9]+(a|f)?(-real|-virtual)?(;[0-9]+(a|f)?(-real|-virtual)?|;)*$")
-        message(STATUS "DEBUG: Overriding CMAKE_CUDA_ARCHITECTURES with native")
         set(CMAKE_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES_NATIVE})
     endif()
     message(STATUS "Using CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES} CMAKE_CUDA_ARCHITECTURES_NATIVE=${CMAKE_CUDA_ARCHITECTURES_NATIVE}")
@@ -145,10 +123,6 @@ if (CUDAToolkit_FOUND)
         file(GLOB   SRCS "template-instances/fattn-vec*f16-f16.cu")
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
     endif()
-
-    # CRITICAL: Explicitly mark all .cu files as CUDA language BEFORE adding to library
-    # This tells CMake to compile these files with nvcc, not with C++ compiler
-    set_source_files_properties(${GGML_SOURCES_CUDA} PROPERTIES LANGUAGE CUDA)
 
     ggml_add_backend_library(ggml-cuda
                              ${GGML_HEADERS_CUDA}

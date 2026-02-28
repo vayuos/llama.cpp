@@ -1,7 +1,6 @@
 ---
 Checks: >
     bugprone-*,
-    -bugprone-pointer-arithmetic-on-polymorphic-object,
     -bugprone-easily-swappable-parameters,
     -bugprone-implicit-widening-of-multiplication-result,
     -bugprone-misplaced-widening-cast,

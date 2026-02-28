@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.18) # for add_link_options, implicit target directories, and CUDA support
-project("llama.cpp" C CXX CUDA)
+cmake_minimum_required(VERSION 3.14...3.28) # for add_link_options and implicit target directories.
+project("llama.cpp" C CXX)
 include(CheckIncludeFileCXX)
 
 #set(CMAKE_WARN_DEPRECATED YES)
@@ -12,31 +12,7 @@ if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# Force Release build for optimization
-#if (NOT XCODE AND NOT MSVC)
-#    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-#endif()
-
 message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
-
-# Aggressive Optimization Flags for Release Builds
-if (NOT MSVC)
-    # -O3: Maximum optimizations
-    # -ffast-math: Aggressive floating-point optimizations
-    # -fno-finite-math-only: Allow optimizations for non-finite values
-    # -funroll-loops: Unroll loops for reduced branch overhead
-    # -march=native: Optimize for native CPU architecture
-    # -flto: Link Time Optimization (enabled below for Release)
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native")
-    
-    # Enable LTO for Release builds
-    if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -flto=auto -s")
-        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=auto -s")
-        set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto=auto -s")
-    endif()
-endif()
 
 # Add path to modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
@@ -128,29 +104,17 @@ option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
 
 # extra artifacts
-option(LLAMA_BUILD_TESTS    "llama: build tests"          OFF)
-option(LLAMA_BUILD_TOOLS    "llama: build tools"          ON)
-option(LLAMA_BUILD_EXAMPLES "llama: build examples"       OFF)
-option(LLAMA_BUILD_SERVER   "llama: build server example" ON)
-option(LLAMA_TOOLS_INSTALL  "llama: install tools"        OFF)
-option(LLAMA_TESTS_INSTALL  "llama: install tests"        OFF)
-
-# optimization
-option(LLAMA_CUDA_MMQ "llama: use mmq kernels instead of cuBLAS" ON)
-if (LLAMA_CUDA_MMQ AND NOT GGML_CUDA_FORCE_CUBLAS)
-    set(GGML_CUDA_FORCE_MMQ ON CACHE BOOL "ggml: use mmq kernels instead of cuBLAS" FORCE)
-endif()
+option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_TOOLS    "llama: build tools"          ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES "llama: build examples"       ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_SERVER   "llama: build server example" ${LLAMA_STANDALONE})
+option(LLAMA_TOOLS_INSTALL  "llama: install tools"        ${LLAMA_TOOLS_INSTALL_DEFAULT})
+option(LLAMA_TESTS_INSTALL  "llama: install tests"        ON)
 
 # 3rd party libs
-option(LLAMA_HTTPLIB    "llama: httplib for downloading functionality" ON)
 option(LLAMA_OPENSSL    "llama: use openssl to support HTTPS" ON)
 option(LLAMA_LLGUIDANCE "llama-common: include LLGuidance library for structured output in common utils" OFF)
 
-# deprecated
-option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
-if (LLAMA_CURL)
-    message(WARNING "LLAMA_CURL option is deprecated and will be ignored")
-endif()
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
@@ -178,10 +142,15 @@ if (NOT DEFINED GGML_CUDA_GRAPHS)
 endif()
 
 # transition helpers
-function (llama_option_depr TYPE OLD NEW)
+function (llama_option_depr TYPE OLD)
     if (${OLD})
-        message(${TYPE} "${OLD} is deprecated and will be removed in the future.\nUse ${NEW} instead\n")
-        set(${NEW} ON PARENT_SCOPE)
+        set(NEW "${ARGV2}")
+        if(NEW)
+            message(${TYPE} "${OLD} is deprecated, use ${NEW} instead")
+            set(${NEW} ON PARENT_SCOPE)
+        else()
+            message(${TYPE} "${OLD} is deprecated and will be ignored")
+        endif()
     endif()
 endfunction()
 
@@ -194,6 +163,7 @@ llama_option_depr(WARNING     LLAMA_RPC                 GGML_RPC)
 llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
 llama_option_depr(WARNING     LLAMA_SYCL_F16            GGML_SYCL_F16)
 llama_option_depr(WARNING     LLAMA_CANN                GGML_CANN)
+llama_option_depr(WARNING     LLAMA_CURL)
 
 include("cmake/license.cmake")
 license_add_file("llama.cpp" "LICENSE")
@@ -227,9 +197,7 @@ add_subdirectory(src)
 
 if (LLAMA_BUILD_COMMON)
     add_subdirectory(common)
-    if (LLAMA_HTTPLIB)
-        add_subdirectory(vendor/cpp-httplib)
-    endif()
+    add_subdirectory(vendor/cpp-httplib)
 endif()
 
 if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)

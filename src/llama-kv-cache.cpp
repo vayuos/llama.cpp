@@ -1,29 +1,3 @@
-// ============================================================================
-// FIX: Section 11.3 - GPU-EXCLUSIVE KV CACHE IMPLEMENTATION
-// ============================================================================
-//
-// This file implements the KV cache management system with mandatory GPU-only
-// enforcement during decode phase.
-//
-// DESIGN PRINCIPLE:
-// - During prefill: KV can be CPU, GPU, or hybrid (flexible)
-// - During decode: KV MUST be GPU-resident ONLY (hard requirement)
-//
-// ENFORCEMENT MECHANISM:
-// 1. enforce_gpu_only_kv() called at decode start
-// 2. Verifies ALL KV buffers are GPU-resident (calls is_offloaded())
-// 3. Sets kv_gpu_only_locked flag if successful
-// 4. If CPU KV detected: returns -1, decode cannot proceed
-// 5. All CPU KV path guards check kv_gpu_only_locked flag
-// 6. If flag set and CPU path attempted: ABORT with error
-//
-// COMPILE-TIME CONFIGURATION:
-// For GPU-exclusive decode builds, define:
-//   -DLLAMA_KV_HYBRID_EXCLUDED
-// This excludes hybrid memory allocation paths entirely.
-//
-// ============================================================================
-
 #include "llama-kv-cache.h"
 
 #include "llama-impl.h"
@@ -240,27 +214,6 @@ llama_kv_cache::llama_kv_cache(
 }
 
 void llama_kv_cache::clear(bool data) {
-    // ====================================================================
-    // KV CACHE LAYOUT IMMUTABILITY ENFORCEMENT
-    // ====================================================================
-    // During decode phase, KV cache layout must remain FROZEN.
-    // No sequence mutations, resizing, or repartitioning permitted.
-    // If KV layout is frozen, this operation is forbidden.
-    // ====================================================================
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY ENFORCEMENT
-    // ====================================================================
-    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
-    // If GPU-only mode is locked: no CPU KV path access permitted
-    if (kv_gpu_only_locked) {
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
-        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
-        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
-        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
-    }
-
     for (uint32_t s = 0; s < n_stream; ++s) {
         v_cells[s].reset();
         v_heads[s] = 0;
@@ -274,29 +227,6 @@ void llama_kv_cache::clear(bool data) {
 }
 
 bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
-    // ====================================================================
-    // KV CACHE LAYOUT IMMUTABILITY ENFORCEMENT
-    // ====================================================================
-    // During decode phase, KV cache layout must remain FROZEN.
-    // No sequence mutations, resizing, or repartitioning permitted.
-    // If KV layout is frozen, this operation is forbidden.
-    // ====================================================================
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY ENFORCEMENT
-    // ====================================================================
-    // If KV is locked to GPU-only (during decode), ensure hybrid modes
-    // are not accessed. CPU KV paths are forbidden when GPU-only is locked.
-    // ====================================================================
-    if (kv_gpu_only_locked) {
-        // FIX: Section 11.3 - During GPU-only decode: additional hybrid mode check
-        // All KV operations must be GPU-native (no CPU paths)
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but hybrid KV operation attempted (Section 11.3 violation)\n", __func__);
-        LLAMA_LOG_ERROR("%s: No CPU KV paths are permitted during decode\n", __func__);
-        GGML_ABORT("Hybrid KV operation during GPU-exclusive decode - architecture violation");
-    }
-
     GGML_ASSERT(seq_id == -1 || (seq_id >= 0 && (size_t) seq_id < seq_to_stream.size()));
 
     if (p0 < 0) {
@@ -360,25 +290,6 @@ bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
 }
 
 void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
-    // ====================================================================
-    // KV CACHE LAYOUT IMMUTABILITY ENFORCEMENT
-    // ====================================================================
-    // KV layout must remain frozen during decode.
-    // ====================================================================
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY ENFORCEMENT
-    // ====================================================================
-    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
-    // If GPU-only mode is locked: no CPU KV path access permitted
-    if (kv_gpu_only_locked) {
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
-        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
-        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
-        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
-    }
-
     GGML_ASSERT(seq_id_src >= 0 && (size_t) seq_id_src < seq_to_stream.size());
     GGML_ASSERT(seq_id_dst >= 0 && (size_t) seq_id_dst < seq_to_stream.size());
 
@@ -466,14 +377,6 @@ void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, ll
 }
 
 void llama_kv_cache::seq_keep(llama_seq_id seq_id) {
-    // KV layout must remain frozen during decode
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // GPU-only KV residency enforcement
-    if (kv_gpu_only_locked) {
-        GGML_ASSERT(!kv_gpu_only_locked && "GPU-only KV mode active: hybrid CPU KV paths forbidden");
-    }
-
     GGML_ASSERT(seq_id >= 0 && (size_t) seq_id < seq_to_stream.size());
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
@@ -498,27 +401,6 @@ void llama_kv_cache::seq_keep(llama_seq_id seq_id) {
 void llama_kv_cache::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos shift) {
     GGML_ASSERT(seq_id >= 0 && (size_t) seq_id < seq_to_stream.size());
     GGML_ASSERT(hparams.n_pos_per_embd() == 1 && "seq_add() is only supported for n_pos_per_embd() == 1");
-
-    // ====================================================================
-    // KV CACHE LAYOUT IMMUTABILITY ENFORCEMENT
-    // ====================================================================
-    // During decode phase, KV cache layout must remain FROZEN.
-    // No sequence mutations, resizing, or repartitioning permitted.
-    // If KV layout is frozen, this operation is forbidden.
-    // ====================================================================
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY ENFORCEMENT
-    // ====================================================================
-    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
-    // If GPU-only mode is locked: no CPU KV path access permitted
-    if (kv_gpu_only_locked) {
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
-        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
-        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
-        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
-    }
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
     auto & head  = v_heads[seq_to_stream[seq_id]];
@@ -564,27 +446,6 @@ void llama_kv_cache::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, ll
 void llama_kv_cache::seq_div(llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
     GGML_ASSERT(seq_id >= 0 && (size_t) seq_id < seq_to_stream.size());
     GGML_ASSERT(hparams.n_pos_per_embd() == 1 && "seq_div() is only supported for n_pos_per_embd() == 1");
-
-    // ====================================================================
-    // KV CACHE LAYOUT IMMUTABILITY ENFORCEMENT
-    // ====================================================================
-    // During decode phase, KV cache layout must remain FROZEN.
-    // No sequence mutations, resizing, or repartitioning permitted.
-    // If KV layout is frozen, this operation is forbidden.
-    // ====================================================================
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY ENFORCEMENT
-    // ====================================================================
-    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
-    // If GPU-only mode is locked: no CPU KV path access permitted
-    if (kv_gpu_only_locked) {
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
-        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
-        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
-        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
-    }
 
     auto & cells = v_cells[seq_to_stream[seq_id]];
 
@@ -647,100 +508,6 @@ std::map<ggml_backend_buffer_type_t, size_t> llama_kv_cache::memory_breakdown() 
     }
 
     return ret;
-}
-
-// ============================================================================
-// KV Cache Layout Freezing for Decode Phase
-// ============================================================================
-
-int llama_kv_cache::freeze_kv_layout() {
-    if (kv_layout_frozen) {
-        return -1;  // Already frozen
-    }
-    kv_layout_frozen = true;
-    LLAMA_LOG_DEBUG("%s: KV cache layout FROZEN for decode phase\n", __func__);
-    return 0;
-}
-
-int llama_kv_cache::unfreeze_kv_layout() {
-    if (!kv_layout_frozen) {
-        return -1;  // Not frozen
-    }
-    kv_layout_frozen = false;
-    LLAMA_LOG_DEBUG("%s: KV cache layout UNFROZEN (returning to encode phase)\n", __func__);
-    return 0;
-}
-
-int llama_kv_cache::is_kv_layout_frozen() const {
-    return kv_layout_frozen ? 1 : 0;
-}
-
-// ============================================================================
-// GPU-Only KV Residency Enforcement for Decode Phase
-// ============================================================================
-
-int llama_kv_cache::enforce_gpu_only_kv() {
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY INVARIANT ENFORCEMENT
-    // ====================================================================
-    // Hybrid KV cache modes (CPU+GPU split) are completely forbidden
-    // during decode. KV cache MUST be GPU-only.
-    //
-    // This function locks KV cache to GPU-only residency.
-    // If hybrid KV mode is detected, decode cannot proceed.
-    //
-    // Rules:
-    //  1. All KV must be allocated in GPU memory
-    //  2. No CPU-side KV buffers permitted
-    //  3. No per-layer backend branching
-    //  4. No hybrid mode fallback under memory pressure
-    //  5. If conditions violated: ABORT (return -1)
-    // ====================================================================
-    
-    if (kv_gpu_only_locked) {
-        return -2;  // Already locked to GPU-only
-    }
-    
-    // Validate that ALL KV layers are on GPU (not CPU, not hybrid)
-    if (!is_offloaded()) {
-        fprintf(stderr,
-                "GPU-ONLY KV RESIDENCY VIOLATION:\n"
-                "  KV cache contains host-resident (CPU) buffers\n"
-                "  Hybrid KV modes forbidden during decode\n"
-                "  GPU-exclusive execution required\n"
-                "  Cannot enforce GPU-only KV: parts of the cache are on CPU\n");
-        return -1;  // FAILED: KV is not fully offloaded, cannot lock to GPU-only
-    }
-    
-    // All validations passed: lock to GPU-only
-    kv_gpu_only_locked = true;
-    LLAMA_LOG_INFO("%s: KV cache locked to GPU-ONLY residency for decode phase\n", __func__);
-    LLAMA_LOG_INFO("%s: Hybrid KV modes are FORBIDDEN\n", __func__);
-    LLAMA_LOG_INFO("%s: CPU KV access is PROHIBITED\n", __func__);
-    
-    return 0;  // SUCCESS: GPU-only KV enforced
-}
-
-int llama_kv_cache::unlock_gpu_only_kv() {
-    // ====================================================================
-    // UNLOCK GPU-ONLY KV RESIDENCY
-    // ====================================================================
-    // Allows CPU KV access again (for non-decode phases)
-    // Only valid when returning to prefill, encoding, or model loading.
-    // ====================================================================
-    
-    if (!kv_gpu_only_locked) {
-        return -1;  // Not locked
-    }
-    
-    kv_gpu_only_locked = false;
-    LLAMA_LOG_DEBUG("%s: KV cache UNLOCKED from GPU-only (returning to hybrid-capable phase)\n", __func__);
-    
-    return 0;
-}
-
-int llama_kv_cache::is_gpu_only_kv_locked() const {
-    return kv_gpu_only_locked ? 1 : 0;
 }
 
 llama_memory_context_ptr llama_kv_cache::init_batch(
@@ -859,27 +626,6 @@ llama_kv_cache::slot_info_vec_t llama_kv_cache::prepare(const std::vector<llama_
 }
 
 bool llama_kv_cache::update(llama_context * lctx, bool do_shift, const stream_copy_info & sc_info) {
-    // ====================================================================
-    // KV CACHE LAYOUT IMMUTABILITY ENFORCEMENT
-    // ====================================================================
-    // During decode phase, KV cache layout must remain FROZEN.
-    // No sequence mutations, resizing, or repartitioning permitted.
-    // If KV layout is frozen, this operation is forbidden.
-    // ====================================================================
-    GGML_ASSERT(!kv_layout_frozen && "KV layout mutation forbidden during frozen decode phase");
-
-    // ====================================================================
-    // GPU-ONLY KV RESIDENCY ENFORCEMENT
-    // ====================================================================
-    // FIX: Section 11.3 - ENFORCE GPU-ONLY KV DURING DECODE
-    // If GPU-only mode is locked: no CPU KV path access permitted
-    if (kv_gpu_only_locked) {
-        LLAMA_LOG_ERROR("%s: FATAL - GPU-only KV mode active but CPU KV path invoked (Section 11.3 violation)\n", __func__);
-        LLAMA_LOG_ERROR("%s: Hybrid KV cache modes are FORBIDDEN during decode\n", __func__);
-        LLAMA_LOG_ERROR("%s: All KV operations must remain GPU-resident\n", __func__);
-        GGML_ABORT("CPU KV path access during GPU-exclusive decode - architecture violation");
-    }
-
     bool updated = false;
 
     auto * sched = lctx->get_sched();
@@ -1222,23 +968,17 @@ void llama_kv_cache::apply_ubatch(const slot_info & sinfo, const llama_ubatch & 
     // move the head at the end of the slot
     for (uint32_t s = 0; s < sinfo.n_stream(); ++s) {
         auto & head = v_heads[sinfo.strm[s]];
+
         head = sinfo.idxs[s].back() + 1;
     }
-}
-
-
-bool llama_kv_cache::is_offloaded() const {
-    for (const auto & [ctx, buf] : ctxs_bufs) {
-        if (ggml_backend_buffer_is_host(buf.get())) {
-            return false;
-        }
-    }
-    return true;
 }
 
 bool llama_kv_cache::get_can_shift() const {
     // Step35 uses per-layer RoPE dims; K-shift assumes a single global n_rot.
     if (model.arch == LLM_ARCH_STEP35) {
+        return false;
+    }
+    if (hparams.n_pos_per_embd() > 1) {
         return false;
     }
     return true;
@@ -1451,14 +1191,6 @@ ggml_tensor * llama_kv_cache::build_input_v_idxs(ggml_context * ctx, const llama
 
 void llama_kv_cache::set_input_k_idxs(ggml_tensor * dst, const llama_ubatch * ubatch, const slot_info & sinfo) const {
     const uint32_t n_tokens = ubatch->n_tokens;
-    if (sinfo.idxs.size() != sinfo.strm.size()) {
-        fprintf(stderr, "\n[FATAL DEBUG] idxs.size() = %zu != strm.size() = %zu\n", sinfo.idxs.size(), sinfo.strm.size());
-        fflush(stderr);
-    }
-    if (n_tokens != (int64_t) sinfo.size()*sinfo.n_stream()) {
-        fprintf(stderr, "\n[DEBUG] set_input_k_idxs mismatch: n_tokens=%u, sinfo.size()=%zu, sinfo.n_stream()=%zu, sinfo.idxs.size()=%zu, sinfo.strm.size()=%zu\n",
-            n_tokens, sinfo.size(), sinfo.n_stream(), sinfo.idxs.size(), sinfo.strm.size());
-    }
     GGML_ASSERT(n_tokens == (int64_t) sinfo.size()*sinfo.n_stream());
 
     GGML_ASSERT(ggml_backend_buffer_is_host(dst->buffer));
@@ -2494,24 +2226,12 @@ uint32_t llama_kv_cache_context::get_n_kv() const {
     return n_kv;
 }
 
-uint32_t llama_kv_cache_context::get_kv_size() const {
-    return kv->get_size();
-}
-
 ggml_tensor * llama_kv_cache_context::get_k(ggml_context * ctx, int32_t il) const {
     return kv->get_k(ctx, il, n_kv, sinfos[i_cur]);
 }
 
 ggml_tensor * llama_kv_cache_context::get_v(ggml_context * ctx, int32_t il) const {
     return kv->get_v(ctx, il, n_kv, sinfos[i_cur]);
-}
-
-ggml_tensor * llama_kv_cache_context::get_k_fixed(ggml_context * ctx, int32_t il, uint32_t n_kv_view) const {
-    return kv->get_k(ctx, il, n_kv_view, sinfos[i_cur]);
-}
-
-ggml_tensor * llama_kv_cache_context::get_v_fixed(ggml_context * ctx, int32_t il, uint32_t n_kv_view) const {
-    return kv->get_v(ctx, il, n_kv_view, sinfos[i_cur]);
 }
 
 ggml_tensor * llama_kv_cache_context::cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggml_tensor * k_idxs, int32_t il) const {

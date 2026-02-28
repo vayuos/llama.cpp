@@ -15,84 +15,6 @@ add_library(llama
             llama-chat.cpp
             llama-context.cpp
             llama-cparams.cpp
-            llama-decode-admission-control.cpp
-            llama-decode-cpu-hard-failure.cpp
-            llama-decode-invariant-enforce.cpp
-            llama-core-isolation-enforce.cpp
-            llama-decode-engine.cpp
-            llama-expert-cache.cpp
-            llama-task-taxonomy.cpp
-            llama-token-dependency-assert.cpp
-            llama-backend-immutability-enforce.cpp
-            llama-cuda-support-enforce.cpp
-            llama-decode-backend-lock.cpp
-            llama-graph-freeze-enforce.cpp
-            llama-decode-rebuild-prohibition.cpp
-            llama-graph-backend-cache.cpp
-            llama-graph-schedule-elimination.cpp
-            llama-token-persistent-execution.cpp
-            llama-decode-loop-elimination.cpp
-            llama-token-step-gating-elimination.cpp
-            llama-sampling-elimination.cpp
-            llama-kvcache-elimination.cpp
-            llama-tensor-metadata-elimination.cpp
-            llama-greedy-sampling-gpu.cpp
-            llama-penalty-gpu.cpp
-            llama-topk-gpu.cpp
-            llama-topp-gpu.cpp
-            llama-logits-gpu.cpp
-            llama-token-selection-authority.cpp
-            llama-kvcache-position-gpu.cpp
-            llama-context-position-gpu.cpp
-            llama-kv-metadata-gpu.cpp
-            llama-kv-layout-freeze.cpp
-            llama-transfer-prohibition-gpu.cpp
-            llama-token-buffer-gpu.cpp
-            llama-attention-state-gpu.cpp
-            llama-kv-slice-operations-gpu.cpp
-            llama-hybrid-kv-elimination.cpp
-            llama-decode-sync-elimination.cpp
-            llama-stream-ordering-enforce.cpp
-            llama-tensor-allocation-gpu.cpp
-            llama-tensor-metadata-gpu.cpp
-            llama-rnorm-matmul-fusion.cpp
-            llama-bias-activation-fusion.cpp
-            llama-mmq-enforcement.cpp
-            llama-decode-boundary-enforce.cpp
-            llama-kernel-fusion-enforce.cpp
-            llama-threading-discipline.cpp
-            llama-topology-freeze.cpp
-            llama-oversubscription-control.cpp
-            llama-decode-path-isolation.cpp
-            llama-server-decode-isolation.cpp
-            llama-json-isolation.cpp
-            llama-streaming-async.cpp
-            llama-decode-mutex-elimination.cpp
-            llama-decode-logging-disable.cpp
-            llama-config-freeze.cpp
-            llama-feature-freeze.cpp
-            llama-decode-probing-removal.cpp
-            llama-decode-composite.cpp
-            llama-backend-disable.cpp
-            llama-debug-stripping.cpp
-            llama-mmq-backend-enforcement.cpp
-            llama-cublas-fallback-prevention.cpp
-            llama-quantization-format-freeze.cpp
-            llama-cpu-dequantization-elimination.cpp
-            llama-fused-kernel-coverage.cpp
-            llama-decode-allocation-freeze.cpp
-            llama-decode-buffer-freeze.cpp
-            llama-gpu-allocation-alignment.cpp
-            llama-host-access-prevention.cpp
-            llama-gpu-memory-fragmentation-monitor.cpp
-            llama-decode-cpu-execution-detector.cpp
-            llama-backend-audit-log.cpp
-            llama-gpu-utilization-probe.cpp
-            llama-pcie-traffic-watchdog.cpp
-            llama-decode-stability-harness.cpp
-            llama-decode-acceptance-criteria.cpp
-            llama-graph-backend-binding.cpp
-            llama-fallback-elimination.cpp
             llama-grammar.cpp
             llama-graph.cpp
             llama-hparams.cpp
@@ -135,13 +57,15 @@ add_library(llama
             models/deci.cpp
             models/deepseek.cpp
             models/deepseek2.cpp
+            models/delta-net-base.cpp
             models/dots1.cpp
             models/dream.cpp
             models/ernie4-5-moe.cpp
             models/ernie4-5.cpp
+            models/eurobert.cpp
+            models/exaone-moe.cpp
             models/exaone.cpp
             models/exaone4.cpp
-            models/exaone-moe.cpp
             models/falcon-h1.cpp
             models/falcon.cpp
             models/gemma-embedding.cpp
@@ -161,6 +85,7 @@ add_library(llama
             models/hunyuan-moe.cpp
             models/internlm2.cpp
             models/jais.cpp
+            models/jais2.cpp
             models/jamba.cpp
             models/kimi-linear.cpp
             models/lfm2.cpp
@@ -169,10 +94,12 @@ add_library(llama
             models/llama-iswa.cpp
             models/llama.cpp
             models/maincoder.cpp
+            models/mamba-base.cpp
             models/mamba.cpp
             models/mimo2-iswa.cpp
             models/minicpm3.cpp
             models/minimax-m2.cpp
+            models/mistral3.cpp
             models/modern-bert.cpp
             models/mpt.cpp
             models/nemotron-h.cpp
@@ -184,6 +111,7 @@ add_library(llama
             models/openai-moe-iswa.cpp
             models/openelm.cpp
             models/orion.cpp
+            models/paddleocr.cpp
             models/pangu-embedded.cpp
             models/phi2.cpp
             models/phi3.cpp
@@ -196,10 +124,12 @@ add_library(llama
             models/qwen2moe.cpp
             models/qwen2vl.cpp
             models/qwen3.cpp
-            models/qwen3vl.cpp
-            models/qwen3vl-moe.cpp
+            models/qwen35.cpp
+            models/qwen35moe.cpp
             models/qwen3moe.cpp
             models/qwen3next.cpp
+            models/qwen3vl-moe.cpp
+            models/qwen3vl.cpp
             models/refact.cpp
             models/rnd1.cpp
             models/rwkv6-base.cpp
@@ -218,8 +148,6 @@ add_library(llama
             models/t5-enc.cpp
             models/wavtokenizer-dec.cpp
             models/xverse.cpp
-            models/mistral3.cpp
-            models/graph-context-mamba.cpp
             )
 
 set_target_properties(llama PROPERTIES
@@ -233,7 +161,6 @@ target_include_directories(llama PUBLIC ../include)
 target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
 target_link_libraries(llama PUBLIC ggml)
-target_link_libraries(llama PRIVATE common)
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)

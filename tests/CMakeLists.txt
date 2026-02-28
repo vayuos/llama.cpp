@@ -1,7 +1,6 @@
 llama_add_compile_flags()
 
 function(llama_build source)
-    find_package(CUDAToolkit)
     set(TEST_SOURCES ${source} ${ARGN})
 
     if (DEFINED LLAMA_TEST_NAME)
@@ -153,7 +152,7 @@ if (NOT WIN32 OR NOT BUILD_SHARED_LIBS)
     llama_build_and_test(test-grammar-parser.cpp)
     llama_build_and_test(test-grammar-integration.cpp)
     llama_build_and_test(test-llama-grammar.cpp)
-    llama_build_and_test(test-chat.cpp)
+    llama_build_and_test(test-chat.cpp WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
     # TODO: disabled on loongarch64 because the ggml-ci node lacks Python 3.8
     if (NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
         llama_build_and_test(test-json-schema-to-grammar.cpp   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -240,9 +239,6 @@ llama_build_and_test(test-model-load-cancel.cpp LABEL "model")
 llama_build_and_test(test-autorelease.cpp       LABEL "model")
 llama_build_and_test(test-backend-sampler.cpp   LABEL "model")
 
-llama_build_and_test(test-gpu-sampling.cpp)
-target_link_libraries(test-gpu-sampling PRIVATE ggml-cuda CUDA::cudart)
-
 # Test for state restore with fragmented KV cache
 # Requires a model, uses same args pattern as test-thread-safety
 llama_build_and_test(test-state-restore-fragmented.cpp LABEL "model" ARGS -m "${MODEL_DEST}")
@@ -265,18 +261,6 @@ target_link_libraries(${LLAMA_TEST_NAME} PRIVATE mtmd)
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
 add_executable(${TEST_TARGET} test-c.c)
 target_link_libraries(${TEST_TARGET} PRIVATE llama)
-
-# CI Regression Test: CPU Must Not Gate Decode (Section 73)
-llama_build_and_test(decode_cpu_gating_test.cpp LABEL "ci")
-
-# CI Regression Test: No CPU Backend Ops in Decode (Section 74)
-llama_build_and_test(decode_cpu_backend_test.cpp LABEL "ci")
-
-# CI Regression Test: Deterministic Output Preserved (Section 75)
-llama_build_and_test(decode_determinism_test.cpp LABEL "ci")
-
-# CI Regression Test: GPU Utilization Does Not Dip Per Token (Section 76)
-llama_build_and_test(decode_gpu_continuity_test.cpp LABEL "ci")
 
 llama_build_and_test(test-alloc.cpp)
 target_include_directories(test-alloc PRIVATE ${PROJECT_SOURCE_DIR}/ggml/src)

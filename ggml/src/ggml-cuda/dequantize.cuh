@@ -75,26 +75,3 @@ static __device__ __forceinline__ void dequantize_q8_0(const void * vx, const in
     v.x *= d;
     v.y *= d;
 }
- 
- static __device__ __forceinline__ void dequantize_f8_e5m2(const void * vx, const int64_t ib, const int iqs, float2 & v){
-     const block_f8_e5m2 * x = (const block_f8_e5m2 *) vx;
- 
-     auto f8_to_fp32 = [] (uint8_t x) -> float {
-         uint32_t s = (x & 0x80) << 24;
-         uint32_t e = (x & 0x7C) >> 2;
-         uint32_t m = (x & 0x03) << 21;
- 
-         if (e == 0) {
-             if (m == 0) return __int_as_float(s);
-             e = 1;
-             while (!(m & 0x00400000)) { m <<= 1; e--; }
-             m &= 0x003FFFFF;
-         } else if (e == 31) {
-             return __int_as_float(s | 0x7F800000 | (m != 0 ? 0x00400000 : 0));
-         }
-         return __int_as_float(s | ((e + 112) << 23) | m);
-     };
- 
-     v.x = f8_to_fp32(x[ib].qs[iqs + 0]);
-     v.y = f8_to_fp32(x[ib].qs[iqs + 1]);
- }

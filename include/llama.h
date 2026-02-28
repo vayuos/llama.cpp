@@ -1,9 +1,6 @@
 #ifndef LLAMA_H
 #define LLAMA_H
 
-#ifdef __cplusplus
-#include <vector>
-#endif
 #include "ggml.h"
 #include "ggml-cpu.h"
 #include "ggml-backend.h"
@@ -157,12 +154,6 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_MXFP4_MOE     = 38, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
-    };
- 
-    enum llama_kv_precision {
-        LLAMA_KV_PRECISION_FP16 = 0,
-        LLAMA_KV_PRECISION_FP8  = 1,
-        LLAMA_KV_PRECISION_Q8   = 2,
     };
 
     enum llama_rope_scaling_type {
@@ -361,8 +352,6 @@ extern "C" {
 
         enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
         enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
- 
-        enum llama_kv_precision kv_precision; // KV cache precision
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
@@ -400,6 +389,7 @@ extern "C" {
         bool only_copy;                       // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                            // quantize all tensors to the default type
         bool keep_split;                      // quantize to the same number of shards
+        bool dry_run;                         // calculate and show the final quantization size without performing quantization
         void * imatrix;                       // pointer to importance matrix data
         void * kv_overrides;                  // pointer to vector containing overrides
         void * tensor_types;                  // pointer to vector containing tensor types
@@ -493,7 +483,7 @@ extern "C" {
     enum llama_params_fit_status {
         LLAMA_PARAMS_FIT_STATUS_SUCCESS = 0, // found allocations that are projected to fit
         LLAMA_PARAMS_FIT_STATUS_FAILURE = 1, // could not find allocations that are projected to fit
-        LLAMA_PARAMS_FIT_STATUS_ERROR   = 2, // a hard error occured, e.g. because no model could be found at the specified path
+        LLAMA_PARAMS_FIT_STATUS_ERROR   = 2, // a hard error occurred, e.g. because no model could be found at the specified path
     };
 
     // fits mparams and cparams to free device memory (assumes system memory is unlimited)
@@ -667,21 +657,12 @@ extern "C" {
 
     // The following functions operate on a llama_context, hence the naming: llama_verb_...
 
-    // Add a loaded LoRA adapter to given context
-    // This will not modify model's weight
-    LLAMA_API int32_t llama_set_adapter_lora(
+    // Set LoRa adapters on the context. Will only modify if the adapters currently in context are different.
+    LLAMA_API int32_t llama_set_adapters_lora(
             struct llama_context * ctx,
-            struct llama_adapter_lora * adapter,
-            float scale);
-
-    // Remove a specific LoRA adapter from given context
-    // Return -1 if the adapter is not present in the context
-    LLAMA_API int32_t llama_rm_adapter_lora(
-            struct llama_context * ctx,
-            struct llama_adapter_lora * adapter);
-
-    // Remove all LoRA adapters from given context
-    LLAMA_API void llama_clear_adapter_lora(struct llama_context * ctx);
+            struct llama_adapter_lora ** adapters,
+            size_t n_adapters,
+            float * scales);
 
     // Apply a loaded control vector to a llama_context, or if data is NULL, clear
     // the currently loaded vector.
@@ -689,7 +670,7 @@ extern "C" {
     // to an n_embd x n_layers buffer starting from layer 1.
     // il_start and il_end are the layer range the vector should apply to (both inclusive)
     // See llama_control_vector_load in common to load a control vector.
-    LLAMA_API int32_t llama_apply_adapter_cvec(
+    LLAMA_API int32_t llama_set_adapter_cvec(
             struct llama_context * ctx,
                      const float * data,
                           size_t   len,
@@ -951,14 +932,6 @@ extern "C" {
             struct llama_context * ctx,
               struct llama_batch   batch);
 
-    // [STRICT] Autonomous Decode: GPU-managed escape from CPU control.
-    // The CPU initiates the decode and then waits for the GPU to signal completion.
-    // Progression, sampling, and state updates occur entirely on the GPU.
-    LLAMA_API int32_t llama_decode_autonomous(
-            struct llama_context * ctx,
-              struct llama_batch   batch,
-                           int     n_predict);
-
     // Set the number of threads used for decoding
     // n_threads is the number of threads used for generation (single token)
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
@@ -1169,9 +1142,9 @@ extern "C" {
     //
 
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
-    /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
+    ///
     /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggml-org/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
-    /// @param tmpl A Jinja template to use for this chat. If this is nullptr, the model’s default chat template will be used instead.
+    /// @param tmpl A Jinja template to use for this chat.
     /// @param chat Pointer to a list of multiple llama_chat_message
     /// @param n_msg Number of llama_chat_message in this chat
     /// @param add_ass Whether to end the prompt with the token(s) that indicate the start of an assistant message.
@@ -1231,9 +1204,6 @@ extern "C" {
         struct ggml_tensor * probs;
         struct ggml_tensor * sampled;
         struct ggml_tensor * candidates;
-
-        // [STRICT] autonomous decode state
-        struct ggml_tensor * last_tokens;
     };
 
     // user code can implement the interface below in order to create custom llama_sampler
@@ -1406,13 +1376,6 @@ extern "C" {
                                float   penalty_repeat,   // 1.0 = disabled
                                float   penalty_freq,     // 0.0 = disabled
                                float   penalty_present); // 0.0 = disabled
-    
-    LLAMA_API int32_t llama_sampler_get_penalties_last_n(const struct llama_sampler * smpl);
-    LLAMA_API void    llama_sampler_get_penalties_prev(const struct llama_sampler * smpl, std::vector<llama_token> & prev);
-
-    LLAMA_API int32_t llama_sampler_get_top_k(const struct llama_sampler * smpl);
-    LLAMA_API float   llama_sampler_get_temp(const struct llama_sampler * smpl);
-    LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);
 
     ///  @details DRY sampler, designed by p-e-w, as described in: https://github.com/oobabooga/text-generation-webui/pull/5677, porting Koboldcpp implementation authored by pi6am: https://github.com/LostRuins/koboldcpp/pull/982
     LLAMA_API struct llama_sampler * llama_sampler_init_dry(

@@ -2,8 +2,6 @@
 #include "mmq.cuh"
 #include "quantize.cuh"
 #include "mmid.cuh"
-#include <algorithm>
-#include <vector>
 
 static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, const mmq_args & args, cudaStream_t stream) {
     switch (args.type_x) {
@@ -71,7 +69,7 @@ static void ggml_cuda_mul_mat_q_switch_type(ggml_backend_cuda_context & ctx, con
 }
 
 void ggml_cuda_mul_mat_q(
-        ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * ids, ggml_tensor * dst, const ggml_cuda_mm_fusion_args_host * fusion) {
+        ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * ids, ggml_tensor * dst) {
     GGML_ASSERT(        src1->type == GGML_TYPE_F32);
     GGML_ASSERT(        dst->type  == GGML_TYPE_F32);
     GGML_ASSERT(!ids || ids->type  == GGML_TYPE_I32); // Optional, used for batched GGML_MUL_MAT_ID.
@@ -93,24 +91,6 @@ void ggml_cuda_mul_mat_q(
     const char  * src0_d = (const char  *) src0->data;
     const float * src1_d = (const float *) src1->data;
     float       *  dst_d = (float       *)  dst->data;
-
-    // DEBUG: check pointer validity for ids-path illegal memory access diagnosis
-    if (ids) {
-        // Check if src1->data and ids->data are valid CUDA device pointers
-        cudaPointerAttributes src1_attr, ids_attr;
-        cudaError_t src1_err = cudaPointerGetAttributes(&src1_attr, src1->data);
-        cudaError_t ids_err  = cudaPointerGetAttributes(&ids_attr,  ids->data);
-        // Clear any error from the pointer query (cuCtxResetError unavailable, use cudaGetLastError)
-        cudaGetLastError();
-        fprintf(stderr,
-            "DEBUG mmq ids-path: ne11=%lld ne12=%lld n_expert_used=%lld\n"
-            "  src1->data=%p cudaMemType=%d err=%d\n"
-            "  ids->data=%p  cudaMemType=%d err=%d\n",
-            (long long)ne11, (long long)ne12, (long long)ids->ne[0],
-            src1->data, (int)src1_attr.type, (int)src1_err,
-            ids->data,  (int)ids_attr.type,  (int)ids_err);
-        fflush(stderr);
-    }
 
     // If src0 is a temporary compute buffer, clear any potential padding.
     if (ggml_backend_buffer_get_usage(src0->buffer) == GGML_BACKEND_BUFFER_USAGE_COMPUTE) {
@@ -143,13 +123,6 @@ void ggml_cuda_mul_mat_q(
             get_mmq_x_max_host(cc)*sizeof(block_q8_1_mmq);
         ggml_cuda_pool_alloc<char> src1_q8_1(ctx.pool(), nbytes_src1_q8_1);
 
-        float rms_eps = 0.0f;
-        const float * rms_w = nullptr;
-        if (fusion) {
-            rms_eps = fusion->rms_eps;
-            rms_w = (const float *) (fusion->rms_w ? fusion->rms_w->data : nullptr);
-        }
-
         {
             const int64_t s11 = src1->nb[1] / ts_src1;
             const int64_t s12 = src1->nb[2] / ts_src1;
@@ -157,11 +130,11 @@ void ggml_cuda_mul_mat_q(
             if (use_native_mxfp4) {
                 static_assert(sizeof(block_fp4_mmq) == 4 * sizeof(block_q8_1));
                 quantize_mmq_mxfp4_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded,
-                                        ne11, ne12, ne13, rms_eps, rms_w, stream);
+                                        ne11, ne12, ne13, stream);
 
             } else {
                 quantize_mmq_q8_1_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded,
-                                       ne11, ne12, ne13, rms_eps, rms_w, stream);
+                                       ne11, ne12, ne13, stream);
             }
             CUDA_CHECK(cudaGetLastError());
         }
@@ -196,15 +169,6 @@ void ggml_cuda_mul_mat_q(
     ggml_cuda_pool_alloc<int32_t> ids_dst(ctx.pool(), ne_get_rows);
     ggml_cuda_pool_alloc<int32_t> expert_bounds(ctx.pool(), ne02 + 1);
 
-    if (ids->buffer) {
-        fprintf(stderr, "DEBUG ggml_cuda_mul_mat_q: ids->buffer usage=%d, is_host=%d\n",
-               ggml_backend_buffer_get_usage(ids->buffer),
-               ggml_backend_buffer_is_host(ids->buffer));
-    } else {
-        fprintf(stderr, "DEBUG ggml_cuda_mul_mat_q: ids->buffer is NULL\n");
-    }
-    fflush(stderr);
-
     {
         GGML_ASSERT(ids->nb[0] == ggml_element_size(ids));
         const int si1  = ids->nb[1] / ggml_element_size(ids);
@@ -213,39 +177,6 @@ void ggml_cuda_mul_mat_q(
         ggml_cuda_launch_mm_ids_helper((const int32_t *) ids->data, ids_src1.get(), ids_dst.get(), expert_bounds.get(),
             ne02, ne12, n_expert_used, ne11, si1, sis1, stream);
         CUDA_CHECK(cudaGetLastError());
-
-        // DEBUG: dump full expert_bounds to find nex_prev collisions/gaps
-        {
-            std::vector<int32_t> h_bounds(ne02 + 1);
-            CUDA_CHECK(cudaMemcpy(h_bounds.data(), expert_bounds.get(), (ne02 + 1) * sizeof(int32_t), cudaMemcpyDeviceToHost));
-            int fill_count = h_bounds[ne02];
-            fprintf(stderr, "expert_bounds total=%d (expected %lld)\n", fill_count, (long long)ne_get_rows);
-            // Print only non-trivial experts (where bounds differ from previous)
-            int prev = 0;
-            for (int e = 0; e <= (int)ne02; e++) {
-                if (h_bounds[e] != prev) {
-                    fprintf(stderr, "  expert_bounds[%d]=%d (delta=%d)\n", e, h_bounds[e], h_bounds[e]-prev);
-                    prev = h_bounds[e];
-                }
-            }
-            // FIX: Only verify valid positions filled by mm_ids_helper (first fill_count positions)
-            // Remaining positions in ids_src1 contain uninitialized memory with INT_MAX values
-            const int64_t dbg_s11 = nb11 / ts_src1;
-            const int64_t dbg_limit = (int64_t)(src1->nb[3] / ts_src1) * ne13;
-            std::vector<int32_t> h_ids_all(fill_count);
-            CUDA_CHECK(cudaMemcpy(h_ids_all.data(), ids_src1.get(), fill_count * sizeof(int32_t), cudaMemcpyDeviceToHost));
-            int n_oob = 0;
-            for (int i = 0; i < fill_count; i++) {
-                int64_t max_access = (int64_t)h_ids_all[i] * dbg_s11 + ne10 - 1;
-                if (max_access >= dbg_limit) {
-                    fprintf(stderr, "  OOB: ids_src1[%d]=%d  max_access=%lld >= limit=%lld  s11=%lld\n",
-                        i, h_ids_all[i], (long long)max_access, (long long)dbg_limit, (long long)dbg_s11);
-                    if (++n_oob >= 8) { fprintf(stderr, "  ...(more OOB)\n"); break; }
-                }
-            }
-            if (n_oob == 0) fprintf(stderr, "  All ids_src1 in bounds.\n");
-            fflush(stderr);
-        }
     }
 
     const size_t nbytes_src1_q8_1 = ne12*n_expert_used*ne10_padded * sizeof(block_q8_1)/QK8_1 +
@@ -257,56 +188,16 @@ void ggml_cuda_mul_mat_q(
     const int64_t ne13_flat = 1;
 
     {
-        float rms_eps = 0.0f;
-        const float * rms_w = nullptr;
-        if (fusion) {
-            rms_eps = fusion->rms_eps;
-            rms_w = (const float *) (fusion->rms_w ? fusion->rms_w->data : nullptr);
-        }
-
         const int64_t s11 = src1->nb[1] / ts_src1;
         const int64_t s12 = src1->nb[2] / ts_src1;
         const int64_t s13 = src1->nb[3] / ts_src1;
 
-        // DEBUG: print strides and valid ids_src1 values to find OOB source
-        // FIX: Only read valid positions, not uninitialized memory positions
-        {
-            std::vector<int32_t> h_bounds_for_count(ne02 + 1);
-            CUDA_CHECK(cudaMemcpy(h_bounds_for_count.data(), expert_bounds.get(), (ne02 + 1) * sizeof(int32_t), cudaMemcpyDeviceToHost));
-            int fill_count = h_bounds_for_count[ne02];
-
-            std::vector<int32_t> h_ids(fill_count);
-            CUDA_CHECK(cudaMemcpy(h_ids.data(), ids_src1.get(), fill_count * sizeof(int32_t), cudaMemcpyDeviceToHost));
-            int32_t max_id = fill_count > 0 ? *std::max_element(h_ids.begin(), h_ids.end()) : -1;
-            int64_t src1_total_floats = (int64_t)src1->nb[3] / 4 * src1->ne[3]; // total float elements
-            if (src1->ne[3] == 1) src1_total_floats = (int64_t)src1->nb[2] / 4 * src1->ne[2];
-            fprintf(stderr,
-                "DEBUG quantize pre: ne11=%lld ne12=%lld ne10=%lld ne10_pad=%lld\n"
-                "  s11=%lld s12=%lld s13=%lld ne11_flat=%lld\n"
-                "  src1 nb[0..3]=%zu %zu %zu %zu  ne[0..3]=%lld %lld %lld %lld\n"
-                "  src1->data=%p alignment=%d\n"
-                "  max_ids_src1=%d  max_access=(max_id*s11+ne10-1)=%lld  src1_total_floats=%lld  OOB=%s\n",
-                (long long)ne11, (long long)ne12, (long long)ne10, (long long)ne10_padded,
-                (long long)s11, (long long)s12, (long long)s13, (long long)ne11_flat,
-                (size_t)src1->nb[0], (size_t)src1->nb[1], (size_t)src1->nb[2], (size_t)src1->nb[3],
-                (long long)src1->ne[0], (long long)src1->ne[1], (long long)src1->ne[2], (long long)src1->ne[3],
-                src1->data, (int)((uintptr_t)src1->data % 16),
-                max_id, (long long)(max_id >= 0 ? max_id * s11 + ne10 - 1 : -1), (long long)src1_total_floats,
-                (max_id >= 0 && (long long)max_id * s11 + ne10 - 1 >= src1_total_floats) ? "YES!" : "no");
-            fprintf(stderr, "  ids_src1[0..%d] (valid positions only):", fill_count);
-            for (int i = 0; i < fill_count; i++) {
-                fprintf(stderr, " %d", h_ids[i]);
-            }
-            fprintf(stderr, "\n");
-            fflush(stderr);
-        }
-
         if (use_native_mxfp4) {
             quantize_mmq_mxfp4_cuda(src1_d, ids_src1.get(), src1_q8_1.get(), src0->type, ne10, s11, s12, s13,
-                                    ne10_padded, ne11_flat, ne12_flat, ne13_flat, rms_eps, rms_w, stream);
+                                    ne10_padded, ne11_flat, ne12_flat, ne13_flat, stream);
         } else {
             quantize_mmq_q8_1_cuda(src1_d, ids_src1.get(), src1_q8_1.get(), src0->type, ne10, s11, s12, s13,
-                                   ne10_padded, ne11_flat, ne12_flat, ne13_flat, rms_eps, rms_w, stream);
+                                   ne10_padded, ne11_flat, ne12_flat, ne13_flat, stream);
         }
         CUDA_CHECK(cudaGetLastError());
     }
@@ -330,9 +221,7 @@ void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
-    const int64_t src1_padded_row_size, const ggml_cuda_mm_fusion_args_host * fusion, cudaStream_t stream) {
-
-    GGML_UNUSED(fusion);
+    const int64_t src1_padded_row_size, cudaStream_t stream) {
 
     const int64_t ne00 = src0->ne[0];
 
