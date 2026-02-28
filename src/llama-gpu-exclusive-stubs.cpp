@@ -16,6 +16,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
 
 // ============================================================================
 // MEMORY RESIDENCY VERIFICATION STUBS
