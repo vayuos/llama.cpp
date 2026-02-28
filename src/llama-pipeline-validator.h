@@ -75,5 +75,3 @@ bool llama_pipeline_validation_passed(
 #ifdef __cplusplus
 }
 #endif
-
-#endif // LLAMA_PIPELINE_VALIDATOR_H
