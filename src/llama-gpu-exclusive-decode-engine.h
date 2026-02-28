@@ -15,6 +15,18 @@
 #include "llama.h"
 #include <cstdint>
 
+// Use LLAMA_API macro for proper symbol export on all platforms
+// (Windows DLL, Linux ELF visibility, macOS, etc.)
+#ifndef LLAMA_API
+#    if defined(_WIN32) && !defined(__MINGW32__)
+#        define LLAMA_API __declspec(dllexport)
+#    elif defined(__MINGW32__)
+#        define LLAMA_API __declspec(dllexport)
+#    else
+#        define LLAMA_API __attribute__ ((visibility ("default")))
+#    endif
+#endif
+
 // Forward declaration for async pipelining scheduler
 struct llama_stream_scheduler;
 
@@ -34,7 +46,7 @@ extern "C" {
  * @param rng_seed Random seed for GPU RNG
  * @return 0 on success, -1 on error
  */
-int llama_gpu_exclusive_engine_init(
+LLAMA_API int llama_gpu_exclusive_engine_init(
     const llama_context * ctx,
     uint32_t rng_seed);
 
@@ -46,25 +58,25 @@ int llama_gpu_exclusive_engine_init(
  * @param max_tokens Maximum tokens to generate
  * @return 0 on success, -1 on error
  */
-int llama_gpu_exclusive_engine_prepare_decode(
+LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
     const llama_context * ctx,
     int max_tokens);
 
 /**
  * Start decode session (transition to decoding state).
  */
-int llama_gpu_exclusive_engine_start_decode();
+LLAMA_API int llama_gpu_exclusive_engine_start_decode();
 
 /**
  * Stop decode session.
  */
-int llama_gpu_exclusive_engine_stop_decode();
+LLAMA_API int llama_gpu_exclusive_engine_stop_decode();
 
 /**
  * Cleanup engine and free all resources.
  * Called at shutdown.
  */
-void llama_gpu_exclusive_engine_cleanup();
+LLAMA_API void llama_gpu_exclusive_engine_cleanup();
 
 // ============================================================================
 // RUNTIME EXECUTION
@@ -78,7 +90,7 @@ void llama_gpu_exclusive_engine_cleanup();
  * @param token Current token to process
  * @return >=0 output token ready, -1 error, -2 no output yet (still in pipeline)
  */
-int llama_gpu_exclusive_engine_decode_step(int token);
+LLAMA_API int llama_gpu_exclusive_engine_decode_step(int token);
 
 // ============================================================================
 // STREAM SCHEDULER ACCESSORS (Async Pipelining)
@@ -89,24 +101,24 @@ int llama_gpu_exclusive_engine_decode_step(int token);
  * Used for CPU-GPU async pipelining coordination.
  * Returns NULL if not initialized.
  */
-struct llama_stream_scheduler * llama_gpu_exclusive_engine_get_scheduler();
+LLAMA_API struct llama_stream_scheduler * llama_gpu_exclusive_engine_get_scheduler();
 
 /**
  * Get CPU compute stream from scheduler.
  * Used to queue layer 0-66 compute on CPU_COMPUTE stream.
  */
-void * llama_gpu_exclusive_engine_get_cpu_stream();
+LLAMA_API void * llama_gpu_exclusive_engine_get_cpu_stream();
 
 /**
  * Get GPU compute stream from scheduler.
  * Used to queue layer 36-49 compute on GPU_COMPUTE stream.
  */
-void * llama_gpu_exclusive_engine_get_gpu_stream();
+LLAMA_API void * llama_gpu_exclusive_engine_get_gpu_stream();
 
 /**
  * Print stream scheduler diagnostics for debugging async pipelining.
  */
-void llama_gpu_exclusive_engine_print_scheduler_diagnostics();
+LLAMA_API void llama_gpu_exclusive_engine_print_scheduler_diagnostics();
 
 // ============================================================================
 // STATISTICS AND DIAGNOSTICS
@@ -126,12 +138,12 @@ struct llama_gpu_engine_stats {
 /**
  * Get engine statistics.
  */
-struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats();
+LLAMA_API struct llama_gpu_engine_stats llama_gpu_exclusive_engine_get_stats();
 
 /**
  * Print comprehensive diagnostics (for debugging).
  */
-void llama_gpu_exclusive_engine_print_diagnostics();
+LLAMA_API void llama_gpu_exclusive_engine_print_diagnostics();
 
 // ============================================================================
 // GLOBAL CONTROL
@@ -141,12 +153,12 @@ void llama_gpu_exclusive_engine_print_diagnostics();
  * Enable/disable the GPU-exclusive engine.
  * Default: enabled
  */
-void llama_gpu_exclusive_engine_set_enabled(bool enabled);
+LLAMA_API void llama_gpu_exclusive_engine_set_enabled(bool enabled);
 
 /**
  * Check if engine is enabled.
  */
-bool llama_gpu_exclusive_engine_is_enabled();
+LLAMA_API bool llama_gpu_exclusive_engine_is_enabled();
 
 #ifdef __cplusplus
 }
