@@ -18,6 +18,9 @@
 #include <cstdlib>
 #include <cstdint>
 
+// Forward declarations of all stub functions from the decode engine header
+#include "llama-gpu-exclusive-decode-engine.h"
+
 // ============================================================================
 // API VISIBILITY MACRO
 // ============================================================================
