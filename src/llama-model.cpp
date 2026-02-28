@@ -2902,7 +2902,15 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             buft_list_t * buft_list;
             switch (info.layer) {
                 case LLM_TENSOR_LAYER_INPUT:
-                    buft_list = pimpl->dev_input.buft_list;
+                    // CRITICAL FIX: For token embeddings, prioritize GPU placement (accessed every token)
+                    if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
+                        // Use output layer's buffer list (GPU device) for token embeddings
+                        buft_list = pimpl->dev_output.buft_list;
+                        LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD prioritized for GPU placement (critical path)\n");
+                    } else {
+                        // Other input tensors use CPU buffer list
+                        buft_list = pimpl->dev_input.buft_list;
+                    }
                     break;
                 case LLM_TENSOR_LAYER_OUTPUT:
                     buft_list = pimpl->dev_output.buft_list;
