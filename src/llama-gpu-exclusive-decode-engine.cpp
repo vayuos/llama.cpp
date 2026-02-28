@@ -60,45 +60,6 @@ extern int ggml_cuda_graph_launch(uint64_t graph_id, cudaStream_t stream);
 extern bool ggml_cuda_graph_is_enabled();
 
 // ============================================================================
-// STATE TRANSITION VALIDATION (Phase B4+)
-// ============================================================================
-
-/**
- * Validate state machine transitions
- * Returns true if transition is valid, false otherwise
- */
-static bool is_valid_state_transition(int current, int next) {
-    // Allow transitions to ERROR state from any state
-    if (next == GPU_ENGINE_ERROR) {
-        return true;
-    }
-
-    // Define valid transitions
-    switch (current) {
-        case GPU_ENGINE_UNINITIALIZED:
-            return next == GPU_ENGINE_INITIALIZED;
-
-        case GPU_ENGINE_INITIALIZED:
-            return next == GPU_ENGINE_GRAPH_CAPTURING || next == GPU_ENGINE_UNINITIALIZED;
-
-        case GPU_ENGINE_GRAPH_CAPTURING:
-            return next == GPU_ENGINE_GRAPH_READY;
-
-        case GPU_ENGINE_GRAPH_READY:
-            return next == GPU_ENGINE_DECODING || next == GPU_ENGINE_INITIALIZED;
-
-        case GPU_ENGINE_DECODING:
-            return next == GPU_ENGINE_GRAPH_READY;
-
-        case GPU_ENGINE_ERROR:
-            return next == GPU_ENGINE_UNINITIALIZED;  // Recovery path
-
-        default:
-            return false;
-    }
-}
-
-// ============================================================================
 // ASYNC PIPELINING STREAM SCHEDULER
 // ============================================================================
 
@@ -182,6 +143,45 @@ static bool g_gpu_engine_enabled = true;
 static std::atomic<int> g_gpu_engine_state(GPU_ENGINE_UNINITIALIZED);
 
 // ============================================================================
+// STATE TRANSITION VALIDATION (Phase B4+)
+// ============================================================================
+
+/**
+ * Validate state machine transitions
+ * Returns true if transition is valid, false otherwise
+ */
+static bool is_valid_state_transition(int current, int next) {
+    // Allow transitions to ERROR state from any state
+    if (next == GPU_ENGINE_ERROR) {
+        return true;
+    }
+
+    // Define valid transitions
+    switch (current) {
+        case GPU_ENGINE_UNINITIALIZED:
+            return next == GPU_ENGINE_INITIALIZED;
+
+        case GPU_ENGINE_INITIALIZED:
+            return next == GPU_ENGINE_GRAPH_CAPTURING || next == GPU_ENGINE_UNINITIALIZED;
+
+        case GPU_ENGINE_GRAPH_CAPTURING:
+            return next == GPU_ENGINE_GRAPH_READY;
+
+        case GPU_ENGINE_GRAPH_READY:
+            return next == GPU_ENGINE_DECODING || next == GPU_ENGINE_INITIALIZED;
+
+        case GPU_ENGINE_DECODING:
+            return next == GPU_ENGINE_GRAPH_READY;
+
+        case GPU_ENGINE_ERROR:
+            return next == GPU_ENGINE_UNINITIALIZED;  // Recovery path
+
+        default:
+            return false;
+    }
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -251,11 +251,11 @@ LLAMA_API int llama_gpu_exclusive_engine_init(
     if (!is_valid_state_transition(current_state, next_state)) {
         fprintf(stderr, "GPU_ENGINE: Invalid state transition %d -> %d\n", current_state, next_state);
         g_gpu_engine_state.store(GPU_ENGINE_ERROR);
-        g_gpu_engine.state = GPU_ENGINE_ERROR;
+        g_gpu_engine.state = (llama_gpu_engine_state)GPU_ENGINE_ERROR;
         return -1;
     }
     g_gpu_engine_state.store(next_state);
-    g_gpu_engine.state = next_state;
+    g_gpu_engine.state = (llama_gpu_engine_state)next_state;
 
     fprintf(stderr, "GPU_ENGINE: Initialized (RNG seed=%u)\n", rng_seed);
 
@@ -290,7 +290,7 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
         return -1;
     }
     g_gpu_engine_state.store(next_state);
-    g_gpu_engine.state = next_state;
+    g_gpu_engine.state = (llama_gpu_engine_state)next_state;
     g_gpu_engine.graph_token_capacity = max_tokens;
 
     // Begin graph capture
@@ -307,7 +307,7 @@ LLAMA_API int llama_gpu_exclusive_engine_prepare_decode(
         return -1;
     }
     g_gpu_engine_state.store(next_state);
-    g_gpu_engine.state = next_state;
+    g_gpu_engine.state = (llama_gpu_engine_state)next_state;
 
     fprintf(stderr, "GPU_ENGINE: Graph prepared for %d tokens\n", max_tokens);
 
@@ -331,7 +331,7 @@ LLAMA_API int llama_gpu_exclusive_engine_start_decode() {
         return -1;
     }
     g_gpu_engine_state.store(next_state);
-    g_gpu_engine.state = next_state;
+    g_gpu_engine.state = (llama_gpu_engine_state)next_state;
     g_gpu_engine.total_decodes++;
     g_gpu_engine.decode_start_time = std::chrono::high_resolution_clock::now();
     g_gpu_engine.last_token_time = g_gpu_engine.decode_start_time;
@@ -357,7 +357,7 @@ LLAMA_API int llama_gpu_exclusive_engine_stop_decode() {
         return -1;
     }
     g_gpu_engine_state.store(next_state);
-    g_gpu_engine.state = next_state;
+    g_gpu_engine.state = (llama_gpu_engine_state)next_state;
 
     fprintf(stderr, "GPU_ENGINE: Decode stopped\n");
     return 0;
@@ -395,7 +395,7 @@ LLAMA_API void llama_gpu_exclusive_engine_cleanup() {
     // Transition to UNINITIALIZED
     int next_state = GPU_ENGINE_UNINITIALIZED;
     g_gpu_engine_state.store(next_state);
-    g_gpu_engine.state = next_state;
+    g_gpu_engine.state = (llama_gpu_engine_state)next_state;
 
     fprintf(stderr, "GPU_ENGINE: Cleanup complete\n");
 }
