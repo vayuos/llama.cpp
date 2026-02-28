@@ -34,6 +34,7 @@ add_library(llama
             llama-sampler.cpp
             llama-stream-scheduler.cpp
             llama-gpu-exclusive-decode-engine.cpp
+            llama-gpu-exclusive-stubs.cpp
             llama-pipeline-validator.cpp
             llama-vocab.cpp
             unicode-data.cpp
