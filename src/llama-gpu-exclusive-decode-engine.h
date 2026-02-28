@@ -160,6 +160,115 @@ LLAMA_API void llama_gpu_exclusive_engine_set_enabled(bool enabled);
  */
 LLAMA_API bool llama_gpu_exclusive_engine_is_enabled();
 
+// ============================================================================
+// INFRASTRUCTURE STUBS (Phase 2.4+ implementations)
+// ============================================================================
+
+/**
+ * Verify that all decode tensors reside on GPU.
+ * Phase 2.3: Stub returns success
+ * Phase 2.4+: Real implementation checking tensor placement
+ */
+LLAMA_API int llama_verify_decode_memory_residency(const struct llama_context * ctx);
+
+/**
+ * Print memory residency diagnostics.
+ * Phase 2.3: Stub (silent)
+ * Phase 2.4+: Real implementation printing residency statistics
+ */
+LLAMA_API void llama_residency_print_report();
+
+/**
+ * Initialize persistent kernel infrastructure.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation setting up persistent kernels
+ */
+LLAMA_API int llama_persistent_kernel_init(int max_tokens);
+
+/**
+ * Launch persistent kernel for token decoding.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation launching GPU kernels
+ */
+LLAMA_API int llama_persistent_kernel_launch(const struct llama_context * ctx, int max_tokens);
+
+/**
+ * Stop persistent kernel execution.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation stopping kernels
+ */
+LLAMA_API int llama_persistent_kernel_stop();
+
+/**
+ * Wait for persistent kernel to complete.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation waiting for kernel completion
+ */
+LLAMA_API int llama_persistent_kernel_wait(int timeout_ms);
+
+/**
+ * Cleanup persistent kernel resources.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation cleaning up kernel resources
+ */
+LLAMA_API void llama_persistent_kernel_cleanup();
+
+/**
+ * Initialize CUDA RNG state for GPU-side operations.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation initializing CUDA RNG
+ */
+LLAMA_API int ggml_cuda_rng_init(uint32_t seed);
+
+/**
+ * Cleanup CUDA RNG state.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation cleaning up CUDA RNG
+ */
+LLAMA_API int ggml_cuda_rng_cleanup();
+
+/**
+ * Check if CUDA RNG is initialized.
+ * Phase 2.3: Stub returns false
+ * Phase 2.4+: Real implementation checking CUDA RNG state
+ */
+LLAMA_API bool ggml_cuda_rng_is_initialized();
+
+/**
+ * Begin CUDA graph capture on a stream.
+ * Phase 2.3: Stub returns 0
+ * Phase 2.4+: Real implementation capturing CUDA graphs
+ */
+LLAMA_API uint64_t ggml_cuda_graph_capture_begin(void * stream);
+
+/**
+ * End CUDA graph capture.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation ending graph capture
+ */
+LLAMA_API int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream);
+
+/**
+ * Instantiate a captured CUDA graph.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation instantiating CUDA graphs
+ */
+LLAMA_API int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream);
+
+/**
+ * Launch an instantiated CUDA graph.
+ * Phase 2.3: Stub (no-op)
+ * Phase 2.4+: Real implementation launching CUDA graphs
+ */
+LLAMA_API int ggml_cuda_graph_launch(uint64_t graph_id, void * stream);
+
+/**
+ * Check if CUDA graph support is enabled.
+ * Phase 2.3: Stub returns false
+ * Phase 2.4+: Real implementation checking CUDA graph support
+ */
+LLAMA_API bool ggml_cuda_graph_is_enabled();
+
 #ifdef __cplusplus
 }
 #endif
