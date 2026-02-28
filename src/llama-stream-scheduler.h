@@ -276,5 +276,3 @@ void llama_stream_scheduler_print_queue(
 #ifdef __cplusplus
 }
 #endif
-
-#endif // LLAMA_STREAM_SCHEDULER_H

@@ -350,6 +350,8 @@ int llama_stream_scheduler_wait_event(
 
     // Note: Actual CUDA event wait deferred to GPU backend
     // This is placeholder for state tracking
+    // timeout_ms parameter reserved for future implementation
+    (void)timeout_ms;  // Suppress unused parameter warning
     return 0;
 }
 
