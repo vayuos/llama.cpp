@@ -2946,10 +2946,16 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             }
 
             // avoid using a host buffer when using mmap
-            // EXCEPTION: Keep input layer tensors (embeddings) on GPU for GPU-exclusive decoding
+            // EXCEPTION: Keep critical GPU-exclusive decode tensors on GPU
+            // - LLM_TENSOR_TOKEN_EMBD: token embeddings (per-token lookup, must be fast)
+            // - LLM_TENSOR_OUTPUT: output layer logits (final tensor before sampling)
+            // - LLM_TENSOR_LAYER_INPUT: explicitly marked input tensors
             auto * buft_dev = ggml_backend_buft_get_device(buft);
+            bool is_critical_gpu_tensor = (info.tensor == LLM_TENSOR_TOKEN_EMBD ||
+                                           info.tensor == LLM_TENSOR_OUTPUT ||
+                                           info.layer == LLM_TENSOR_LAYER_INPUT);
             if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev) &&
-                info.layer != LLM_TENSOR_LAYER_INPUT) {
+                !is_critical_gpu_tensor) {
                 auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
                 if (!cpu_dev) {
                     throw std::runtime_error("no CPU backend found");
