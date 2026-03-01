@@ -2906,10 +2906,24 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                     if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
                         // Use output layer's buffer list (GPU device) for token embeddings
                         buft_list = pimpl->dev_output.buft_list;
+                        LLAMA_LOG_DEBUG("===== PHASE1_TRACE: TOKEN_EMBD START =====\n");
+                        LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD tensor '%s' detected\n", tn.str().c_str());
+                        LLAMA_LOG_DEBUG("load_tensors: Using dev_output buffer list (GPU) instead of dev_input (CPU)\n");
+                        if (pimpl->dev_output.buft_list && !pimpl->dev_output.buft_list->empty()) {
+                            LLAMA_LOG_DEBUG("load_tensors: dev_output.buft_list size=%zu, first buffer type=%s\n",
+                                pimpl->dev_output.buft_list->size(),
+                                ggml_backend_buft_name(pimpl->dev_output.buft_list->front().second));
+                        }
+                        if (pimpl->dev_input.buft_list && !pimpl->dev_input.buft_list->empty()) {
+                            LLAMA_LOG_DEBUG("load_tensors: dev_input.buft_list size=%zu, first buffer type=%s (NOT USED)\n",
+                                pimpl->dev_input.buft_list->size(),
+                                ggml_backend_buft_name(pimpl->dev_input.buft_list->front().second));
+                        }
                         LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD prioritized for GPU placement (critical path)\n");
                     } else {
                         // Other input tensors use CPU buffer list
                         buft_list = pimpl->dev_input.buft_list;
+                        LLAMA_LOG_DEBUG("load_tensors: Using dev_input buffer list (CPU) for tensor '%s'\n", tn.str().c_str());
                     }
                     break;
                 case LLM_TENSOR_LAYER_OUTPUT:
@@ -2947,7 +2961,18 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             }
 
             if (!buft) {
+                if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
+                    LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD calling select_weight_buft with GPU buffer list\n");
+                }
                 buft = select_weight_buft(hparams, t_meta, op, *buft_list);
+                if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
+                    if (buft) {
+                        LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD select_weight_buft returned: %s\n",
+                            ggml_backend_buft_name(buft));
+                    } else {
+                        LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD select_weight_buft FAILED (returned nullptr)\n");
+                    }
+                }
                 if (!buft) {
                     throw std::runtime_error(format("failed to find a compatible buffer type for tensor %s", tn.str().c_str()));
                 }
@@ -2962,6 +2987,14 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             bool is_critical_gpu_tensor = (tn_tensor == LLM_TENSOR_TOKEN_EMBD ||
                                            tn_tensor == LLM_TENSOR_OUTPUT ||
                                            info.layer == LLM_TENSOR_LAYER_INPUT);
+
+            if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
+                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD MMAP check: use_mmap=%d, buft_dev=%p, is_critical=%d\n",
+                    ml.use_mmap, (void*)buft_dev, is_critical_gpu_tensor);
+                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD before MMAP exception: buffer type=%s\n",
+                    ggml_backend_buft_name(buft));
+            }
+
             if (ml.use_mmap && buft_dev && buft == ggml_backend_dev_host_buffer_type(buft_dev) &&
                 !is_critical_gpu_tensor) {
                 auto * cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
@@ -2969,6 +3002,14 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                     throw std::runtime_error("no CPU backend found");
                 }
                 buft = ggml_backend_dev_buffer_type(cpu_dev);
+                if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
+                    LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD MMAP exception APPLIED (not critical)\n");
+                }
+            }
+
+            if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
+                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD FINAL buffer type=%s\n", ggml_backend_buft_name(buft));
+                LLAMA_LOG_DEBUG("===== PHASE1_TRACE: TOKEN_EMBD END =====\n");
             }
 
             if (buft != buft_list->front().second) {
