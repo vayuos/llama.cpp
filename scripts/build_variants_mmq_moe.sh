@@ -52,7 +52,7 @@ cd "${BUILD_DIR}"
 # -march=native:  use all available CPU SIMD
 # -DNDEBUG:       eliminate assertions and logging overhead
 # ------------------------------------------------------------
-COMMON_CXX_FLAGS="-O3 -ffast-math -funroll-loops -march=native -DNDEBUG"
+COMMON_CXX_FLAGS="-O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native -DNDEBUG"
 
 # ------------------------------------------------------------
 # CUDA compiler flags (applies to GPU kernel compilation)
