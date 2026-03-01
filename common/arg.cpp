@@ -1332,6 +1332,39 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                                    string_format("error: unknown value for --flash-attn: '%s'\n", value.c_str()));
                            }
                        }).set_env("LLAMA_ARG_FLASH_ATTN"));
+
+    // Phase 3A: Context Optimization
+    add_opt(common_arg(
+        {"--n-ctx-optimized"}, "N",
+        "optimized context size for memory optimization (Phase 3A, 0 = auto)",
+        [](common_params & params, const std::string & value) {
+            params.n_ctx_optimized = std::stoul(value);
+        }
+    ).set_env("LLAMA_ARG_N_CTX_OPTIMIZED"));
+
+    // Phase 3B: KV Cache CUDA_Host Placement
+    add_opt(common_arg(
+        {"--prefer-cuda-host-kv"},
+        {"--no-prefer-cuda-host-kv"},
+        string_format("prefer CUDA_Host for KV cache (Phase 3B, default: %s)", params.prefer_cuda_host_kv ? "true" : "false"),
+        [](common_params & params, bool value) {
+            params.prefer_cuda_host_kv = value;
+        }
+    ).set_env("LLAMA_ARG_PREFER_CUDA_HOST_KV"));
+
+    // Phase 3C: Ubatch Optimization
+    add_opt(common_arg(
+        {"--ubatch-optimize"}, "N",
+        "ubatch size optimization (Phase 3C, 0=auto, 256-1024 for fixed, default: 0)",
+        [](common_params & params, const std::string & value) {
+            uint32_t ubatch = std::stoul(value);
+            if (ubatch > 0 && (ubatch < 256 || ubatch > 1024)) {
+                throw std::runtime_error(string_format("error: ubatch-optimize must be 0 or between 256-1024, got: %u", ubatch));
+            }
+            params.ubatch_optimize = ubatch;
+        }
+    ).set_env("LLAMA_ARG_UBATCH_OPTIMIZE"));
+
     add_opt(common_arg(
         {"-p", "--prompt"}, "PROMPT",
         "prompt to start generation with; for system message, use -sys",

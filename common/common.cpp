@@ -1380,6 +1380,11 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.type_k = params.cache_type_k;
     cparams.type_v = params.cache_type_v;
 
+    // Phase 3 Optimization Parameters
+    cparams.n_ctx_optimized     = params.n_ctx_optimized;
+    cparams.prefer_cuda_host_kv = params.prefer_cuda_host_kv;
+    cparams.ubatch_optimize     = params.ubatch_optimize;
+
     return cparams;
 }
 

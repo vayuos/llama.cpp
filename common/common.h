@@ -607,6 +607,11 @@ struct common_params {
     // batched-bench params
     bool batched_bench_output_jsonl = false;
 
+    // Phase 3 Optimization Parameters
+    uint32_t n_ctx_optimized     = 0;     // Phase 3A: optimized context size (0 = no override)
+    bool     prefer_cuda_host_kv = false; // Phase 3B: prefer CUDA_Host for KV cache
+    uint32_t ubatch_optimize     = 0;     // Phase 3C: ubatch optimization (0 = auto, 256-1024 for fixed)
+
     // common params
     std::string out_file; // output filename for all example programs
     // optional callback for model loading progress and cancellation:
