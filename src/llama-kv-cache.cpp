@@ -126,12 +126,20 @@ llama_kv_cache::llama_kv_cache(
 
             dev_name = ggml_backend_dev_name(dev);
 
-            // Phase 3B: DISABLED - Logic was inverted, caused performance regression
-            // TODO: Fix to only target CPU-resident layers, not GPU layers
-            // if (prefer_cuda_host_kv && il >= (hparams.n_layer - gpu_layers)) {
-            //     auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
-            //     if (host_buft) { ... }
-            // }
+            // Phase 3B: KV Cache CUDA_Host Placement for CPU-resident layers
+            // Only apply CUDA_Host (pinned memory) to CPU-resident layers to improve PCIe transfer speed
+            if (prefer_cuda_host_kv) {
+                std::string dev_name_str = dev_name;
+                // Check if this layer is CPU-resident (contains "CPU" in device name)
+                if (dev_name_str.find("CPU") != std::string::npos) {
+                    auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+                    if (host_buft) {
+                        buft = host_buft;
+                        dev_name = ggml_backend_buft_name(host_buft);
+                        LLAMA_LOG_INFO("%s: layer %3d: Phase 3B - using CUDA_Host (pinned) for CPU-resident KV cache\n", __func__, il);
+                    }
+                }
+            }
         }
 
         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
