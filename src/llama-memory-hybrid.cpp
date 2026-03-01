@@ -45,7 +45,8 @@ llama_memory_hybrid::llama_memory_hybrid(
         filter_attn == nullptr ?
             [&](int32_t il) { return !hparams.is_recurrent(il); }
             : filter_attn,
-        nullptr
+        nullptr,
+        false  // Phase 3B: prefer_cuda_host_kv
     )),
     mem_recr(new llama_memory_recurrent(
         model,
