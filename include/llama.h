@@ -371,6 +371,11 @@ extern "C" {
                           // try to disable when n_seq_max > 1 for improved performance when the sequences do not share a large prefix
                           // ref: https://github.com/ggml-org/llama.cpp/pull/14363
 
+        // Phase 3: Optimization Parameters
+        uint32_t n_ctx_optimized;    // Phase 3A: recommended context size for memory optimization (0 = auto from workload)
+        bool     prefer_cuda_host_kv; // Phase 3B: prefer CUDA_Host for KV cache instead of CPU (experimental)
+        uint32_t ubatch_optimize;     // Phase 3C: ubatch size optimization strategy (0=auto, 256-1024 for fixed)
+
         // [EXPERIMENTAL]
         // backend sampler chain configuration (make sure the caller keeps the sampler chains alive)
         // note: the samplers must be sampler chains (i.e. use llama_sampler_chain_init)
