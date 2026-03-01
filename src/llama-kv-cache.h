@@ -232,6 +232,9 @@ private:
     // this is the SWA type of the cache - not to be confused with the model SWA type
     const llama_swa_type swa_type = LLAMA_SWA_TYPE_NONE;
 
+    // Phase 3B: Prefer CUDA_Host for KV cache (pinned memory for early layers)
+    const bool prefer_cuda_host_kv = false;
+
     // ggml contexts for the KV cache along with the allocated backend buffers:
     std::vector<std::pair<ggml_context_ptr, ggml_backend_buffer_ptr>> ctxs_bufs;
 

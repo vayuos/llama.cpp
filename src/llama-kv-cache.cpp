@@ -30,9 +30,11 @@ llama_kv_cache::llama_kv_cache(
                  uint32_t   n_swa,
            llama_swa_type   swa_type,
     const layer_filter_cb & filter,
-    const  layer_reuse_cb & reuse) :
+    const  layer_reuse_cb & reuse,
+                     bool   prefer_cuda_host_kv) :
     model(model), hparams(model.hparams), v_trans(v_trans),
-    n_seq_max(n_seq_max), n_stream(unified ? 1 : n_seq_max), n_pad(n_pad), n_swa(n_swa), swa_type(swa_type) {
+    n_seq_max(n_seq_max), n_stream(unified ? 1 : n_seq_max), n_pad(n_pad), n_swa(n_swa), swa_type(swa_type),
+    prefer_cuda_host_kv(prefer_cuda_host_kv) {
 
     GGML_ASSERT(kv_size % n_pad == 0);
 
@@ -123,6 +125,16 @@ llama_kv_cache::llama_kv_cache(
             buft = ggml_backend_dev_buffer_type(dev);
 
             dev_name = ggml_backend_dev_name(dev);
+
+            // Phase 3B: Prefer CUDA_Host for early layers (pinned memory for reduced latency)
+            if (prefer_cuda_host_kv && il < (hparams.n_layer / 2)) {
+                auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+                if (host_buft) {
+                    buft = host_buft;
+                    dev_name = ggml_backend_buft_name(host_buft);
+                    LLAMA_LOG_DEBUG("%s: layer %3d: Phase 3B - preferring CUDA_Host (pinned) for early layer KV\n", __func__, il);
+                }
+            }
         }
 
         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
