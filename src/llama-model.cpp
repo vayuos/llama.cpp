@@ -2921,9 +2921,25 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         }
                         LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD prioritized for GPU placement (critical path)\n");
                     } else {
-                        // Other input tensors use CPU buffer list
+                        // Phase 2: Prefer CUDA_Host for other input tensors (pinned memory access)
+                        // Fall back to CPU if CUDA_Host not available
                         buft_list = pimpl->dev_input.buft_list;
-                        LLAMA_LOG_DEBUG("load_tensors: Using dev_input buffer list (CPU) for tensor '%s'\n", tn.str().c_str());
+
+                        // Check if CUDA_Host is available in the buffer list
+                        if (pimpl->dev_input.buft_list && !pimpl->dev_input.buft_list->empty()) {
+                            bool has_cuda_host = false;
+                            for (const auto & buft_pair : *pimpl->dev_input.buft_list) {
+                                const char * buft_name = ggml_backend_buft_name(buft_pair.second);
+                                if (buft_name && strcmp(buft_name, "CUDA_Host") == 0) {
+                                    has_cuda_host = true;
+                                    LLAMA_LOG_DEBUG("load_tensors: CUDA_Host available in dev_input for tensor '%s' (pinned memory preference)\n", tn.str().c_str());
+                                    break;
+                                }
+                            }
+                            if (!has_cuda_host) {
+                                LLAMA_LOG_DEBUG("load_tensors: Using dev_input buffer list (CPU) for tensor '%s'\n", tn.str().c_str());
+                            }
+                        }
                     }
                     break;
                 case LLM_TENSOR_LAYER_OUTPUT:

@@ -1016,8 +1016,20 @@ bool llama_model_loader::load_all_data(
             return nullptr;
         }
 
-        if (buft != ggml_backend_dev_buffer_type(dev)) {
-            LLAMA_LOG_DEBUG("%s: buffer type %s is not the default buffer type for device %s for async uploads\n", func,
+        // Phase 2: Allow CUDA_Host and other suitable buffer types for async uploads
+        // CUDA_Host is pinned memory which is optimal for async transfers
+        auto * default_buft = ggml_backend_dev_buffer_type(dev);
+        bool is_suitable_for_async = (buft == default_buft);
+
+        // Check if this is CUDA_Host or another host-pinned buffer type
+        const char * buft_name = ggml_backend_buft_name(buft);
+        if (!is_suitable_for_async && buft_name && strcmp(buft_name, "CUDA_Host") == 0) {
+            is_suitable_for_async = true;
+            LLAMA_LOG_DEBUG("%s: CUDA_Host buffer type optimized for async uploads (pinned memory)\n", func);
+        }
+
+        if (!is_suitable_for_async) {
+            LLAMA_LOG_DEBUG("%s: buffer type %s is not suitable for device %s for async uploads\n", func,
                 ggml_backend_buft_name(buft), ggml_backend_dev_name(dev));
             return nullptr;
         }
