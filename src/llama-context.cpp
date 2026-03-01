@@ -48,6 +48,7 @@ llama_context::llama_context(
     cparams.embeddings       = params.embeddings;
     cparams.offload_kqv      = params.offload_kqv;
     cparams.no_perf          = params.no_perf;
+    cparams.prefer_cuda_host_kv = params.prefer_cuda_host_kv;  // Phase 3B
     cparams.pooling_type     = params.pooling_type;
     cparams.warmup           = false;
 

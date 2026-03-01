@@ -36,6 +36,7 @@ struct llama_cparams {
     bool op_offload;
     bool kv_unified;
     bool pipeline_parallel;
+    bool prefer_cuda_host_kv;  // Phase 3B: prefer CUDA_Host for KV cache
 
     enum llama_pooling_type pooling_type;
 
