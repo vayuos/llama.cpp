@@ -42,7 +42,7 @@ fi
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-COMMON_CXX_FLAGS="-O3 -ffast-math -funroll-loops -march=native -DNDEBUG"
+COMMON_CXX_FLAGS="-O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native -DNDEBUG"
 CUDA_FLAGS="--use_fast_math -O3"
 
 CMAKE_FLAGS=(
