@@ -2963,6 +2963,12 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
             if (!buft) {
                 if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
                     LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD calling select_weight_buft with GPU buffer list\n");
+                    LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD tensor type=%s, buffer list size=%zu\n",
+                        ggml_type_name(t_meta->type), buft_list->size());
+                    for (size_t i = 0; i < buft_list->size() && i < 5; i++) {
+                        LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD buft_list[%zu]=%s\n", i,
+                            ggml_backend_buft_name(buft_list->at(i).second));
+                    }
                 }
                 buft = select_weight_buft(hparams, t_meta, op, *buft_list);
                 if (tn_tensor == LLM_TENSOR_TOKEN_EMBD) {
@@ -2971,6 +2977,19 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                             ggml_backend_buft_name(buft));
                     } else {
                         LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD select_weight_buft FAILED (returned nullptr)\n");
+                    }
+
+                    // Q4_K CRITICAL FIX: Force GPU buffer type for token embeddings with Q4_K
+                    // Q4_K is fully supported on GPU (MMQ kernels + Flash Attention enabled),
+                    // but select_weight_buft may conservatively reject it. Override to ensure
+                    // token_embd.weight (Q4_K) stays on GPU for fast per-token lookups.
+                    if (t_meta->type == GGML_TYPE_Q4_K && buft_list->size() > 0) {
+                        auto gpu_buft = buft_list->front().second;
+                        if (gpu_buft && ggml_backend_buft_get_device(gpu_buft)) {
+                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K GPU override: forcing %s\n",
+                                ggml_backend_buft_name(gpu_buft));
+                            buft = gpu_buft;
+                        }
                     }
                 }
                 if (!buft) {
