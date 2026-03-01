@@ -63,36 +63,18 @@ llama_context::llama_context(
         cparams.n_ctx = params.n_ctx_optimized;
     }
 
-    // Phase 3B: KV Cache Placement - Log preference
-    if (params.prefer_cuda_host_kv) {
-        LLAMA_LOG_INFO("%s: Phase 3B - KV cache placement preference: CUDA_Host (pinned memory)\n", __func__);
-    }
+    // Phase 3B: KV Cache Placement - DISABLED (logic was inverted, caused -24% regression)
+    // TODO: Fix logic to target only CPU-resident layers, not GPU layers
+    // if (params.prefer_cuda_host_kv) {
+    //     LLAMA_LOG_INFO("%s: Phase 3B - KV cache placement preference: CUDA_Host (pinned memory)\n", __func__);
+    // }
 
-    // Phase 3C: Ubatch Optimization - Apply if specified
-    if (params.ubatch_optimize > 0) {
-        // Validate ubatch range: 256-1024 recommended, allow flexibility
-        if (params.ubatch_optimize < 128) {
-            LLAMA_LOG_WARN("%s: Phase 3C - ubatch_optimize=%u is very small, may hurt throughput\n", __func__, params.ubatch_optimize);
-        }
-        if (params.ubatch_optimize > 2048) {
-            LLAMA_LOG_WARN("%s: Phase 3C - ubatch_optimize=%u is very large, may increase latency\n", __func__, params.ubatch_optimize);
-        }
-
-        cparams.n_ubatch = params.ubatch_optimize;
-
-        // Log impact analysis
-        if (params.ubatch_optimize < 512) {
-            LLAMA_LOG_INFO("%s: Phase 3C - ubatch optimization: n_ubatch=%u (reduced) -> Low-latency profile\n", __func__, params.ubatch_optimize);
-            LLAMA_LOG_DEBUG("%s:   - Benefit: Lower per-token latency for interactive use\n", __func__);
-            LLAMA_LOG_DEBUG("%s:   - Trade-off: Slightly lower throughput vs n_ubatch=512\n", __func__);
-        } else if (params.ubatch_optimize > 512) {
-            LLAMA_LOG_INFO("%s: Phase 3C - ubatch optimization: n_ubatch=%u (increased) -> High-throughput profile\n", __func__, params.ubatch_optimize);
-            LLAMA_LOG_DEBUG("%s:   - Benefit: Higher batch throughput for prompt processing\n", __func__);
-            LLAMA_LOG_DEBUG("%s:   - Trade-off: Slightly higher per-token latency vs n_ubatch=512\n", __func__);
-        } else {
-            LLAMA_LOG_INFO("%s: Phase 3C - ubatch optimization: n_ubatch=%u (balanced) -> Default profile\n", __func__, params.ubatch_optimize);
-        }
-    }
+    // Phase 3C: Ubatch Optimization - DISABLED (showed no improvement in testing)
+    // TODO: Investigate why ubatch optimization doesn't provide expected gains
+    // if (params.ubatch_optimize > 0) {
+    //     cparams.n_ubatch = params.ubatch_optimize;
+    //     LLAMA_LOG_INFO("%s: Phase 3C - ubatch optimization: set n_ubatch = %u\n", __func__, params.ubatch_optimize);
+    // }
 
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;

@@ -126,15 +126,12 @@ llama_kv_cache::llama_kv_cache(
 
             dev_name = ggml_backend_dev_name(dev);
 
-            // Phase 3B: Prefer CUDA_Host for early layers (pinned memory for reduced latency)
-            if (prefer_cuda_host_kv && il < (hparams.n_layer / 2)) {
-                auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
-                if (host_buft) {
-                    buft = host_buft;
-                    dev_name = ggml_backend_buft_name(host_buft);
-                    LLAMA_LOG_DEBUG("%s: layer %3d: Phase 3B - preferring CUDA_Host (pinned) for early layer KV\n", __func__, il);
-                }
-            }
+            // Phase 3B: DISABLED - Logic was inverted, caused performance regression
+            // TODO: Fix to only target CPU-resident layers, not GPU layers
+            // if (prefer_cuda_host_kv && il >= (hparams.n_layer - gpu_layers)) {
+            //     auto * host_buft = ggml_backend_dev_host_buffer_type(dev);
+            //     if (host_buft) { ... }
+            // }
         }
 
         LLAMA_LOG_DEBUG("%s: layer %3d: dev = %s\n", __func__, il, dev_name);
