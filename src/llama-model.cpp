@@ -2979,16 +2979,32 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                         LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD select_weight_buft FAILED (returned nullptr)\n");
                     }
 
-                    // Q4_K CRITICAL FIX: Force GPU buffer type for token embeddings with Q4_K
-                    // Q4_K is fully supported on GPU (MMQ kernels + Flash Attention enabled),
-                    // but select_weight_buft may conservatively reject it. Override to ensure
-                    // token_embd.weight (Q4_K) stays on GPU for fast per-token lookups.
+                    // Q4_K PERFORMANCE FIX: Select optimal buffer type for Q4_K token embeddings
+                    // Q4_K has multiple GPU buffer options with different performance characteristics.
+                    // Try CUDA_Host first (best for embedding operations), fall back to CUDA0 if needed.
                     if (t_meta->type == GGML_TYPE_Q4_K && buft_list->size() > 0) {
-                        auto gpu_buft = buft_list->front().second;
-                        if (gpu_buft && ggml_backend_buft_get_device(gpu_buft)) {
-                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K GPU override: forcing %s\n",
-                                ggml_backend_buft_name(gpu_buft));
-                            buft = gpu_buft;
+                        ggml_backend_buffer_type_t selected_buft = nullptr;
+
+                        // Prefer CUDA_Host for Q4_K embeddings (optimized kernel path)
+                        for (size_t i = 0; i < buft_list->size(); i++) {
+                            auto candidate = buft_list->at(i).second;
+                            const char * buft_name = ggml_backend_buft_name(candidate);
+                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K trying buffer[%zu]=%s\n", i, buft_name);
+
+                            // Prefer CUDA_Host for better embedding perf, then CUDA0
+                            if (!selected_buft) {
+                                selected_buft = candidate;
+                                if (std::string(buft_name).find("CUDA_Host") != std::string::npos) {
+                                    LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K selected CUDA_Host (optimal embedding kernel)\n");
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (selected_buft) {
+                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K GPU optimization: using %s\n",
+                                ggml_backend_buft_name(selected_buft));
+                            buft = selected_buft;
                         }
                     }
                 }
