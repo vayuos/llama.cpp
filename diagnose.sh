@@ -36,6 +36,7 @@ echo ""
         --no-mmap \
         -t 1 \
         --cache-prompt \
+        --host 192.168.1.5 \
         --port 8080 \
         --verbose 2>&1
 

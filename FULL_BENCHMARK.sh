@@ -13,7 +13,7 @@ LOG_FILE="${SCRIPT_DIR}/server_logs_benchmark_${TIMESTAMP}.txt"
 METRICS_FILE="${SCRIPT_DIR}/benchmark_results_${TIMESTAMP}.txt"
 
 PORT=8080
-HOST="127.0.0.1"
+HOST="192.168.1.5"
 
 # Colors
 GREEN='\033[0;32m'

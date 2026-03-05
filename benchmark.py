@@ -55,10 +55,10 @@ def make_request(host, port, prompt, max_tokens):
         }
 
 def main():
-    HOST = "127.0.0.1"
+    HOST = "192.168.1.5"
     PORT = 8080
     TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-    METRICS_FILE = f"/home/vayuos/llama/llama.cpp/benchmark_results_{TIMESTAMP}.txt"
+    METRICS_FILE = f"/home/viren/llama/llama.cpp/benchmark_results_{TIMESTAMP}.txt"
 
     print("\n" + "="*50)
     print("LLAMA.CPP PYTHON BENCHMARK")

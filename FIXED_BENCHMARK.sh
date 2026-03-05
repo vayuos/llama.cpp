@@ -12,7 +12,7 @@ LOG_FILE="${SCRIPT_DIR}/server_logs_fixed_benchmark_${TIMESTAMP}.txt"
 METRICS_FILE="${SCRIPT_DIR}/metrics_fixed_benchmark_${TIMESTAMP}.txt"
 
 PORT=8080
-HOST="127.0.0.1"
+HOST="192.168.1.5"
 
 echo "=========================================="
 echo "LLAMA.CPP FIXED BENCHMARK"
