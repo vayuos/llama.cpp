@@ -3020,13 +3020,14 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                             }
                         }
 
-                        // SELECT CUDA_Host if available (test optimized path)
-                        if (cuda_host_buft) {
-                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K **USING CUDA_Host** (optimized kernel test)\n");
-                            buft = cuda_host_buft;
-                        } else if (cuda0_buft) {
-                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K CUDA_Host not available, using CUDA0\n");
+                        // PRIORITIZE GPU (CUDA0/ROCm0) over Host for token embeddings
+                        // GPU embedding lookup is critical for performance (every token)
+                        if (cuda0_buft) {
+                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K **USING GPU BUFFER** (CUDA0/HIP0/ROCm0 - optimal for performance)\n");
                             buft = cuda0_buft;
+                        } else if (cuda_host_buft) {
+                            LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K GPU not available, fallback to CUDA_Host/ROCm_Host\n");
+                            buft = cuda_host_buft;
                         }
                     }
                 }
