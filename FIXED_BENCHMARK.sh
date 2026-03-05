@@ -1,40 +1,27 @@
 #!/bin/bash
 
 ##############################################################################
-# COMPLETE PERFORMANCE BENCHMARK WITH DETAILED METRICS
-# Measures prompt and generation throughput
+# FIXED PERFORMANCE BENCHMARK - Uses only supported flags
 ##############################################################################
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_FILE="${SCRIPT_DIR}/server_logs_benchmark_${TIMESTAMP}.txt"
-METRICS_FILE="${SCRIPT_DIR}/benchmark_results_${TIMESTAMP}.txt"
+LOG_FILE="${SCRIPT_DIR}/server_logs_fixed_benchmark_${TIMESTAMP}.txt"
+METRICS_FILE="${SCRIPT_DIR}/metrics_fixed_benchmark_${TIMESTAMP}.txt"
 
 PORT=8080
 HOST="127.0.0.1"
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-echo -e "${BLUE}=========================================="
-echo "LLAMA.CPP FULL PERFORMANCE BENCHMARK"
-echo "==========================================${NC}"
+echo "=========================================="
+echo "LLAMA.CPP FIXED BENCHMARK"
+echo "=========================================="
 echo "Timestamp: $TIMESTAMP"
 echo "Log file: $LOG_FILE"
 echo "Metrics file: $METRICS_FILE"
 echo ""
 
-# Function to log
-log_msg() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$METRICS_FILE"
-}
-
-# Start logging
 {
     echo "=========================================="
     echo "BENCHMARK START: $TIMESTAMP"
@@ -45,9 +32,6 @@ log_msg() {
     echo "Cleaning up any existing servers..."
     pkill -f "llama-server" || true
     sleep 2
-
-    # Start new server with optimizations
-    echo "Starting optimized llama-server..."
 
     # Find the llama-server binary
     LLAMA_SERVER=""
@@ -71,6 +55,10 @@ log_msg() {
     fi
 
     echo "Using binary: $LLAMA_SERVER"
+    echo ""
+
+    # Start server with ONLY SUPPORTED FLAGS
+    echo "Starting optimized llama-server..."
     cd "$SCRIPT_DIR"
 
     timeout 600 "$LLAMA_SERVER" \
@@ -87,39 +75,38 @@ log_msg() {
 
     SERVER_PID=$!
     echo "Server started with PID: $SERVER_PID"
-    echo "Waiting for server warmup (20 seconds)..."
+    echo "Waiting 20 seconds for server warmup..."
     sleep 20
 
     # Verify server is running
     if ! nc -z $HOST $PORT 2>/dev/null; then
         echo "ERROR: Server failed to start!"
-        tail -50 "$LOG_FILE"
+        echo "Last 30 lines of log:"
+        tail -30 "$LOG_FILE"
         exit 1
     fi
 
     echo "✅ Server is ready on $HOST:$PORT"
     echo ""
 
-    # Benchmark configuration
     echo "=========================================="
     echo "BENCHMARK CONFIGURATION"
     echo "=========================================="
     echo "Server: $HOST:$PORT"
-    echo "Model: Qwen3-Coder-Next-UD-Q4_K_XL (80B parameters, Q4_K)"
+    echo "Model: Qwen3-Coder-Next-UD-Q4_K_XL"
     echo "Context: 8192 tokens"
     echo "Batch: 4096 tokens"
     echo "Ubatch: 1024 tokens"
-    echo "GPU Layers: 999 (all to GPU)"
-    echo "Flash Attention: Enabled"
+    echo "GPU Layers: 999 (all)"
     echo ""
 
-    # Test prompts of different sizes
+    # Test prompts
     SHORT_PROMPT="What is Python?"
-    MID_PROMPT="Explain how quicksort works. Include the algorithm, time complexity, and a Python implementation."
-    LONG_PROMPT="Design a complete REST API for a task management system using Python and FastAPI. Include:\n1. Data models for tasks and users\n2. CRUD endpoints\n3. Authentication\n4. Error handling\n5. Database integration\n\nProvide complete code with documentation."
+    MID_PROMPT="Explain how quicksort works. Include algorithm, complexity, and Python code."
+    LONG_PROMPT="Design a REST API for task management using FastAPI. Include data models, CRUD endpoints, auth, error handling, and database integration."
 
     echo "=========================================="
-    echo "TEST 1: SHORT PROMPT THROUGHPUT"
+    echo "TEST 1: SHORT PROMPT"
     echo "=========================================="
 
     START_TIME=$(date +%s%N)
@@ -129,23 +116,22 @@ log_msg() {
             \"model\": \"gpt-3.5-turbo\",
             \"messages\": [{\"role\": \"user\", \"content\": \"$SHORT_PROMPT\"}],
             \"max_tokens\": 128,
-            \"temperature\": 0.7,
-            \"top_p\": 0.9
+            \"temperature\": 0.7
         }")
     END_TIME=$(date +%s%N)
 
-    ELAPSED=$(( (END_TIME - START_TIME) / 1000000 ))  # Convert to milliseconds
-    TOKENS=$(echo "$RESPONSE1" | grep -oP '"usage":\{[^}]*"completion_tokens":\K[0-9]+' || echo "0")
-    PROMPT_TOKENS=$(echo "$RESPONSE1" | grep -oP '"usage":\{[^}]*"prompt_tokens":\K[0-9]+' || echo "0")
+    ELAPSED=$(( (END_TIME - START_TIME) / 1000000 ))
+    TOKENS=$(echo "$RESPONSE1" | grep -oP '"completion_tokens":\s*\K[0-9]+' || echo "0")
 
+    echo "Elapsed: ${ELAPSED}ms | Tokens: $TOKENS"
     if [ $ELAPSED -gt 0 ] && [ $TOKENS -gt 0 ]; then
         SPEED=$(echo "scale=2; ($TOKENS * 1000) / $ELAPSED" | bc)
-        echo "Time: ${ELAPSED}ms | Tokens: $TOKENS | Speed: ${SPEED} tok/sec"
+        echo "Speed: ${SPEED} tok/sec"
     fi
     echo ""
 
     echo "=========================================="
-    echo "TEST 2: MEDIUM PROMPT THROUGHPUT"
+    echo "TEST 2: MEDIUM PROMPT"
     echo "=========================================="
 
     START_TIME=$(date +%s%N)
@@ -155,22 +141,22 @@ log_msg() {
             \"model\": \"gpt-3.5-turbo\",
             \"messages\": [{\"role\": \"user\", \"content\": \"$MID_PROMPT\"}],
             \"max_tokens\": 256,
-            \"temperature\": 0.7,
-            \"top_p\": 0.9
+            \"temperature\": 0.7
         }")
     END_TIME=$(date +%s%N)
 
     ELAPSED=$(( (END_TIME - START_TIME) / 1000000 ))
-    TOKENS=$(echo "$RESPONSE2" | grep -oP '"usage":\{[^}]*"completion_tokens":\K[0-9]+' || echo "0")
+    TOKENS=$(echo "$RESPONSE2" | grep -oP '"completion_tokens":\s*\K[0-9]+' || echo "0")
 
+    echo "Elapsed: ${ELAPSED}ms | Tokens: $TOKENS"
     if [ $ELAPSED -gt 0 ] && [ $TOKENS -gt 0 ]; then
         SPEED=$(echo "scale=2; ($TOKENS * 1000) / $ELAPSED" | bc)
-        echo "Time: ${ELAPSED}ms | Tokens: $TOKENS | Speed: ${SPEED} tok/sec"
+        echo "Speed: ${SPEED} tok/sec"
     fi
     echo ""
 
     echo "=========================================="
-    echo "TEST 3: LONG PROMPT THROUGHPUT"
+    echo "TEST 3: LONG PROMPT"
     echo "=========================================="
 
     START_TIME=$(date +%s%N)
@@ -180,69 +166,72 @@ log_msg() {
             \"model\": \"gpt-3.5-turbo\",
             \"messages\": [{\"role\": \"user\", \"content\": \"$LONG_PROMPT\"}],
             \"max_tokens\": 512,
-            \"temperature\": 0.7,
-            \"top_p\": 0.9
+            \"temperature\": 0.7
         }")
     END_TIME=$(date +%s%N)
 
     ELAPSED=$(( (END_TIME - START_TIME) / 1000000 ))
-    TOKENS=$(echo "$RESPONSE3" | grep -oP '"usage":\{[^}]*"completion_tokens":\K[0-9]+' || echo "0")
+    TOKENS=$(echo "$RESPONSE3" | grep -oP '"completion_tokens":\s*\K[0-9]+' || echo "0")
 
+    echo "Elapsed: ${ELAPSED}ms | Tokens: $TOKENS"
     if [ $ELAPSED -gt 0 ] && [ $TOKENS -gt 0 ]; then
         SPEED=$(echo "scale=2; ($TOKENS * 1000) / $ELAPSED" | bc)
-        echo "Time: ${ELAPSED}ms | Tokens: $TOKENS | Speed: ${SPEED} tok/sec"
+        echo "Speed: ${SPEED} tok/sec"
     fi
     echo ""
 
-    # Extract GPU metrics from server log
     echo "=========================================="
-    echo "GPU METRICS"
+    echo "GPU METRICS FROM LOG"
     echo "=========================================="
     echo ""
-    echo "GPU Layer Offloading:"
+
+    echo "GPU Detection:"
+    grep "found.*ROCm devices" "$LOG_FILE" | head -1 || echo "  (Searching...)"
+
+    echo ""
+    echo "Layer Offloading:"
     grep "offloaded.*layers" "$LOG_FILE" | tail -1 || echo "  (Data being collected...)"
+
     echo ""
     echo "Memory Configuration:"
-    grep "buffer size" "$LOG_FILE" | head -5 || echo "  (Data being collected...)"
+    grep "buffer size.*=" "$LOG_FILE" | head -5 || echo "  (Data being collected...)"
+
     echo ""
 
     echo "=========================================="
-    echo "SYSTEM DIAGNOSTICS"
+    echo "ERROR CHECK"
     echo "=========================================="
-    echo "Checking for errors..."
+
     ERROR_COUNT=$(grep -ic "error\|failed\|exception" "$LOG_FILE" || echo 0)
-    WARNING_COUNT=$(grep -ic "warning" "$LOG_FILE" || echo 0)
+    echo "Errors detected: $ERROR_COUNT"
 
-    echo "Errors: $ERROR_COUNT"
-    echo "Warnings: $WARNING_COUNT"
-    echo ""
-
-    if grep -i "oom\|out of memory" "$LOG_FILE" >/dev/null 2>&1; then
-        echo "⚠️  OOM DETECTED!"
+    if grep -iq "oom\|out of memory" "$LOG_FILE"; then
+        echo "⚠️  OOM ERROR DETECTED"
     else
         echo "✅ No OOM errors"
     fi
 
-    if grep -i "cuda error\|rocm error\|hip error" "$LOG_FILE" >/dev/null 2>&1; then
-        echo "⚠️  GPU ERRORS DETECTED!"
+    if grep -iq "cuda error\|rocm error\|hip error" "$LOG_FILE"; then
+        echo "⚠️  GPU ERRORS DETECTED"
     else
         echo "✅ No GPU errors"
     fi
-    echo ""
 
+    echo ""
     echo "=========================================="
     echo "BENCHMARK COMPLETE"
     echo "=========================================="
     echo ""
-    echo "Full server log: $LOG_FILE"
-    echo "Metrics summary: $METRICS_FILE"
+    echo "Server log: $LOG_FILE"
+    echo "Metrics: $METRICS_FILE"
     echo ""
-    echo "Server still running on $HOST:$PORT"
-    echo "To run more benchmarks: curl requests to http://$HOST:$PORT/v1/chat/completions"
-    echo "To stop server: pkill -f llama-server"
+    echo "To view full log:"
+    echo "  tail -100 $LOG_FILE"
+    echo ""
+    echo "To kill server:"
+    echo "  pkill -f llama-server"
 
 } | tee "$METRICS_FILE"
 
 echo ""
-echo -e "${GREEN}✅ Benchmark complete!${NC}"
-echo "Results saved to: $METRICS_FILE"
+echo "✅ Benchmark complete!"
