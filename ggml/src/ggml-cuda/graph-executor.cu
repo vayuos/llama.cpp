@@ -6,7 +6,6 @@
 
 #include "graph-executor.cuh"
 #include "common.cuh"
-#include <cuda_runtime.h>
 #include <unordered_map>
 #include <mutex>
 #include <cstdio>
@@ -26,13 +25,13 @@ static uint64_t g_next_graph_id = 1;
 static bool g_graphs_enabled = true;
 
 // Forward declarations for all exported functions
-uint64_t ggml_cuda_graph_capture_begin(void * stream);
-int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream);
-int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream);
-int ggml_cuda_graph_launch(uint64_t graph_id, void * stream);
+uint64_t ggml_cuda_graph_capture_begin(cudaStream_t stream);
+int ggml_cuda_graph_capture_end(uint64_t graph_id, cudaStream_t stream);
+int ggml_cuda_graph_instantiate(uint64_t graph_id, cudaStream_t stream);
+int ggml_cuda_graph_launch(uint64_t graph_id, cudaStream_t stream);
 int ggml_cuda_graph_get_count();
 
-uint64_t ggml_cuda_graph_capture_begin(void * stream) {
+uint64_t ggml_cuda_graph_capture_begin(cudaStream_t stream) {
     if (!g_graphs_enabled) return 0;
     std::lock_guard<std::mutex> lock(g_graph_mutex);
     
@@ -60,7 +59,7 @@ uint64_t ggml_cuda_graph_capture_begin(void * stream) {
     return graph_id;
 }
 
-int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
+int ggml_cuda_graph_capture_end(uint64_t graph_id, cudaStream_t stream) {
     std::lock_guard<std::mutex> lock(g_graph_mutex);
     
     if (g_graphs.find(graph_id) == g_graphs.end()) {
@@ -81,14 +80,14 @@ int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream) {
     g_graphs[graph_id].is_captured = true;
     
     size_t num_nodes = 0;
-    cudaGraphGetNodes(graph, nullptr, &num_nodes);
+    (void)cudaGraphGetNodes(graph, nullptr, &num_nodes);
     g_graphs[graph_id].graph_nodes = num_nodes;
     // Debug: ggml_cuda_graph_capture_end: graph captured with node count
 
     return 0;
 }
 
-int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
+int ggml_cuda_graph_instantiate(uint64_t graph_id, cudaStream_t stream) {
     (void)stream;  // stream parameter unused - kept for API consistency
     std::lock_guard<std::mutex> lock(g_graph_mutex);
     
@@ -120,7 +119,7 @@ int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream) {
     return 0;
 }
 
-int ggml_cuda_graph_launch(uint64_t graph_id, void * stream) {
+int ggml_cuda_graph_launch(uint64_t graph_id, cudaStream_t stream) {
     std::lock_guard<std::mutex> lock(g_graph_mutex);
 
     if (g_graphs.find(graph_id) == g_graphs.end()) {
@@ -161,12 +160,12 @@ int ggml_cuda_graph_destroy(uint64_t graph_id) {
     cuda_graph_state & state = g_graphs[graph_id];
     
     if (state.is_instantiated && state.graph_exec) {
-        cudaGraphExecDestroy(state.graph_exec);
+        (void)cudaGraphExecDestroy(state.graph_exec);
         state.graph_exec = nullptr;
     }
     
     if (state.is_captured && state.graph) {
-        cudaGraphDestroy(state.graph);
+        (void)cudaGraphDestroy(state.graph);
         state.graph = nullptr;
     }
     
@@ -182,10 +181,10 @@ int ggml_cuda_graph_cleanup_all() {
     for (auto & pair : g_graphs) {
         cuda_graph_state & state = pair.second;
         if (state.is_instantiated && state.graph_exec) {
-            cudaGraphExecDestroy(state.graph_exec);
+            (void)cudaGraphExecDestroy(state.graph_exec);
         }
         if (state.is_captured && state.graph) {
-            cudaGraphDestroy(state.graph);
+            (void)cudaGraphDestroy(state.graph);
         }
     }
     

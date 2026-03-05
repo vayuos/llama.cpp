@@ -16,7 +16,7 @@
 #include "sampling.h"
 #include "common.cuh"
 
-#include <cuda_runtime.h>
+#include "common.cuh"
 #include <algorithm>
 #include <cmath>
 

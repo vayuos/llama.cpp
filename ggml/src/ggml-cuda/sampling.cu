@@ -1,8 +1,7 @@
 #include "sampling.cuh"
 #include "sampling.h"
 #include "top-k.cuh"
-#include <device_launch_parameters.h>
-#include <cub/cub.cuh>
+#include <cstdint>
 
 // GPU-exclusive decode stream (nullptr when not in use)
 cudaStream_t ggml_cuda_decode_stream = nullptr;

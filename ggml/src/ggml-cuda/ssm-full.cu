@@ -13,8 +13,7 @@
 
 #include "common.cuh"
 #include "ssm-full.cuh"
-#include <cuda_runtime.h>
-#include <cub/cub.cuh>
+#include "ssm-full.cuh"
 
 // ============================================================================
 // SSM CONVOLUTION KERNEL

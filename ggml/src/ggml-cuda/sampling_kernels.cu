@@ -13,12 +13,12 @@
 
 #include "sampling.h"
 
-#include <cuda_runtime.h>
+#include "common.cuh"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <curand_kernel.h>
+// common.cuh already handles curand/hiprand
 
 #include <algorithm>
 

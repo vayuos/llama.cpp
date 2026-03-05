@@ -9,7 +9,7 @@
 
 #include "rng-gpu-state.cuh"
 #include "common.cuh"
-#include <cuda_runtime.h>
+#include "common.cuh"
 #include <cstring>
 #include <cmath>
 

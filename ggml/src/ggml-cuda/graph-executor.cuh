@@ -5,9 +5,16 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cstdint>
 #include <chrono>
+
+#if defined(GGML_USE_HIP)
+#    include "vendors/hip.h"
+#elif defined(GGML_USE_MUSA)
+#    include "vendors/musa.h"
+#else
+#    include "vendors/cuda.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {

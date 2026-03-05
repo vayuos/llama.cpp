@@ -15,8 +15,7 @@
 #include "sampling.h"
 #include "common.cuh"
 
-#include <cuda_runtime.h>
-#include <curand_kernel.h>
+// common.cuh already handles curand/hiprand
 
 extern "C" {
 

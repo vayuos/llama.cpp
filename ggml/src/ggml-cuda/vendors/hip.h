@@ -5,6 +5,11 @@
 #include <hipblas/hipblas.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_bf16.h>
+#include <hiprand/hiprand_kernel.h>
+
+#define curandState hiprandState
+#define curand_init hiprand_init
+#define curand_uniform hiprand_uniform
 
 #if defined(GGML_HIP_ROCWMMA_FATTN)
 #include <rocwmma/rocwmma-version.hpp>
@@ -28,9 +33,10 @@
 #define CU_MEM_LOCATION_TYPE_DEVICE hipMemLocationTypeDevice
 #define CU_MEM_ACCESS_FLAGS_PROT_READWRITE hipMemAccessFlagsProtReadWrite
 #define CU_CHECK(fn) {hipError_t err = fn; if(err != hipSuccess) { GGML_ABORT("HipVMM Failure: %s\n", hipGetErrorString(err)); }}
-#define __shfl_sync(mask, var, laneMask, width) __shfl(var, laneMask, width)
-#define __shfl_up_sync(mask, var, laneMask, width) __shfl_up(var, laneMask, width)
-#define __shfl_xor_sync(mask, var, laneMask, width) __shfl_xor(var, laneMask, width)
+#define __shfl_sync(mask, ...) __shfl(__VA_ARGS__)
+#define __shfl_up_sync(mask, ...) __shfl_up(__VA_ARGS__)
+#define __shfl_down_sync(mask, ...) __shfl_down(__VA_ARGS__)
+#define __shfl_xor_sync(mask, ...) __shfl_xor(__VA_ARGS__)
 #define __all_sync(mask, var) __all(var)
 #define __any_sync(mask, var) __any(var)
 #define cublasStrsmBatched hipblasStrsmBatched
@@ -132,6 +138,7 @@
 #define cudaGraphNodeGetType hipGraphNodeGetType
 #define cudaGraphGetNodes hipGraphGetNodes
 #define cudaGraphExecUpdate hipGraphExecUpdate
+#define cudaStreamCaptureModeGlobal hipStreamCaptureModeGlobal
 #define cudaStreamCaptureModeRelaxed hipStreamCaptureModeRelaxed
 #define cudaStreamBeginCapture hipStreamBeginCapture
 #define cudaGraph_t hipGraph_t
