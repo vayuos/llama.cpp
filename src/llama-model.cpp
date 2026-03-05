@@ -3006,17 +3006,13 @@ bool llama_model::load_tensors(llama_model_loader & ml) {
                             auto candidate = buft_list->at(i).second;
                             const char * buft_name = ggml_backend_buft_name(candidate);
 
-                            if (std::string(buft_name).find("CUDA_Host") != std::string::npos ||
-                                std::string(buft_name).find("HIP_Host") != std::string::npos ||
-                                std::string(buft_name).find("ROCm_Host") != std::string::npos) {
+                            if (std::string(buft_name).find("CUDA_Host") != std::string::npos) {
                                 cuda_host_buft = candidate;
-                                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K found CUDA_Host/HIP_Host/ROCm_Host at buffer[%zu]\n", i);
+                                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K found CUDA_Host at buffer[%zu]\n", i);
                             }
-                            if (std::string(buft_name).find("CUDA0") != std::string::npos ||
-                                std::string(buft_name).find("HIP0") != std::string::npos ||
-                                std::string(buft_name).find("ROCm0") != std::string::npos) {
+                            if (std::string(buft_name).find("CUDA0") != std::string::npos) {
                                 cuda0_buft = candidate;
-                                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K found CUDA0/HIP0/ROCm0 at buffer[%zu]\n", i);
+                                LLAMA_LOG_DEBUG("load_tensors: TOKEN_EMBD Q4_K found CUDA0 at buffer[%zu]\n", i);
                             }
                         }
 
