@@ -1,0 +1,280 @@
+================================================================================
+                    LLAMA.CPP OPTIMIZATION - QUICK START
+================================================================================
+
+📍 YOU ARE HERE: Optimization code applied, build complete, ready to benchmark
+
+================================================================================
+                              STEP 1: SETUP
+================================================================================
+
+cd ~/llama/llama.cpp
+chmod +x FULL_BENCHMARK.sh RUN_BENCHMARK.sh EXTRACT_METRICS.sh
+
+================================================================================
+                           STEP 2: RUN BENCHMARK
+================================================================================
+
+OPTION A: Full Benchmark (RECOMMENDED) ⭐
+──────────────────────────────────────────
+  ./FULL_BENCHMARK.sh
+
+  • Runs complete end-to-end test
+  • Measures real API throughput
+  • Tests short, medium, long prompts
+  • Duration: ~5-10 minutes
+  • Output: benchmark_results_YYYYMMDD_HHMMSS.txt
+
+OPTION B: Quick Benchmark
+──────────────────────────
+  ./RUN_BENCHMARK.sh
+
+  • Simpler, faster test
+  • Duration: ~2-3 minutes
+  • Fewer measurements
+
+OPTION C: Analyze Existing Logs
+────────────────────────────────
+  ./EXTRACT_METRICS.sh server_logs_all_optimizations_20260305_222035.txt
+
+  • Instant analysis
+  • No server restart
+  • Good for quick checks
+
+================================================================================
+                         STEP 3: INTERPRET RESULTS
+================================================================================
+
+BASELINE PERFORMANCE (Previous Run):
+  Prompt throughput: 405 tok/sec
+  GPU layers: 20/49 (partial)
+  Token embeddings: CPU (bottleneck)
+
+EXPECTED WITH OPTIMIZATIONS:
+  Prompt throughput: 475-560 tok/sec
+  GPU layers: 49/49 (complete ✅)
+  Token embeddings: GPU ✅
+  Improvement: +17-38%
+
+MINIMUM ACCEPTABLE:
+  Prompt throughput: 450+ tok/sec
+  GPU memory: 87%+ utilization
+  No crashes/OOM: True
+
+================================================================================
+                        STEP 4: VERIFY SUCCESS
+================================================================================
+
+Look for these in benchmark results:
+
+✅ CODE FIX APPLIED
+   grep "HIP0\|ROCm0" src/llama-model.cpp
+   → Should find 4 matches
+
+✅ ALL LAYERS ON GPU
+   grep "offloaded.*49/49" server_logs_benchmark_*.txt
+   → Should show: offloaded 49/49 layers to GPU
+
+✅ EMBEDDINGS ON GPU
+   grep "ROCm0 model buffer" server_logs_benchmark_*.txt
+   → Should show: ~42000+ MiB (very high)
+
+✅ CPU USAGE MINIMAL
+   grep "ROCm_Host.*buffer" server_logs_benchmark_*.txt
+   → Should show: <200 MiB
+
+✅ KV CACHE ON GPU
+   grep "ROCm0 KV buffer" server_logs_benchmark_*.txt
+   → Should show: 102.00 MiB
+
+✅ THROUGHPUT IMPROVED
+   grep "Speed:" benchmark_results_*.txt
+   → Should show: 475-560 tok/sec (vs 405 baseline)
+
+✅ NO ERRORS
+   grep -i "error\|oom" server_logs_benchmark_*.txt
+   → Should be EMPTY
+
+================================================================================
+                       STEP 5: ANALYZE & COMMIT
+================================================================================
+
+1. Check results file:
+   cat benchmark_results_*.txt
+
+2. Calculate improvement:
+   (NEW_SPEED - 405) / 405 * 100 = % improvement
+
+3. If meeting targets (475-560 tok/sec):
+   git add benchmark_results_*.txt
+   git commit -m "benchmark: optimization verified - X tok/sec (+Y% improvement)"
+   git push origin main
+
+4. If not meeting targets:
+   → Run: ./EXTRACT_METRICS.sh to analyze
+   → Check: troubleshooting section in BENCHMARK_GUIDE.md
+   → Review: all layers on GPU check list above
+
+================================================================================
+                        TROUBLESHOOTING QUICK FIXES
+================================================================================
+
+Problem: Server won't start
+Fix:     pkill -f llama-server
+         sleep 2
+         ./FULL_BENCHMARK.sh
+
+Problem: Low throughput (< 450 tok/sec)
+Fix:     1. Check GPU layers: grep "offloaded" server_logs_benchmark_*.txt
+         2. Check embeddings: grep "ROCm0 model buffer" server_logs_benchmark_*.txt
+         3. If embeddings on CPU (low number), rebuild with fix
+
+Problem: OOM errors
+Fix:     Edit FULL_BENCHMARK.sh:
+         Change: -c 8192 → -c 4096
+         Change: -b 4096 → -b 2048
+         Then run again
+
+Problem: GPU errors
+Fix:     Check ROCm: rocm-smi
+         Try env var: export GGML_HIP_PINNED_MEM=1
+         Then run: ./FULL_BENCHMARK.sh
+
+================================================================================
+                          IMPORTANT FILES
+================================================================================
+
+Code:
+  src/llama-model.cpp (lines 3009-3020) - Token embedding fix
+
+Build:
+  BUILD_ALL_OPTIMIZATIONS.sh - Complete build pipeline
+
+Benchmarking:
+  FULL_BENCHMARK.sh - Full benchmark (RECOMMENDED)
+  RUN_BENCHMARK.sh - Quick benchmark
+  EXTRACT_METRICS.sh - Log analysis
+
+Documentation:
+  BENCHMARK_GUIDE.md - Detailed guide
+  OPTIMIZATION_COMPLETE.md - Full summary
+  BENCHMARK_QUICK_START.txt - This file
+
+Configuration:
+  -c 8192         Context size
+  -b 4096         Batch size
+  -ub 1024        Ubatch size
+  -ngl 999        All layers to GPU
+  --no-mmap       CRITICAL for ROCm
+
+================================================================================
+                           PERFORMANCE TARGETS
+================================================================================
+
+Baseline (405 tok/sec):
+  └─ 20/49 GPU layers
+  └─ Token embeddings on CPU (bottleneck)
+  └─ Less optimized configuration
+
+After Optimization (475-560 tok/sec):
+  ├─ 49/49 GPU layers ✅
+  ├─ Token embeddings on GPU ✅
+  ├─ Context: 8K tokens ✅
+  ├─ Batch: 4K tokens ✅
+  ├─ Flash attention: enabled ✅
+  └─ +17-38% improvement ✅
+
+================================================================================
+                             TYPICAL WORKFLOW
+================================================================================
+
+1. Make scripts executable:
+   chmod +x *.sh
+
+2. Run benchmark:
+   ./FULL_BENCHMARK.sh
+
+   [Waits 5-10 minutes]
+
+3. Check results:
+   cat benchmark_results_*.txt
+
+4. Verify metrics:
+   grep "Speed:" benchmark_results_*.txt
+   [Should show 475-560 tok/sec]
+
+5. Commit:
+   git add benchmark_results_*.txt server_logs_benchmark_*.txt
+   git commit -m "benchmark: optimization verified - XXX tok/sec"
+
+6. Push:
+   git push origin main
+
+Total time: ~15-20 minutes including all analysis
+
+================================================================================
+                          QUICK COMMAND REFERENCE
+================================================================================
+
+Full benchmark:          ./FULL_BENCHMARK.sh
+Quick benchmark:         ./RUN_BENCHMARK.sh
+Analyze logs:            ./EXTRACT_METRICS.sh server_logs_*.txt
+Check code changes:      grep "HIP0" src/llama-model.cpp
+Check GPU layers:        grep "offloaded" server_logs_*.txt
+Check embeddings:        grep "ROCm0 model buffer" server_logs_*.txt
+Kill server:             pkill -f llama-server
+Check GPU status:        rocm-smi
+View results:            cat benchmark_results_*.txt | tail -30
+List benchmark files:    ls -lh benchmark_results_*.txt
+Check for errors:        grep -i "error\|oom" server_logs_*.txt
+
+================================================================================
+                         EXPECTED BENCHMARK OUTPUT
+================================================================================
+
+Good output looks like:
+────────────────────────
+[DATE TIME] Request 1/3...
+[DATE TIME] Response received
+Time: 4523ms | Tokens: 256 | Speed: 56.56 tok/sec
+✅ No OOM errors
+✅ No GPU errors
+offloaded 49/49 layers to GPU
+ROCm0 model buffer size = 42333.22 MiB
+ROCm_Host model buffer size = 166.92 MiB
+
+Bad output looks like:
+──────────────────────
+offloaded 20/49 layers to GPU   ← WRONG (should be 49/49)
+ROCm_Host model buffer size = 1000 MiB   ← TOO HIGH (should be <200)
+⚠️ OOM DETECTED!   ← ERROR (out of memory)
+Time: 2000ms | Tokens: 128 | Speed: 64 tok/sec   ← TOO SLOW (should be 475+)
+
+================================================================================
+                              NEXT STEPS
+================================================================================
+
+RIGHT NOW:
+  1. Make scripts executable: chmod +x *.sh
+  2. Run benchmark: ./FULL_BENCHMARK.sh
+  3. Wait 5-10 minutes for results
+
+AFTER BENCHMARK:
+  1. Check results: cat benchmark_results_*.txt
+  2. Compare to baseline: 405 tok/sec → 475-560 tok/sec
+  3. Commit results: git add/commit/push
+
+IF NOT MEETING TARGETS:
+  1. Review BENCHMARK_GUIDE.md troubleshooting section
+  2. Run: ./EXTRACT_METRICS.sh to analyze
+  3. Check GPU metrics (layers, embeddings, memory)
+  4. Adjust flags if needed and rebuild
+
+================================================================================
+
+Status: ✅ OPTIMIZATION COMPLETE
+Next:   RUN ./FULL_BENCHMARK.sh to measure performance improvement
+
+Expected improvement: +17-38% (405 tok/sec → 475-560 tok/sec)
+
+================================================================================
