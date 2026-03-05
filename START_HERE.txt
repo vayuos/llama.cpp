@@ -1,0 +1,228 @@
+================================================================================
+                        🚀 START HERE - QUICK WORKFLOW
+================================================================================
+
+                         LLAMA.CPP OPTIMIZATION PIPELINE
+                              Complete workflow to:
+                    1. Build optimized llama-server binary
+                    2. Benchmark and measure performance improvement
+                         Estimated total time: 35-50 minutes
+
+================================================================================
+                              CURRENT STATUS
+================================================================================
+
+✅ Code optimization applied (commit 8c18344)
+  └─ Token embedding buffer placement fix active
+
+❌ Binary not built yet
+  └─ llama-server needs to be compiled
+
+⏳ Benchmark ready to run (after build)
+  └─ FULL_BENCHMARK.sh will measure performance
+
+================================================================================
+                          COMPLETE WORKFLOW (3 STEPS)
+================================================================================
+
+TOTAL TIME: ~35-50 minutes (mostly waiting for build)
+
+================================================================================
+STEP 1: BUILD PROJECT (20-30 minutes)
+================================================================================
+
+Run this command:
+
+    cd ~/llama/llama.cpp
+    chmod +x BUILD_ALL_OPTIMIZATIONS.sh
+    ./BUILD_ALL_OPTIMIZATIONS.sh
+
+What happens:
+  ✓ Pulls latest code from git (includes optimization fix)
+  ✓ Configures CMake with ROCm optimization flags
+  ✓ Compiles entire project
+  ✓ Creates binary: build_cuda_mmq_moe_full_logs/bin/llama-server
+
+Status tracking:
+  Watch for:
+    [████████████████] 100% (CMake)
+    [████████████████] 100% (Build)
+    "BUILD COMPLETE" message
+
+⏳ This takes 20-30 minutes - CANNOT BE SKIPPED
+
+================================================================================
+STEP 2: VERIFY BUILD CREATED BINARY (30 seconds)
+================================================================================
+
+Run this command:
+
+    ls -lh ~/llama/llama.cpp/build_cuda_mmq_moe_full_logs/bin/llama-server
+
+Expected output:
+    -rwxr-xr-x user group 100M+ Jan 5 22:00 llama-server
+
+If you see "No such file":
+  ✗ BUILD FAILED
+  ✗ Check error messages from STEP 1
+  ✗ Fix the issue and rebuild
+
+================================================================================
+STEP 3: RUN BENCHMARK (5-10 minutes)
+================================================================================
+
+Run this command:
+
+    cd ~/llama/llama.cpp
+    ./FULL_BENCHMARK.sh
+
+What happens:
+  ✓ Kills any existing servers
+  ✓ Starts freshly-built llama-server
+  ✓ Runs 3 benchmark tests (short, medium, long prompts)
+  ✓ Measures throughput in tokens/second
+  ✓ Extracts GPU metrics
+  ✓ Saves results to benchmark_results_YYYYMMDD_HHMMSS.txt
+
+Output files created:
+  - server_logs_benchmark_YYYYMMDD_HHMMSS.txt (full server log)
+  - benchmark_results_YYYYMMDD_HHMMSS.txt (metric summary)
+
+⏳ This takes 5-10 minutes
+
+================================================================================
+STEP 4: ANALYZE RESULTS (5 minutes)
+================================================================================
+
+Run this command:
+
+    cat benchmark_results_*.txt
+
+Look for:
+  ✅ Speed: 475-560 tok/sec (vs baseline 405)
+  ✅ Improvement: +17-38%
+  ✅ GPU layers: 49/49 offloaded
+  ✅ Token embeddings: On GPU
+  ✅ No errors/OOM
+
+If you see lower numbers:
+  - Review BENCHMARK_GUIDE.md troubleshooting
+  - Run: ./EXTRACT_METRICS.sh to analyze
+  - Check GPU metrics (layers, embeddings, memory)
+
+================================================================================
+PERFORMANCE EXPECTATIONS
+================================================================================
+
+BASELINE (Previous run):
+  Prompt throughput: 405 tok/sec
+  GPU layers: 20/49 (partial - bottleneck!)
+  Token embeddings: CPU (bottleneck!)
+
+EXPECTED AFTER BUILD + BENCHMARK:
+  Prompt throughput: 475-560 tok/sec ← Goal
+  GPU layers: 49/49 (all on GPU) ✅
+  Token embeddings: GPU (ROCm0) ✅
+  Improvement: +17-38% ← Expected
+
+MINIMUM ACCEPTABLE:
+  Prompt throughput: 450+ tok/sec
+  No crashes or OOM errors
+  All 49 GPU layers
+
+================================================================================
+QUICK START: ONE COMMAND
+================================================================================
+
+Want to run everything in sequence? Use this:
+
+    cd ~/llama/llama.cpp && \
+    chmod +x BUILD_ALL_OPTIMIZATIONS.sh && \
+    ./BUILD_ALL_OPTIMIZATIONS.sh && \
+    ./FULL_BENCHMARK.sh
+
+(Runs build, then immediately benchmarks when complete)
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+PROBLEM: Build takes forever
+SOLUTION: Normal - takes 20-30 minutes. Cannot be shortened.
+
+PROBLEM: Build fails with errors
+SOLUTION: Check output for compiler errors, install missing dependencies
+
+PROBLEM: Binary not found after build
+SOLUTION: Build failed. Check error messages and retry
+
+PROBLEM: Benchmark shows low throughput (< 450 tok/sec)
+SOLUTION:
+  1. Check if all 49 layers are on GPU
+  2. Check if token embeddings are on GPU (not CPU)
+  3. Review BENCHMARK_GUIDE.md
+
+PROBLEM: GPU out of memory (OOM)
+SOLUTION:
+  1. Edit FULL_BENCHMARK.sh
+  2. Change: -c 8192 → -c 4096
+  3. Change: -b 4096 → -b 2048
+  4. Re-run benchmark
+
+PROBLEM: Server crashes during benchmark
+SOLUTION:
+  1. Check logs: grep -i "error\|crash\|oom" server_logs_benchmark_*.txt
+  2. Review GPU environment variables
+  3. Try: export GGML_HIP_PINNED_MEM=1 && ./FULL_BENCHMARK.sh
+
+================================================================================
+FILE LOCATIONS & PURPOSES
+================================================================================
+
+Core Files:
+  BUILD_ALL_OPTIMIZATIONS.sh    ← RUN THIS FIRST (Step 1)
+  FULL_BENCHMARK.sh             ← RUN THIS SECOND (Step 3)
+
+Documentation:
+  START_HERE.txt                ← This file
+  WORKFLOW_CORRECTED.md         ← Full workflow explanation
+  BENCHMARK_QUICK_START.txt     ← Quick reference
+  BENCHMARK_GUIDE.md            ← Detailed troubleshooting
+  OPTIMIZATION_COMPLETE.md      ← Complete technical summary
+
+Generated during build:
+  build_cuda_mmq_moe_full_logs/  ← Build directory
+  build_cuda_mmq_moe_full_logs/bin/llama-server ← Compiled binary
+
+Generated during benchmark:
+  server_logs_benchmark_*.txt    ← Server log (auto-generated)
+  benchmark_results_*.txt       ← Results file (auto-generated)
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+👉 RIGHT NOW:
+
+    cd ~/llama/llama.cpp
+    chmod +x BUILD_ALL_OPTIMIZATIONS.sh
+    ./BUILD_ALL_OPTIMIZATIONS.sh
+
+⏳ Then wait 20-30 minutes for build to complete...
+
+👉 AFTER BUILD:
+
+    ./FULL_BENCHMARK.sh
+
+⏳ Wait 5-10 minutes for benchmark to complete...
+
+👉 CHECK RESULTS:
+
+    cat benchmark_results_*.txt
+
+🎯 GOAL: See 475-560 tok/sec (improvement from 405 baseline)
+
+================================================================================
+                          STATUS: READY TO BUILD
+                   Execute: ./BUILD_ALL_OPTIMIZATIONS.sh
+================================================================================

@@ -5,14 +5,38 @@
 📍 YOU ARE HERE: Optimization code applied, build complete, ready to benchmark
 
 ================================================================================
-                              STEP 1: SETUP
+                         ⚠️  IMPORTANT: WORKFLOW SEQUENCE
+================================================================================
+
+The project MUST BE BUILT BEFORE BENCHMARKING!
+
+STEP 1: BUILD (20-30 minutes) ⭐ REQUIRED FIRST
+STEP 2: BENCHMARK (5-10 minutes) - AFTER BUILD COMPLETES
+
+================================================================================
+                           STEP 1: BUILD PROJECT
 ================================================================================
 
 cd ~/llama/llama.cpp
-chmod +x FULL_BENCHMARK.sh RUN_BENCHMARK.sh EXTRACT_METRICS.sh
+chmod +x BUILD_ALL_OPTIMIZATIONS.sh
+./BUILD_ALL_OPTIMIZATIONS.sh
+
+⏳ Wait 20-30 minutes for build to complete...
+
+(This creates the llama-server binary needed for benchmarking)
 
 ================================================================================
-                           STEP 2: RUN BENCHMARK
+                        STEP 2: VERIFY BUILD SUCCESS
+================================================================================
+
+ls -lh ~/llama/llama.cpp/build_cuda_mmq_moe_full_logs/bin/llama-server
+
+Should show: -rwxr-xr-x llama-server (100+ MB file)
+
+If file not found: BUILD FAILED - check error messages above
+
+================================================================================
+                          STEP 3: RUN BENCHMARK
 ================================================================================
 
 OPTION A: Full Benchmark (RECOMMENDED) ⭐

@@ -48,9 +48,32 @@ log_msg() {
 
     # Start new server with optimizations
     echo "Starting optimized llama-server..."
+
+    # Find the llama-server binary
+    LLAMA_SERVER=""
+    if [ -f "$SCRIPT_DIR/build_cuda_mmq_moe_full_logs/bin/llama-server" ]; then
+        LLAMA_SERVER="$SCRIPT_DIR/build_cuda_mmq_moe_full_logs/bin/llama-server"
+    elif [ -f "$SCRIPT_DIR/build/bin/llama-server" ]; then
+        LLAMA_SERVER="$SCRIPT_DIR/build/bin/llama-server"
+    elif [ -f "$SCRIPT_DIR/llama-server" ]; then
+        LLAMA_SERVER="$SCRIPT_DIR/llama-server"
+    else
+        echo "ERROR: llama-server binary not found!"
+        echo "Searched locations:"
+        echo "  1. $SCRIPT_DIR/build_cuda_mmq_moe_full_logs/bin/llama-server"
+        echo "  2. $SCRIPT_DIR/build/bin/llama-server"
+        echo "  3. $SCRIPT_DIR/llama-server"
+        echo ""
+        echo "Please run BUILD_ALL_OPTIMIZATIONS.sh first to compile the project:"
+        echo "  cd $SCRIPT_DIR"
+        echo "  ./BUILD_ALL_OPTIMIZATIONS.sh"
+        exit 1
+    fi
+
+    echo "Using binary: $LLAMA_SERVER"
     cd "$SCRIPT_DIR"
 
-    timeout 600 ./llama-server \
+    timeout 600 "$LLAMA_SERVER" \
         -m /home/vayuos/models/qwen/Qwen3-Coder-Next-UD-Q4_K_XL.gguf \
         -ngl 999 \
         -c 8192 \

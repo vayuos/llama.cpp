@@ -44,9 +44,24 @@ if ! nc -z $HOST $PORT 2>/dev/null; then
     log_msg "${RED}ERROR: Server not running on $HOST:$PORT${NC}"
     log_msg "Starting llama-server in background..."
 
+    # Find the llama-server binary
+    LLAMA_SERVER=""
+    if [ -f "$SCRIPT_DIR/build_cuda_mmq_moe_full_logs/bin/llama-server" ]; then
+        LLAMA_SERVER="$SCRIPT_DIR/build_cuda_mmq_moe_full_logs/bin/llama-server"
+    elif [ -f "$SCRIPT_DIR/build/bin/llama-server" ]; then
+        LLAMA_SERVER="$SCRIPT_DIR/build/bin/llama-server"
+    elif [ -f "$SCRIPT_DIR/llama-server" ]; then
+        LLAMA_SERVER="$SCRIPT_DIR/llama-server"
+    else
+        log_msg "ERROR: llama-server binary not found!"
+        log_msg "Please run BUILD_ALL_OPTIMIZATIONS.sh first:"
+        log_msg "  cd $SCRIPT_DIR && ./BUILD_ALL_OPTIMIZATIONS.sh"
+        exit 1
+    fi
+
     # Start the server
     cd "$SCRIPT_DIR"
-    timeout 300 ./llama-server -m /home/vayuos/models/qwen/Qwen3-Coder-Next-UD-Q4_K_XL.gguf \
+    timeout 300 "$LLAMA_SERVER" -m /home/vayuos/models/qwen/Qwen3-Coder-Next-UD-Q4_K_XL.gguf \
         -ngl 999 \
         -c 8192 \
         -b 4096 \

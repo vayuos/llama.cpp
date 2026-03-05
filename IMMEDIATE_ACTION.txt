@@ -1,0 +1,152 @@
+================================================================================
+                           ⚡ IMMEDIATE ACTION
+================================================================================
+
+❌ ERROR ENCOUNTERED:
+    ./FULL_BENCHMARK.sh failed because llama-server binary doesn't exist
+
+    Reason: Build hasn't been run yet
+
+💡 SOLUTION:
+    Build the project first using BUILD_ALL_OPTIMIZATIONS.sh
+
+================================================================================
+                        WHAT TO DO RIGHT NOW
+================================================================================
+
+Copy & paste this command:
+
+────────────────────────────────────────────────────────────────────────────
+    cd ~/llama/llama.cpp && chmod +x BUILD_ALL_OPTIMIZATIONS.sh && \
+    ./BUILD_ALL_OPTIMIZATIONS.sh
+────────────────────────────────────────────────────────────────────────────
+
+Then go have coffee ☕ (takes 20-30 minutes)
+
+================================================================================
+                         WHAT HAPPENS NEXT
+================================================================================
+
+While you wait (20-30 minutes):
+
+  CMake will configure the project
+  Compiler will build llama.cpp with optimizations
+  Binary will be created at:
+    ~/llama/llama.cpp/build_cuda_mmq_moe_full_logs/bin/llama-server
+
+When build completes, you'll see:
+  "✅ BUILD COMPLETE"
+
+================================================================================
+                        AFTER BUILD COMPLETES
+================================================================================
+
+Run this command:
+
+────────────────────────────────────────────────────────────────────────────
+    cd ~/llama/llama.cpp && ./FULL_BENCHMARK.sh
+────────────────────────────────────────────────────────────────────────────
+
+Then wait 5-10 minutes for benchmark to complete
+
+================================================================================
+                          THEN CHECK RESULTS
+================================================================================
+
+Run this:
+
+────────────────────────────────────────────────────────────────────────────
+    cat benchmark_results_*.txt
+────────────────────────────────────────────────────────────────────────────
+
+Look for:
+  ✅ Speed: 475-560 tok/sec (goal: +17-38% improvement)
+  ✅ GPU layers: 49/49
+  ✅ No errors
+
+================================================================================
+                            ONE-LINER MODE
+================================================================================
+
+Want to do it all in one go?
+
+────────────────────────────────────────────────────────────────────────────
+cd ~/llama/llama.cpp && chmod +x BUILD_ALL_OPTIMIZATIONS.sh && \
+./BUILD_ALL_OPTIMIZATIONS.sh && \
+echo "✅ BUILD DONE - Starting benchmark..." && \
+./FULL_BENCHMARK.sh && \
+echo "✅ BENCHMARK DONE - Results:" && \
+cat benchmark_results_*.txt
+────────────────────────────────────────────────────────────────────────────
+
+(This runs build, waits for completion, then immediately benchmarks)
+
+================================================================================
+                          TIMELINE
+================================================================================
+
+⏱️  Build phase:        20-30 minutes
+⏱️  Benchmark phase:     5-10 minutes
+⏱️  Analysis phase:      5 minutes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏱️  TOTAL TIME:        30-50 minutes
+
+================================================================================
+                         WHAT'S HAPPENING
+================================================================================
+
+Your code fix (commit 8c18344) is already in the repository.
+This fix enables token embeddings to be placed on GPU for ROCm/HIP.
+
+The build process will:
+  1. Pull the latest code (with your fix)
+  2. Compile with ROCm optimization flags
+  3. Create the llama-server binary
+  4. Verify all 49 GPU layers can be offloaded
+
+The benchmark will then:
+  1. Run the binary
+  2. Make inference requests
+  3. Measure throughput (tok/sec)
+  4. Verify GPU memory usage
+  5. Compare against 405 tok/sec baseline
+
+Expected result: 475-560 tok/sec (+17-38% improvement)
+
+================================================================================
+                      FILES THAT WERE UPDATED
+================================================================================
+
+✅ FULL_BENCHMARK.sh  - Now auto-detects binary location
+✅ RUN_BENCHMARK.sh   - Now auto-detects binary location
+
+These improvements mean:
+  • Clear error messages if binary not found
+  • Automatic search in 3 possible locations
+  • Guides you to run BUILD first if needed
+
+================================================================================
+                       SUPPORT FILES CREATED
+================================================================================
+
+If you need more info, read these:
+
+  START_HERE.txt            ← Complete workflow guide
+  WORKFLOW_CORRECTED.md     ← Detailed explanation
+  BENCHMARK_GUIDE.md        ← Troubleshooting & detailed options
+  OPTIMIZATION_COMPLETE.md  ← Technical summary of all changes
+
+================================================================================
+
+📍 CURRENT LOCATION: ~/llama/llama.cpp/
+
+👉 NEXT COMMAND TO RUN:
+   ./BUILD_ALL_OPTIMIZATIONS.sh
+
+⏳ EXPECTED COMPLETION: 20-30 minutes from now
+
+✅ THEN RUN: ./FULL_BENCHMARK.sh
+
+📊 THEN CHECK: cat benchmark_results_*.txt
+
+================================================================================
