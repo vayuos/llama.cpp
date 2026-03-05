@@ -41,12 +41,12 @@ static inline int cuda_safe_check(cudaError_t e) {
 static inline void cuda_event_sync(cudaStream_t s, void * token_event) {
     if (s && token_event) {
         cudaEvent_t evt = (cudaEvent_t) token_event;
-        cudaEventRecord(evt, s);
+        (void)cudaEventRecord(evt, s);
         GGML_CUDA_WARN_STREAM_SYNC_DECODE();
-        cudaEventSynchronize(evt);
+        (void)cudaEventSynchronize(evt);
     } else if (s) {
         GGML_CUDA_WARN_STREAM_SYNC_DECODE();
-        cudaStreamSynchronize(s);
+        (void)cudaStreamSynchronize(s);
     }
 }
 
@@ -135,7 +135,7 @@ int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_siz
     }
 
     if (ctx->d_history) {
-        cudaMemset(ctx->d_history, 0, (size_t) max_history * sizeof(int32_t));
+        (void)cudaMemset(ctx->d_history, 0, (size_t) max_history * sizeof(int32_t));
     }
 
     // Initialize decode phase enforcement
@@ -152,7 +152,7 @@ int cuda_sampling_init_gpu(cuda_sampling_context_t ** out_ctx, int32_t vocab_siz
             for (int32_t i = 0; i < vocab_size; i++) {
                 h_inds[i] = i;
             }
-            cudaMemcpyAsync(ctx->d_sorted_inds, h_inds, int_bytes, cudaMemcpyHostToDevice, s);
+            (void)cudaMemcpyAsync(ctx->d_sorted_inds, h_inds, int_bytes, cudaMemcpyHostToDevice, s);
             free(h_inds);
         }
     }
@@ -182,41 +182,41 @@ int cuda_sampling_free_gpu(cuda_sampling_context_t * ctx) {
     // destroy optional stream
     if (ctx->cuda_stream) {
         cudaStream_t s = (cudaStream_t) ctx->cuda_stream;
-        cudaStreamDestroy(s);
+        (void)cudaStreamDestroy(s);
         ctx->cuda_stream = NULL;
     }
     // destroy token-ready event
     if (ctx->token_event) {
         cudaEvent_t evt = (cudaEvent_t) ctx->token_event;
-        cudaEventDestroy(evt);
+        (void)cudaEventDestroy(evt);
         ctx->token_event = NULL;
     }
     if (ctx->d_logits) {
-        cudaFree(ctx->d_logits);
+        (void)cudaFree(ctx->d_logits);
     }
     if (ctx->d_penalties) {
-        cudaFree(ctx->d_penalties);
+        (void)cudaFree(ctx->d_penalties);
     }
     if (ctx->d_probs) {
-        cudaFree(ctx->d_probs);
+        (void)cudaFree(ctx->d_probs);
     }
     if (ctx->d_scratch) {
-        cudaFree(ctx->d_scratch);
+        (void)cudaFree(ctx->d_scratch);
     }
     if (ctx->d_sampled_token) {
-        cudaFree(ctx->d_sampled_token);
+        (void)cudaFree(ctx->d_sampled_token);
     }
     if (ctx->d_sorted_inds) {
-        cudaFree(ctx->d_sorted_inds);
+        (void)cudaFree(ctx->d_sorted_inds);
     }
     if (ctx->d_mask) {
-        cudaFree(ctx->d_mask);
+        (void)cudaFree(ctx->d_mask);
     }
     if (ctx->d_n_keep) {
-        cudaFree(ctx->d_n_keep);
+        (void)cudaFree(ctx->d_n_keep);
     }
     if (ctx->d_history) {
-        cudaFree(ctx->d_history);
+        (void)cudaFree(ctx->d_history);
     }
     free(ctx);
     return 0;
@@ -243,7 +243,7 @@ int cuda_sampling_commit_token(cuda_sampling_context_t * ctx) {
         ctx->n_history = 0; 
     }
 
-    cudaMemcpyAsync(ctx->d_history + ctx->n_history, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToDevice, s);
+    (void)cudaMemcpyAsync(ctx->d_history + ctx->n_history, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToDevice, s);
     
     // Optionally: Update d_penalties buffer based on the new token
     // If d_penalties stores counts, we increment the count for the sampled token.
@@ -331,7 +331,7 @@ int cuda_sampling_sample_greedy(cuda_sampling_context_t * ctx, int32_t * token_o
             size_t token_bytes = sizeof(int32_t);
             if (cuda_check_transfer_guard(ctx, token_bytes) == 0) {
                 GGML_CUDA_ASSERT_SAME_STREAM(s);
-                cudaMemcpyAsync(ctx->d_sampled_token, &best, token_bytes, cudaMemcpyHostToDevice, s);
+                (void)cudaMemcpyAsync(ctx->d_sampled_token, &best, token_bytes, cudaMemcpyHostToDevice, s);
                 ctx->transfer_guard_counter++;
             } else {
                 return -1;
@@ -574,12 +574,12 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
         // Allocate temporary buffers for top-k results
         float *   d_topk_vals = NULL;
         int32_t * d_topk_inds = NULL;
-        cudaMalloc(&d_topk_vals, k_effective * sizeof(float));
-        cudaMalloc(&d_topk_inds, k_effective * sizeof(int32_t));
+        (void)cudaMalloc(&d_topk_vals, k_effective * sizeof(float));
+        (void)cudaMalloc(&d_topk_inds, k_effective * sizeof(int32_t));
 
         if (!d_topk_vals || !d_topk_inds) {
-            if (d_topk_vals) cudaFree(d_topk_vals);
-            if (d_topk_inds) cudaFree(d_topk_inds);
+            if (d_topk_vals) (void)cudaFree(d_topk_vals);
+            if (d_topk_inds) (void)cudaFree(d_topk_inds);
             return -1;
         }
 
@@ -587,15 +587,15 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
         int tk_err = cuda_topk_kernel(ctx->d_logits, d_topk_vals, d_topk_inds,
                                        ctx->vocab_size, k_effective, (void*)s);
         if (tk_err != 0) {
-            cudaFree(d_topk_vals);
-            cudaFree(d_topk_inds);
+            (void)cudaFree(d_topk_vals);
+            (void)cudaFree(d_topk_inds);
             return -1;
         }
 
         // Softmax over top-k values
         if (cuda_softmax_kernel(d_topk_vals, d_topk_vals, k_effective, ctx->d_scratch, (void*)s) != 0) {
-            cudaFree(d_topk_vals);
-            cudaFree(d_topk_inds);
+            (void)cudaFree(d_topk_vals);
+            (void)cudaFree(d_topk_inds);
             return -1;
         }
 
@@ -604,13 +604,13 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
             // ================================================================
             // We cast away const here because cuda_sample_categorical_kernel now performs in-place cumsum
             if (cuda_sample_categorical_kernel((float*)d_topk_vals, ctx->d_sampled_token, k_effective, seed, (void*)s) != 0) {
-                cudaFree(d_topk_vals); cudaFree(d_topk_inds);
+                (void)cudaFree(d_topk_vals); (void)cudaFree(d_topk_inds);
                 return -1;
             }
             // Map top-k internal index back to original vocabulary ID
             cuda_map_token_idx_kernel<<<1, 1, 0, s>>>(ctx->d_sampled_token, d_topk_inds);
             
-            cudaFree(d_topk_vals); cudaFree(d_topk_inds);
+            (void)cudaFree(d_topk_vals); (void)cudaFree(d_topk_inds);
         } else {
             // HOST PATH: Sync copy and CPU sampling
             cudaError_t ce;
@@ -618,7 +618,7 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
             int32_t * h_topk_inds  = (int32_t *) malloc(k_effective * sizeof(int32_t));
             if (!h_topk_probs || !h_topk_inds) {
                 free(h_topk_probs); free(h_topk_inds);
-                cudaFree(d_topk_vals); cudaFree(d_topk_inds);
+                (void)cudaFree(d_topk_vals); (void)cudaFree(d_topk_inds);
                 return -1;
             }
 
@@ -628,7 +628,7 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
             }
             if (ce != cudaSuccess) {
                 free(h_topk_probs); free(h_topk_inds);
-                cudaFree(d_topk_vals); cudaFree(d_topk_inds);
+                (void)cudaFree(d_topk_vals); (void)cudaFree(d_topk_inds);
                 return -1;
             }
 
@@ -652,11 +652,11 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
             // Map back to original vocabulary index
             int32_t best_token = h_topk_inds[chosen_idx];
             if (ctx->d_sampled_token) {
-                 cudaMemcpyAsync(ctx->d_sampled_token, &best_token, sizeof(int32_t), cudaMemcpyHostToDevice, s);
+                 (void)cudaMemcpyAsync(ctx->d_sampled_token, &best_token, sizeof(int32_t), cudaMemcpyHostToDevice, s);
             }
 
             free(h_topk_probs); free(h_topk_inds);
-            cudaFree(d_topk_vals); cudaFree(d_topk_inds);
+            (void)cudaFree(d_topk_vals); (void)cudaFree(d_topk_inds);
         }
     } else {
         // No top-k filtering: process full vocabulary
@@ -697,7 +697,7 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
             *token_out = chosen;
 
             if (ctx->d_sampled_token) {
-                 cudaMemcpyAsync(ctx->d_sampled_token, &chosen, sizeof(int32_t), cudaMemcpyHostToDevice, s);
+                 (void)cudaMemcpyAsync(ctx->d_sampled_token, &chosen, sizeof(int32_t), cudaMemcpyHostToDevice, s);
             }
         }
     }
@@ -708,7 +708,7 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
     if (ctx->in_decode_phase) {
         // Read back the token computed on GPU
         GGML_CUDA_ASSERT_SAME_STREAM(s);
-        cudaMemcpyAsync(token_out, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToHost, s);
+        (void)cudaMemcpyAsync(token_out, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToHost, s);
         cuda_event_sync(s, ctx->token_event);
         return 0;
     }
@@ -717,7 +717,7 @@ int cuda_sampling_sample_specialized(cuda_sampling_context_t * ctx,
         // ALLOWED TRANSFER: Token ID H2D (4 bytes)
         size_t token_bytes = sizeof(int32_t);
         if (cuda_check_transfer_guard(ctx, token_bytes) == 0) {
-            cudaMemcpyAsync(ctx->d_sampled_token, token_out, token_bytes, cudaMemcpyHostToDevice, s);
+            (void)cudaMemcpyAsync(ctx->d_sampled_token, token_out, token_bytes, cudaMemcpyHostToDevice, s);
             cuda_event_sync(s, ctx->token_event);
             ctx->transfer_guard_counter++;
         } else {
@@ -815,10 +815,10 @@ int cuda_sampling_sample_topk_topp(cuda_sampling_context_t * ctx,
                 return -1;
             }
 
-            cudaMemcpyAsync(h_probs, ctx->d_probs, prob_bytes, cudaMemcpyDeviceToHost, s);
-            cudaMemcpyAsync(h_sorted_inds, ctx->d_sorted_inds, inds_bytes, cudaMemcpyDeviceToHost, s);
-            cudaMemcpyAsync(h_mask, ctx->d_mask, mask_bytes, cudaMemcpyDeviceToHost, s);
-            cudaMemcpyAsync(&h_n_keep, ctx->d_n_keep, sizeof(int32_t), cudaMemcpyDeviceToHost, s);
+            (void)cudaMemcpyAsync(h_probs, ctx->d_probs, prob_bytes, cudaMemcpyDeviceToHost, s);
+            (void)cudaMemcpyAsync(h_sorted_inds, ctx->d_sorted_inds, inds_bytes, cudaMemcpyDeviceToHost, s);
+            (void)cudaMemcpyAsync(h_mask, ctx->d_mask, mask_bytes, cudaMemcpyDeviceToHost, s);
+            (void)cudaMemcpyAsync(&h_n_keep, ctx->d_n_keep, sizeof(int32_t), cudaMemcpyDeviceToHost, s);
 
             // Sync ONCE for all transfers
             cuda_event_sync(s, ctx->token_event);
@@ -840,13 +840,13 @@ int cuda_sampling_sample_topk_topp(cuda_sampling_context_t * ctx,
         if (ctx->in_decode_phase) {
             // Read back the token computed on GPU
             GGML_CUDA_ASSERT_SAME_STREAM(s);
-            cudaMemcpyAsync(token_out, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToHost, s);
+            (void)cudaMemcpyAsync(token_out, ctx->d_sampled_token, sizeof(int32_t), cudaMemcpyDeviceToHost, s);
             cuda_event_sync(s, ctx->token_event);
             return 0;
         }
 
         if (ctx->d_sampled_token) {
-            cudaMemcpyAsync(ctx->d_sampled_token, &best_token, sizeof(int32_t), cudaMemcpyHostToDevice, s);
+            (void)cudaMemcpyAsync(ctx->d_sampled_token, &best_token, sizeof(int32_t), cudaMemcpyHostToDevice, s);
             cuda_event_sync(s, ctx->token_event);
         }
     }
