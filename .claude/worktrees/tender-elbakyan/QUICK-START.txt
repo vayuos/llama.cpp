@@ -1,0 +1,137 @@
+================================================================================
+PHASE 3B FIX - QUICK START GUIDE
+================================================================================
+
+WHAT HAPPENED:
+- Previous Phase 3B caused -24% regression (31.89 → 24 t/s)
+- Root cause: Logic was completely inverted
+- Fix applied: Device-aware targeting (only CPU-resident layers)
+- Status: Ready for testing
+
+YOUR NEXT STEPS:
+================
+
+STEP 1: BUILD
+------------
+cd ~/llama/llama.cpp
+./scripts/build-cuda-backend-fix.sh --clean -j$(nproc)
+# Or your normal build command
+# Expected: Should compile without errors
+
+STEP 2: TEST PHASE 3B FIX (5 minutes)
+-----------------------------------
+./llama-server -m ~/.lmstudio/models/lmstudio-community/qwen/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf \
+  -ngl 36 -c 32768 --no-mmap -t 8 \
+  --prefer-cuda-host-kv
+
+Expected result:
+- Logs show "Phase 3B - using CUDA_Host" for layers 0-12 only
+- Performance: 33-33.5 t/s (up from 31.89 baseline)
+- NO regression (fix only improves CPU layers)
+
+STEP 3: IF PHASE 3B IMPROVES, TEST GPU OVERLOADING (10 minutes)
+---------------------------------------------------------------
+Watch GPU memory in separate terminal:
+  watch -n 1 nvidia-smi
+
+Test commands (run one at a time):
+
+# Conservative GPU push
+./llama-server -m ~/.lmstudio/models/lmstudio-community/qwen/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf \
+  -ngl 44 -c 32768 --no-mmap -t 8 \
+  --prefer-cuda-host-kv
+# Expected: 33.5-34.5 t/s
+
+# Aggressive GPU push (nearly all layers)
+./llama-server -m ~/.lmstudio/models/lmstudio-community/qwen/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf \
+  -ngl 48 -c 32768 --no-mmap -t 8 \
+  --prefer-cuda-host-kv
+# Expected: 34-35.5 t/s (monitor VRAM carefully!)
+
+STEP 4: IF YOU REACH 35 T/S, VALIDATE STABILITY
+-----------------------------------------------
+Run your normal inference workload for 1-2 hours to confirm:
+- No crashes or memory errors
+- No GPU thermal issues (<80°C)
+- Performance consistent
+- KV cache device placement is correct
+
+EXPECTED PERFORMANCE PROGRESSION:
+================================
+
+31.89 t/s  ← Baseline (no Phase 3B)
+   ↓ (apply Phase 3B fix + rebuild)
+33-33.5 t/s ← Phase 3B enabled
+   ↓ (test GPU overloading with -ngl 44)
+33.5-34.5 t/s
+   ↓ (push to -ngl 48)
+34-35.5 t/s ← TARGET REACHED!
+
+KEY METRICS TO CHECK:
+====================
+In logs, look for:
+
+✓ Phase 3B messages for LAYERS 0-12 ONLY:
+  "llama_kv_cache: layer   0: Phase 3B - using CUDA_Host (pinned) for CPU-resident KV cache"
+
+✓ NO Phase 3B messages for LAYERS 13-48:
+  "llama_kv_cache: layer  13: dev = CUDA0"
+  [No Phase 3B message = correct]
+
+✓ Performance output at end of decode:
+  "ggml_metal: decode time" or similar with tokens/second
+
+TROUBLESHOOTING:
+===============
+
+If Phase 3B still doesn't improve:
+1. Check if rebuild included the fix (commit ae25227)
+2. Look for "Phase 3B - using CUDA_Host" in logs
+3. Verify layer allocation (layers 0-12 should be CPU)
+4. Check if CUDA_Host is available in your driver
+
+If GPU overloading causes crashes:
+1. Stop at the highest -ngl value that's stable
+2. Monitor GPU memory with nvidia-smi
+3. Avoid values that cause system swap
+
+If you can't reach 35 t/s:
+1. See GPU-OPTIMIZATION-ANALYSIS.md for advanced options
+2. Consider model quantization (Q3_K) or context reduction
+3. Profile to identify actual bottleneck
+
+DOCUMENTATION FILES:
+===================
+- PHASE3B-SUMMARY.txt         ← You're here
+- PHASE3B-FIX-TESTING.md      ← Detailed Phase 3B info
+- GPU-OPTIMIZATION-ANALYSIS.md ← Path to 35+ t/s
+- test-phase3b-performance.sh  ← Automated testing
+
+COMMIT INFO:
+===========
+Commit: ae25227
+Author: Phase 3B Fix
+Date: 2026-03-01
+Message: Fix Phase 3B - Correct KV Cache CUDA_Host Placement Logic for CPU-Resident Layers
+
+FILE CHANGED:
+- src/llama-kv-cache.cpp (15 lines modified)
+
+GIT STATUS:
+===========
+cd ~/llama/llama.cpp && git log --oneline -1
+# Should show: ae25227 Fix Phase 3B: Correct KV Cache CUDA_Host Placement...
+
+NEXT ACTION:
+===========
+1. Build with the fix
+2. Test with --prefer-cuda-host-kv flag
+3. Check for performance improvement
+4. If improved, test GPU overloading (-ngl 44, -ngl 48)
+5. Report results back with GPU memory usage
+
+TARGET: > 35 t/s
+STATUS: Ready for testing
+
+Questions? Check the detailed documentation files above.
+================================================================================
