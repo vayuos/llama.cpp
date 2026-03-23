@@ -1,0 +1,25 @@
+==========================================
+BENCHMARK START: 20260305_231540
+==========================================
+
+Cleaning up any existing servers...
+Using binary: /home/vayuos/llama/llama.cpp/build/bin/llama-server
+
+Starting optimized llama-server...
+Server started with PID: 79010
+Waiting 20 seconds for server warmup...
+✅ Server is ready on 127.0.0.1:8080
+
+==========================================
+BENCHMARK CONFIGURATION
+==========================================
+Server: 127.0.0.1:8080
+Model: Qwen3-Coder-Next-UD-Q4_K_XL
+Context: 8192 tokens
+Batch: 4096 tokens
+Ubatch: 1024 tokens
+GPU Layers: 999 (all)
+
+==========================================
+TEST 1: SHORT PROMPT
+==========================================

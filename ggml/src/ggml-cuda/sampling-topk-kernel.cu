@@ -130,7 +130,9 @@ __global__ void cuda_topk_warp_kernel(
         s_vals[lane] = local_top_vals[lane];
         s_inds[lane] = local_top_inds[lane];
     }
+#ifndef GGML_USE_HIP
     __syncwarp();
+#endif
     
     // ---- Stage 3: Shuffle merge across warp ----
     // Use ballot to synchronize

@@ -1,0 +1,13 @@
+==========================================
+BENCHMARK START: 20260305_231010
+==========================================
+
+Cleaning up any existing servers...
+Starting optimized llama-server...
+Using binary: /home/vayuos/llama/llama.cpp/build/bin/llama-server
+Server started with PID: 78590
+Waiting for server warmup (20 seconds)...
+ERROR: Server failed to start!
+ggml_cuda_init: found 1 ROCm devices:
+  Device 0: AMD Radeon PRO W7800 48GB, gfx1100 (0x1100), VMM: no, Wave Size: 32
+error: invalid argument: --cache-prompt-tokens

@@ -1,0 +1,37 @@
+==================================================
+BENCHMARK RESULTS
+==================================================
+Timestamp: 20260305_232030
+Server: 127.0.0.1:8080
+Model: Qwen3-Coder-Next-UD-Q4_K_XL
+Configuration: -ngl 999 -c 8192 -b 4096 -ub 1024 --no-mmap
+
+Average Throughput: 59.29 tok/sec
+
+
+SHORT PROMPT:
+  Elapsed: 2183ms
+  Completion Tokens: 128
+  Prompt Tokens: 12
+  Speed: 58.64 tok/sec
+
+MEDIUM PROMPT:
+  Elapsed: 4321ms
+  Completion Tokens: 256
+  Prompt Tokens: 24
+  Speed: 59.25 tok/sec
+
+LONG PROMPT:
+  Elapsed: 8538ms
+  Completion Tokens: 512
+  Prompt Tokens: 35
+  Speed: 59.97 tok/sec
+
+==================================================
+PERFORMANCE TARGETS
+==================================================
+Baseline (previous): 405 tok/sec
+Expected (optimized): 475-560 tok/sec
+Improvement: +17-38%
+
+ACTUAL RESULT: 59.29 tok/sec (-85.4%)
