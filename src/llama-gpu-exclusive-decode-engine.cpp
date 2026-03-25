@@ -26,11 +26,27 @@
 #include <chrono>
 #include <vector>
 
-// CUDA headers for stream types and graph operations
-#ifdef __CUDACC__
+// CUDA/HIP headers for stream types and graph operations
+#if defined(GGML_USE_HIP)
+#include <hip/hip_runtime.h>
+typedef hipStream_t cudaStream_t;
+#define cudaSuccess hipSuccess
+#define cudaError_t hipError_t
+#define cudaGetErrorString hipGetErrorString
+#define cudaStreamBeginCapture hipStreamBeginCapture
+#define cudaStreamEndCapture hipStreamEndCapture
+#define cudaStreamCaptureModeGlobal hipStreamCaptureModeGlobal
+#define cudaGraph_t hipGraph_t
+#define cudaGraphExec_t hipGraphExec_t
+#define cudaGraphInstantiate hipGraphInstantiate
+#define cudaGraphLaunch hipGraphLaunch
+#define cudaGraphExecDestroy hipGraphExecDestroy
+#define cudaGraphDestroy hipGraphDestroy
+#define cudaGraphGetNodes hipGraphGetNodes
+#elif defined(GGML_USE_CUDA)
 #include <cuda_runtime.h>
 #else
-// Stub for non-CUDA builds
+// Stub for non-GPU builds
 typedef void* cudaStream_t;
 #endif
 
@@ -54,10 +70,10 @@ extern int ggml_cuda_rng_init(uint32_t seed);
 extern int ggml_cuda_rng_cleanup();
 extern bool ggml_cuda_rng_is_initialized();
 
-extern uint64_t ggml_cuda_graph_capture_begin(cudaStream_t stream);
-extern int ggml_cuda_graph_capture_end(uint64_t graph_id, cudaStream_t stream);
-extern int ggml_cuda_graph_instantiate(uint64_t graph_id, cudaStream_t stream);
-extern int ggml_cuda_graph_launch(uint64_t graph_id, cudaStream_t stream);
+extern uint64_t ggml_cuda_graph_capture_begin(void * stream);
+extern int ggml_cuda_graph_capture_end(uint64_t graph_id, void * stream);
+extern int ggml_cuda_graph_instantiate(uint64_t graph_id, void * stream);
+extern int ggml_cuda_graph_launch(uint64_t graph_id, void * stream);
 extern bool ggml_cuda_graph_is_enabled();
 
 // ============================================================================

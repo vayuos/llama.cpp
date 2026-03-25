@@ -4,35 +4,36 @@ set -euo pipefail
 # ============================================================
 # build_variants_mmq_moe.sh
 #
-# GPU-MAXIMIZED BUILD SCRIPT
-# Variant: build_cuda_mmq_moe
+# GPU-MAXIMIZED BUILD SCRIPT (AMD ROCm / HIP)
+# Variant: build_hip_mmq_moe
 #
 # PURPOSE:
 # - MMQ fused kernels for ALL quantized decode matmul
 # - Flash Attention (all quants) for attention ops
-# - CUDA graphs for reduced kernel launch overhead
+# - HIP graphs for reduced kernel launch overhead
 # - GPU-exclusive decode path per systemchanges.md
 #
 # TARGET:
 # - Quantized models (Q4–Q8, K-variants, IQ)
 # - MoE models
-# - RTX 4060 Ti (Ada Lovelace, sm_89, cc=8.9)
+# - AMD Radeon PRO W7800 (RDNA3, gfx1100)
 #
 # CHANGES vs v1:
-# - CMAKE_CUDA_FLAGS: --use_fast_math (GPU kernels get fast reciprocal/rsqrt/trig)
-# - GGML_SCHED_MAX_COPIES=1 (single GPU, single sequence — no pipeline copies needed)
-# - GGML_CUDA_NO_VMM=OFF (explicit; VMM available on Ada, needed for memory reuse)
-# - GGML_CPU_REPACK=ON (explicit; Q4_0 → Q4_X_X for CPU ops)
+# - AMDGPU_TARGETS: gfx1100 (Native RDNA3 support)
+# - GGML_HIP=ON (Enable AMD backend)
+# - GGML_SCHED_MAX_COPIES=1 (single GPU, single sequence)
+# - GGML_HIP_NO_VMM=OFF (VMM available on RDNA3)
+# - GGML_CPU_REPACK=ON (Quantized weights to CPU-friendly format for fallbacks)
 # ============================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${ROOT_DIR}/build_cuda_mmq_moe"
+BUILD_DIR="${ROOT_DIR}/build_hip_mmq_moe"
 
 echo "==================================================="
-echo "GPU-maximized decode build (MMQ / MoE)"
+echo "GPU-maximized decode build (MMQ / MoE - ROCm/HIP)"
 echo "Source : ${ROOT_DIR}"
 echo "Build  : ${BUILD_DIR}"
-echo "Target : RTX 4060 Ti (sm_89)"
+echo "Target : AMD Radeon PRO W7800 (gfx1100)"
 echo "==================================================="
 
 # ------------------------------------------------------------
@@ -68,13 +69,12 @@ CUDA_FLAGS="--use_fast_math -O3"
 cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_FLAGS="${COMMON_CXX_FLAGS}" \
-    -DCMAKE_CUDA_FLAGS="${CUDA_FLAGS}" \
     -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-    -DCMAKE_CUDA_ARCHITECTURES=89 \
+    -DAMDGPU_TARGETS=gfx1100 \
     \
     -DBUILD_SHARED_LIBS=ON \
     \
-    -DGGML_CUDA=ON \
+    -DGGML_HIP=ON \
     \
     -DGGML_CUDA_FORCE_MMQ=ON \
     -DGGML_CUDA_FORCE_CUBLAS=OFF \
@@ -82,10 +82,10 @@ cmake .. \
     -DGGML_CUDA_FA=ON \
     -DGGML_CUDA_FA_ALL_QUANTS=ON \
     \
-    -DGGML_CUDA_GRAPHS=ON \
+    -DGGML_HIP_GRAPHS=ON \
     \
     -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128 \
-    -DGGML_CUDA_NO_VMM=OFF \
+    -DGGML_HIP_NO_VMM=OFF \
     -DGGML_CUDA_SAMPLING=ON \
     \
     -DGGML_SCHED_MAX_COPIES=1 \
@@ -135,9 +135,9 @@ if ! grep -q "GGML_CUDA_FA:BOOL=ON" "${CACHE_FILE}"; then
     exit 1
 fi
 
-# CUDA graphs must be enabled
-if grep -q "GGML_CUDA_GRAPHS:BOOL=OFF" "${CACHE_FILE}"; then
-    echo "FATAL: CUDA graphs are disabled — required for max GPU throughput"
+# HIP graphs must be enabled
+if grep -q "GGML_HIP_GRAPHS:BOOL=OFF" "${CACHE_FILE}"; then
+    echo "FATAL: HIP graphs are disabled — required for max GPU throughput"
     exit 1
 fi
 
@@ -147,9 +147,9 @@ if ! grep -q "GGML_SCHED_MAX_COPIES:STRING=1" "${CACHE_FILE}"; then
     exit 1
 fi
 
-echo "[OK] MMQ + FA + CUDA Graphs + fast-math kernels + single-copy sched verified"
+echo "[OK] MMQ + FA + HIP Graphs + fast-math kernels + single-copy sched verified"
 echo "---------------------------------------------------"
-echo "FINAL build_cuda_mmq_moe completed successfully"
+echo "FINAL build_hip_mmq_moe completed successfully"
 echo ""
 echo "==================================================="
 echo "MAXIMUM VERBOSITY RUNTIME CONFIGURATION"

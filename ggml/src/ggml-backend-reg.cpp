@@ -34,6 +34,10 @@
 #include "ggml-cuda.h"
 #endif
 
+#ifdef GGML_USE_HIP
+#include "ggml-cuda.h" // HIP reuses CUDA header in this version
+#endif
+
 #ifdef GGML_USE_METAL
 #include "ggml-metal.h"
 #endif
@@ -111,6 +115,9 @@ struct ggml_backend_registry {
     ggml_backend_registry() {
 #ifdef GGML_USE_CUDA
         register_backend(ggml_backend_cuda_reg());
+#endif
+#ifdef GGML_USE_HIP
+        register_backend(ggml_backend_cuda_reg()); // HIP reuses the same registration function
 #endif
 #ifdef GGML_USE_METAL
         register_backend(ggml_backend_metal_reg());
