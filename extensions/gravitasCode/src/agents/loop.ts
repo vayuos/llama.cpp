@@ -25,8 +25,14 @@ export class AgentLoopController {
         if (!config) throw new Error('Config missing');
 
         const tm = TaskManager.getInstance();
-        const coderClient = new LLMClient(config.coder.baseUrl || `http://127.0.0.1:${config.coder.port}/v1`);
-        const reviewerClient = new LLMClient(config.reviewer.baseUrl || `http://127.0.0.1:${config.reviewer.port}/v1`);
+        
+        const coderSockPath = require('path').join(require('os').homedir(), '.gravitas', 'sockets', 'coder.sock');
+        let defaultCoderUrl = require('fs').existsSync(coderSockPath) ? `unix://${coderSockPath}/v1` : `http://${config.coder.host || '127.0.0.1'}:${config.coder.port}/v1`;
+        const coderClient = new LLMClient(config.coder.baseUrl || defaultCoderUrl);
+        
+        const revSockPath = require('path').join(require('os').homedir(), '.gravitas', 'sockets', 'reviewer.sock');
+        let defaultRevUrl = require('fs').existsSync(revSockPath) ? `unix://${revSockPath}/v1` : `http://${config.reviewer.host || '127.0.0.1'}:${config.reviewer.port}/v1`;
+        const reviewerClient = new LLMClient(config.reviewer.baseUrl || defaultRevUrl);
 
         const coderOpts: LLMOptions = {
             temperature: config.coder.temperature,

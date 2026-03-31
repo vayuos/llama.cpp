@@ -12,6 +12,8 @@ export class LlamaProcess {
     private outputChannel: vscode.OutputChannel;
     private logStream: fs.WriteStream | null = null;
     private errorBuffer: string[] = [];
+    private telemetryStr: string = 'Initializing...';
+    private telemetryInterval: NodeJS.Timeout | null = null;
 
     constructor(private name: string, private type: 'coder' | 'reviewer') {
         this.outputChannel = vscode.window.createOutputChannel(`Gravitas: ${name}`);
@@ -21,6 +23,9 @@ export class LlamaProcess {
         if (this.process) {
             await this.stop();
         }
+
+        if (this.telemetryInterval) clearInterval(this.telemetryInterval);
+        this.telemetryStr = 'Spawning...';
 
         // Reset buffer
         this.errorBuffer = [];
@@ -42,10 +47,21 @@ export class LlamaProcess {
         const binaryPathResolved = resolveBinaryPath(binaryPath);
         const modelPathResolved = resolveTilde(modelConfig.modelPath);
 
+        const socketDir = path.join(os.homedir(), '.gravitas', 'sockets');
+        if (!fs.existsSync(socketDir)) {
+            fs.mkdirSync(socketDir, { recursive: true });
+        }
+        
+        // Remove existing socket if it exists to prevent bind errors
+        const socketPath = path.join(socketDir, `${this.type}.sock`);
+        if (fs.existsSync(socketPath)) {
+            try { fs.unlinkSync(socketPath); } catch(e) {}
+        }
+
         const binaryArgs = [
             '-m', modelPathResolved,
-            '--host', modelConfig.host || '127.0.0.1',
-            '--port', modelConfig.port.toString(),
+            '--host', socketPath,
+            '--port', '0',
             '-c', modelConfig.contextSize.toString(),
             '--temp', modelConfig.temperature.toString(),
             '--parallel', '4', // Default to 4 parallel slots
@@ -129,18 +145,29 @@ export class LlamaProcess {
         });
 
         this.updateStatus('starting');
+        this.telemetryInterval = setInterval(() => this.pollTelemetry(modelConfig), 2500);
         return true;
     }
 
     public async stop(): Promise<void> {
         if (this.process) {
-            this.process.kill();
+            this.process.kill('SIGTERM');
             this.process = null;
+        }
+        if (this.telemetryInterval) {
+            clearInterval(this.telemetryInterval);
+            this.telemetryInterval = null;
         }
         if (this.logStream) {
             this.logStream.end();
             this.logStream = null;
         }
+        
+        const socketPath = path.join(os.homedir(), '.gravitas', 'sockets', `${this.type}.sock`);
+        if (fs.existsSync(socketPath)) {
+            try { fs.unlinkSync(socketPath); } catch(e) {}
+        }
+        
         this.updateStatus('stopped');
     }
 
@@ -164,14 +191,55 @@ export class LlamaProcess {
     }
 
     public getTelemetry(): string {
-        // Simple heuristic: look for "eval time =" lines in recent logs
-        // Example: "eval time = 123.45 ms / 10 token ( 81.00 tokens per second )"
-        const lastRelevant = this.errorBuffer.reverse().find(l => l.includes('tokens per second'));
-        if (lastRelevant) {
-            const match = lastRelevant.match(/\(\s*([\d\.]+)\s*tokens per second/);
-            return match ? `${match[1]} t/s` : '';
-        }
-        return '';
+        return this.telemetryStr;
     }
 
+    private async pollTelemetry(config: any) {
+        if (!this.process) return;
+        try {
+            // First run `nvidia-smi` to get VRAM
+            const smi = await new Promise<string>((resolve) => {
+                require('child_process').exec('nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader', (err: any, stdout: string) => resolve(stdout || ''));
+            });
+            let vramStr = 'CPU Mode';
+            const mode = config.mode || 'cpu';
+            if (mode !== 'cpu' && smi && smi.trim() && !smi.includes('failed')) {
+                const lines = smi.trim().split('\n');
+                let deviceId = 0;
+                if (config.cudaVisibleDevices && config.cudaVisibleDevices.toString().trim() !== '') {
+                    deviceId = parseInt(config.cudaVisibleDevices.split(',')[0]);
+                }
+                
+                if (lines[deviceId]) {
+                    const [used, total] = lines[deviceId].split(',').map((s: string) => s.trim().split(' ')[0]);
+                    const pct = Math.round((parseInt(used)/parseInt(total))*100);
+                    vramStr = `VRAM: ${pct}% (${used}MB)`;
+                }
+            }
+
+            // Now read /metrics from UDS to get TPS
+            const sockPath = path.join(os.homedir(), '.gravitas', 'sockets', `${this.type}.sock`);
+            if (fs.existsSync(sockPath)) {
+                // Inline to avoid circular imports if any, using native http
+                const { LlamaHttpClient } = require('../llm/llamaHttpClient');
+                const client = new LlamaHttpClient(`unix://${sockPath}`);
+                let tpsStr: string | null = null;
+                try {
+                    const metrics = await client.get('/metrics');
+                    const tpsMatch = metrics.match(/predicted_tokens_seconds\s+([0-9.]+)/);
+                    if (tpsMatch && parseFloat(tpsMatch[1]) > 0.1) {
+                        tpsStr = `TPS: ${parseFloat(tpsMatch[1]).toFixed(1)}`;
+                    } else if (parseFloat(tpsMatch?.[1] || "0") === 0) {
+                        tpsStr = 'Idle';
+                    }
+                } catch(e) {}
+                
+                this.telemetryStr = `${vramStr}${tpsStr ? ' | ' + tpsStr : ''}`.trim();
+            } else {
+                 this.telemetryStr = vramStr;
+            }
+        } catch(e) {
+            // Error silently ignored for telemetry ping
+        }
+    }
 }

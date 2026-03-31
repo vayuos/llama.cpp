@@ -2,6 +2,10 @@ import axios from 'axios';
 import { GravitasConfig } from '../../core/config';
 import { UnifiedProcessManager } from '../../process/processManager';
 import { ValidationResult, ValidationStep } from '../validator';
+import { LlamaHttpClient } from '../../llm/llamaHttpClient';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 
 export class ServerPingStep implements ValidationStep {
     constructor(private type: 'coder' | 'reviewer') { }
@@ -10,8 +14,13 @@ export class ServerPingStep implements ValidationStep {
 
     async execute(config: GravitasConfig): Promise<ValidationResult> {
         const pm = UnifiedProcessManager.getInstance();
-        const port = this.type === 'coder' ? config.coder.port : config.reviewer.port;
-        const endpoint = `http://127.0.0.1:${port}/v1/models`;
+        
+        const sockPath = path.join(os.homedir(), '.gravitas', 'sockets', `${this.type}.sock`);
+        const endpoint = fs.existsSync(sockPath) 
+            ? `unix://${sockPath}` 
+            : `http://${config[this.type].host || '127.0.0.1'}:${config[this.type].port}`;
+            
+        const client = new LlamaHttpClient(endpoint);
 
         // Start server
         if (this.type === 'coder') await pm.startCoder(config);
@@ -20,7 +29,7 @@ export class ServerPingStep implements ValidationStep {
         // Wait for health check (max 90s for CPU models)
         for (let i = 0; i < 90; i++) {
             try {
-                await axios.get(endpoint, { timeout: 1000 });
+                await client.get('/v1/models');
                 return { success: true, message: `${this.type} server is healthy.` };
             } catch (e) {
                 // Check if process crashed
@@ -49,14 +58,18 @@ export class PromptTestStep implements ValidationStep {
     get name() { return `Send test ${this.type} prompt`; }
 
     async execute(config: GravitasConfig): Promise<ValidationResult> {
-        const port = this.type === 'coder' ? config.coder.port : config.reviewer.port;
-        const endpoint = `http://127.0.0.1:${port}/v1/chat/completions`;
+        const sockPath = path.join(os.homedir(), '.gravitas', 'sockets', `${this.type}.sock`);
+        const endpoint = fs.existsSync(sockPath) 
+            ? `unix://${sockPath}` 
+            : `http://${config[this.type].host || '127.0.0.1'}:${config[this.type].port}`;
+            
+        const client = new LlamaHttpClient(endpoint);
         const prompt = this.type === 'coder' ? 'print("hello")' : 'How are you?';
 
         // Retry for up to 60s for model load
         for (let i = 0; i < 30; i++) {
             try {
-                const resp = await axios.post(endpoint, {
+                const resp = await (client as any).client.post('/v1/chat/completions', {
                     messages: [{ role: 'user', content: prompt }],
                     max_tokens: 10
                 }, { timeout: 20000 }); // Increased timeout for inference

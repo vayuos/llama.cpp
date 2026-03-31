@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { LlamaProcess } from './llamaProcess';
 import { GravitasConfig } from '../core/config';
+import { LlamaHttpClient } from '../llm/llamaHttpClient';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 
 export class UnifiedProcessManager {
     private static instance: UnifiedProcessManager;
@@ -50,11 +54,15 @@ export class UnifiedProcessManager {
         }
 
         // Pulse check for external process
-        const modelCfg = type === 'coder' ? config.coder : config.reviewer;
-        const url = `http://${modelCfg.host || '127.0.0.1'}:${modelCfg.port}/v1/models`;
+        const sockPath = path.join(os.homedir(), '.gravitas', 'sockets', `${type}.sock`);
+        const endpoint = fs.existsSync(sockPath) 
+            ? `unix://${sockPath}` 
+            : `http://${config[type].host || '127.0.0.1'}:${config[type].port}`;
+            
+        const client = new LlamaHttpClient(endpoint);
         
         try {
-            await axios.get(url, { timeout: 1000 });
+            await client.get('/v1/models');
             return { running: true, external: true, telemetry: 'Live (External)' };
         } catch (e) {
             return { running: false, external: false };
