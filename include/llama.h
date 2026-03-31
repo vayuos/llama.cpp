@@ -25,12 +25,14 @@
 #    define LLAMA_API
 #endif
 
+#ifndef DEPRECATED
 #ifdef __GNUC__
 #    define DEPRECATED(func, hint) func __attribute__((deprecated(hint)))
 #elif defined(_MSC_VER)
 #    define DEPRECATED(func, hint) __declspec(deprecated(hint)) func
 #else
 #    define DEPRECATED(func, hint) func
+#endif
 #endif
 
 #define LLAMA_DEFAULT_SEED 0xFFFFFFFF

@@ -56,12 +56,10 @@ cd "${BUILD_DIR}"
 COMMON_CXX_FLAGS="-O3 -ffast-math -fno-finite-math-only -funroll-loops -march=native -DNDEBUG"
 
 # ------------------------------------------------------------
-# CUDA compiler flags (applies to GPU kernel compilation)
-# --use_fast_math: enables fast reciprocal, rsqrt, exp, sin/cos
-#                  on Ada hardware — directly speeds up MMQ+attn kernels
-# -O3:            max PTXAS optimisation level
+# GPU compiler flags (applies to HIP kernel compilation)
+# -O3: maximise optimisation level
 # ------------------------------------------------------------
-CUDA_FLAGS="--use_fast_math -O3"
+HIP_FLAGS="-O3"
 
 # ------------------------------------------------------------
 # CMake configuration
@@ -155,25 +153,24 @@ echo "==================================================="
 echo "MAXIMUM VERBOSITY RUNTIME CONFIGURATION"
 echo "==================================================="
 echo ""
-echo "To run with MAXIMUM VERBOSE OUTPUT during model inference:"
+echo "To run with MAXIMUM VERBOSE OUTPUT during model inference (STABLE ON RDNA3):"
 echo ""
 echo "1. STANDARD VERBOSE RUN:"
+echo "   export GGML_CUDA_GRAPHS=0"
 echo "   export LLAMA_LOG_LEVEL=DEBUG"
 echo "   export GGML_LOG_LEVEL=DEBUG"
 echo "   export GGML_SCHED_DEBUG=1"
-echo "   export CUDA_LAUNCH_BLOCKING=1"
-echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
+echo "   export HIP_LAUNCH_BLOCKING=1"
 echo "   ./bin/llama-server -m /path/to/model.gguf --verbose"
 echo ""
 echo "2. WITH GPU-EXCLUSIVE DECODE DIAGNOSTICS:"
 echo "   export LLAMA_LOG_LEVEL=DEBUG"
 echo "   export GGML_LOG_LEVEL=DEBUG"
 echo "   export GGML_SCHED_DEBUG=1"
-echo "   export GGML_CUDA_DEBUG=1"
+echo "   export GGML_HIP_DEBUG=1"
 echo "   export GGML_BACKEND_DEBUG=1"
-echo "   export CUDA_LAUNCH_BLOCKING=1"
-echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
-echo "   export CUDA_VERBOSE_API_TRACE=1"
+echo "   export HIP_LAUNCH_BLOCKING=1"
+echo "   export HIP_TRACE_API=1"
 echo "   ./bin/llama-server -m /path/to/model.gguf --verbose"
 echo ""
 echo "3. MINIMAL VERBOSITY (PRODUCTION):"
@@ -185,10 +182,9 @@ echo "4. FOR DETAILED KV CACHE & SAMPLING DEBUGGING:"
 echo "   export LLAMA_LOG_LEVEL=DEBUG"
 echo "   export GGML_LOG_LEVEL=DEBUG"
 echo "   export GGML_SCHED_DEBUG=1"
-echo "   export GGML_CUDA_DEBUG=1"
-echo "   export CUDA_LAUNCH_BLOCKING=1"
-echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
-echo "   export CUDA_VERBOSE_API_TRACE=1"
+echo "   export GGML_HIP_DEBUG=1"
+echo "   export HIP_LAUNCH_BLOCKING=1"
+echo "   export HIP_TRACE_API=1"
 echo "   ./bin/llama-server -m /path/to/model.gguf --verbose 2>&1 | tee inference.log"
 echo ""
 echo "BUILD COMPLETE"

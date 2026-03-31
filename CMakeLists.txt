@@ -115,6 +115,12 @@ option(LLAMA_TESTS_INSTALL  "llama: install tests"        ON)
 option(LLAMA_OPENSSL    "llama: use openssl to support HTTPS" ON)
 option(LLAMA_LLGUIDANCE "llama-common: include LLGuidance library for structured output in common utils" OFF)
 
+# GPU-exclusive decode optimizations (Partial implementation)
+option(LLAMA_GPU_EXCLUSIVE_DECODE    "llama: exclusive GPU decode" OFF)
+option(LLAMA_CPU_SAMPLING_EXCLUDED   "llama: exclude CPU from sampling" OFF)
+option(LLAMA_KV_HYBRID_EXCLUDED      "llama: exclude hybrid KV cache" OFF)
+option(LLAMA_SERVER_VERBOSE          "llama: enable verbose server logging" OFF)
+
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)

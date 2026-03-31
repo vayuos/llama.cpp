@@ -14,13 +14,13 @@ set -euo pipefail
 # ============================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${ROOT_DIR}/build_cuda_mmq_moe"
+BUILD_DIR="${ROOT_DIR}/build_hip_mmq_moe"
 
 echo "==================================================="
-echo "Incremental GPU-maximized decode build (MMQ / MoE)"
+echo "Incremental GPU-maximized decode build (MMQ / MoE - ROCm/HIP)"
 echo "Source : ${ROOT_DIR}"
 echo "Build  : ${BUILD_DIR}"
-echo "Target : RTX 4060 Ti (sm_89)"
+echo "Target : AMD Radeon PRO W7800 (gfx1100)"
 echo "==================================================="
 
 mkdir -p "${BUILD_DIR}"
@@ -38,13 +38,12 @@ if [ ! -f "CMakeCache.txt" ]; then
     cmake .. \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_FLAGS="${COMMON_CXX_FLAGS}" \
-        -DCMAKE_CUDA_FLAGS="${CUDA_FLAGS}" \
         -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-        -DCMAKE_CUDA_ARCHITECTURES=89 \
+        -DAMDGPU_TARGETS=gfx1100 \
         \
         -DBUILD_SHARED_LIBS=ON \
         \
-        -DGGML_CUDA=ON \
+        -DGGML_HIP=ON \
         \
         -DGGML_CUDA_FORCE_MMQ=ON \
         -DGGML_CUDA_FORCE_CUBLAS=OFF \
@@ -52,10 +51,10 @@ if [ ! -f "CMakeCache.txt" ]; then
         -DGGML_CUDA_FA=ON \
         -DGGML_CUDA_FA_ALL_QUANTS=ON \
         \
-        -DGGML_CUDA_GRAPHS=ON \
+        -DGGML_HIP_GRAPHS=ON \
         \
         -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128 \
-        -DGGML_CUDA_NO_VMM=OFF \
+        -DGGML_HIP_NO_VMM=ON \
         -DGGML_CUDA_SAMPLING=ON \
         \
         -DGGML_SCHED_MAX_COPIES=1 \
@@ -106,8 +105,8 @@ if ! grep -q "GGML_CUDA_FA:BOOL=ON" "${CACHE_FILE}"; then
     exit 1
 fi
 
-if grep -q "GGML_CUDA_GRAPHS:BOOL=OFF" "${CACHE_FILE}"; then
-    echo "FATAL: CUDA graphs disabled"
+if grep -q "GGML_HIP_GRAPHS:BOOL=OFF" "${CACHE_FILE}"; then
+    echo "FATAL: HIP graphs disabled"
     exit 1
 fi
 
@@ -118,7 +117,7 @@ fi
 
 echo "[OK] MMQ + FA + CUDA Graphs + fast-math kernels + single-copy sched verified"
 echo "---------------------------------------------------"
-echo "Incremental build_cuda_mmq_moe completed successfully"
+echo "Incremental build_hip_mmq_moe completed successfully"
 echo ""
 echo "==================================================="
 echo "MAXIMUM VERBOSITY RUNTIME CONFIGURATION"
@@ -127,22 +126,22 @@ echo ""
 echo "To run with MAXIMUM VERBOSE OUTPUT during model inference:"
 echo ""
 echo "1. STANDARD VERBOSE RUN:"
+echo "   export GGML_CUDA_GRAPHS=0"
 echo "   export LLAMA_LOG_LEVEL=DEBUG"
 echo "   export GGML_LOG_LEVEL=DEBUG"
 echo "   export GGML_SCHED_DEBUG=1"
-echo "   export CUDA_LAUNCH_BLOCKING=1"
-echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
+echo "   export HIP_LAUNCH_BLOCKING=1"
 echo "   ./bin/llama-server -m /path/to/model.gguf --verbose"
 echo ""
 echo "2. WITH GPU-EXCLUSIVE DECODE DIAGNOSTICS:"
+echo "   export GGML_CUDA_GRAPHS=0"
 echo "   export LLAMA_LOG_LEVEL=DEBUG"
 echo "   export GGML_LOG_LEVEL=DEBUG"
 echo "   export GGML_SCHED_DEBUG=1"
-echo "   export GGML_CUDA_DEBUG=1"
+echo "   export GGML_HIP_DEBUG=1"
 echo "   export GGML_BACKEND_DEBUG=1"
-echo "   export CUDA_LAUNCH_BLOCKING=1"
-echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
-echo "   export CUDA_VERBOSE_API_TRACE=1"
+echo "   export HIP_LAUNCH_BLOCKING=1"
+echo "   export HIP_TRACE_API=1"
 echo "   ./bin/llama-server -m /path/to/model.gguf --verbose"
 echo ""
 echo "3. MINIMAL VERBOSITY (PRODUCTION):"
@@ -154,10 +153,9 @@ echo "4. FOR DETAILED KV CACHE & SAMPLING DEBUGGING:"
 echo "   export LLAMA_LOG_LEVEL=DEBUG"
 echo "   export GGML_LOG_LEVEL=DEBUG"
 echo "   export GGML_SCHED_DEBUG=1"
-echo "   export GGML_CUDA_DEBUG=1"
-echo "   export CUDA_LAUNCH_BLOCKING=1"
-echo "   export CUDA_DEVICE_WAITS_ON_EXCEPTION=1"
-echo "   export CUDA_VERBOSE_API_TRACE=1"
+echo "   export GGML_HIP_DEBUG=1"
+echo "   export HIP_LAUNCH_BLOCKING=1"
+echo "   export HIP_TRACE_API=1"
 echo "   ./bin/llama-server -m /path/to/model.gguf --verbose 2>&1 | tee inference.log"
 echo ""
 echo "BUILD COMPLETE"

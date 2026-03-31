@@ -3902,6 +3902,21 @@ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud
 static bool ggml_cuda_graph_set_enabled(ggml_backend_cuda_context * cuda_ctx, const void * graph_key) {
     ggml_cuda_graph * graph = cuda_ctx->cuda_graph(graph_key);
 
+    static bool env_checked = false;
+    static bool env_enabled = true;
+    if (!env_checked) {
+        const char * env = getenv("GGML_CUDA_GRAPHS");
+        if (env && (strcmp(env, "0") == 0 || strcasecmp(env, "OFF") == 0)) {
+            GGML_LOG_INFO("%s: disabling CUDA/HIP graphs via environment variable\n", __func__);
+            env_enabled = false;
+        }
+        env_checked = true;
+    }
+
+    if (!env_enabled) {
+        return false;
+    }
+
     if (graph->graph == nullptr) {
         if (ggml_cuda_info().devices[cuda_ctx->device].cc < GGML_CUDA_CC_AMPERE) {
             if (!graph->disable_due_to_gpu_arch) {

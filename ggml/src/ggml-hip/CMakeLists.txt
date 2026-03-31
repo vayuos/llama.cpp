@@ -52,6 +52,10 @@ message(STATUS "HIP and hipBLAS found")
 # Workaround old compilers
 set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} --gpu-max-threads-per-block=1024")
 
+# Ensure the output directory for template instances exists in the build tree
+# This prevents race conditions in parallel builds with GNU Make when using sources from sibling directories
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances")
+
 file(GLOB   GGML_HEADERS_ROCM "../ggml-cuda/*.cuh")
 list(APPEND GGML_HEADERS_ROCM "../../include/ggml-cuda.h")
 
