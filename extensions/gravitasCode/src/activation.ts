@@ -12,6 +12,7 @@ import { registerCleanup } from './process/cleanup';
 import { registerWatchers } from './core/watchers';
 import { LogBridge } from './core/logBridge';
 import { StorageManager } from './core/storageManager';
+import { TelemetryService } from './llm/telemetry';
 
 import { RuntimeTreeProvider } from './ui/runtimeTreeProvider';
 
@@ -115,9 +116,10 @@ export class ActivationManager {
             logger.warn('system', 'No configuration found.');
         }
 
-        // 3. Register Hooks
+        // 3. Register Hooks & Services
         registerCleanup(context);
         registerWatchers(context);
+        TelemetryService.getInstance().startPolling();
 
         // 4. UI Providers
         const chatSidebarProvider = new ChatSidebarProvider(context.extensionUri);
@@ -268,7 +270,8 @@ export class ActivationManager {
     }
 
     async cleanup() {
-        console.log('Gravitas Code: Cleaning up - stopping all llama servers...');
+        console.log('Gravitas Code: Cleaning up - stopping all llama servers and telemetry...');
+        TelemetryService.getInstance().stopPolling();
         await this.processManager.stopAll();
         console.log('Gravitas Code: Cleanup complete.');
     }

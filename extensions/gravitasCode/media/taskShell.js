@@ -12,9 +12,12 @@ class ChatController {
         
         try {
             this.currentStatusEl = null;
-            this.currentStopBtn = null;
+            this.vscode = acquireVsCodeApi();
+            this.taskFeed = document.getElementById('taskFeed');
             this.commandInput = document.getElementById('commandInput');
             this.debugOverlay = document.getElementById('debugOverlay');
+            this.coderTelemetry = document.getElementById('coderTelemetry');
+            this.reviewerTelemetry = document.getElementById('reviewerTelemetry');
             
             if (!this.taskFeed || !this.commandInput) {
                 console.error('Gravitas Chat: DOM elements missing!', { feed: !!this.taskFeed, input: !!this.commandInput });
@@ -88,6 +91,9 @@ class ChatController {
                     break;
                 case 'focus':
                     this.focusInput();
+                    break;
+                case 'telemetry':
+                    this.updateGlobalTelemetry(message.coder, message.reviewer);
                     break;
             }
         });
@@ -279,6 +285,17 @@ class ChatController {
             case 'HardwareMetricsEmitted':
                 this.updateHardwareUI(taskId, event);
                 break;
+        }
+    }
+
+    updateGlobalTelemetry(coder, reviewer) {
+        if (this.coderTelemetry) {
+            this.coderTelemetry.textContent = `Coder: ${coder.vram} | ${coder.tps}`;
+            this.coderTelemetry.className = `telemetry-item ${coder.status === 'online' ? 'online' : 'offline'}`;
+        }
+        if (this.reviewerTelemetry) {
+            this.reviewerTelemetry.textContent = `Reviewer: ${reviewer.vram} | ${reviewer.tps}`;
+            this.reviewerTelemetry.className = `telemetry-item ${reviewer.status === 'online' ? 'online' : 'offline'}`;
         }
     }
 

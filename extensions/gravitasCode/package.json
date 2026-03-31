@@ -177,17 +177,33 @@
                 "order": 10,
                 "type": "object",
                 "properties": {
+                    "gravitasCode.connection.mode": {
+                        "type": "string",
+                        "enum": [
+                            "local",
+                            "remote"
+                        ],
+                        "default": "local",
+                        "description": "Connection mode. Local: Starts llama-server on System4 via UDS. Remote: Connects to System3 via TCP.",
+                        "order": 1
+                    },
+                    "gravitasCode.connection.system3Ip": {
+                        "type": "string",
+                        "default": "127.0.0.1",
+                        "description": "IP address of System3 for Remote mode.",
+                        "order": 2
+                    },
                     "gravitasCode.runtime.autoTestOnStart": {
                         "type": "boolean",
                         "default": true,
                         "description": "Run connectivity and memory tests before enabling agents.",
-                        "order": 2
+                        "order": 3
                     },
                     "gravitasCode.runtime.showLogs": {
                         "type": "boolean",
                         "default": true,
                         "description": "Show system logs in the terminal.",
-                        "order": 3
+                        "order": 4
                     },
                     "gravitasCode.runtime.logLevel": {
                         "type": "string",
@@ -199,7 +215,7 @@
                         ],
                         "default": "debug",
                         "description": "Verbosity level for logging.",
-                        "order": 4
+                        "order": 5
                     },
                     "gravitasCode.runtime.killSignal": {
                         "type": "string",
@@ -209,7 +225,7 @@
                         ],
                         "default": "SIGTERM",
                         "description": "Signal to use when stopping LLM servers.",
-                        "order": 5
+                        "order": 6
                     }
                 }
             },

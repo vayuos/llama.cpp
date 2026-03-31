@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { TaskManager } from './taskManager';
 import { CentralLogger } from '../core/logger';
+import { TelemetryService } from '../llm/telemetry';
 
 /**
  * High-fidelity Sidebar Chat Provider (Gravitas chat Infrastructure).
@@ -30,6 +31,12 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
 
         TaskManager.getInstance().onDidTaskUpdate((task) => {
             this.postOrBuffer({ type: 'updateTask', task });
+        });
+
+        TelemetryService.getInstance().onDidUpdate(() => {
+            const coder = TelemetryService.getInstance().getTelemetry('coder');
+            const reviewer = TelemetryService.getInstance().getTelemetry('reviewer');
+            this.postOrBuffer({ type: 'telemetry', coder, reviewer });
         });
         
         this._isSubscribed = true;
@@ -161,7 +168,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     <link href="${styleUri}" rel="stylesheet">
     <script nonce="${nonce}" src="${toolkitUri}"></script>
     <style>
-        body { padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        body { padding: 0; display: flex; flex-direction: column; height: 100vh; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         #taskFeed { flex: 1; padding: 12px; gap: 24px; overflow-y: auto; }
         .task-footer { padding: 16px; background: rgba(10, 10, 12, 0.95); border-top: 1px solid rgba(255,255,255,0.05); }
         .welcome-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80%; text-align: center; color: var(--text-secondary); padding: 40px; }
@@ -171,6 +178,10 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     </style>
 </head>
 <body class="sidebar-mode">
+    <div class="telemetry-wrapper">
+        <div id="coderTelemetry" class="telemetry-item gpu">Coder: Idle</div>
+        <div id="reviewerTelemetry" class="telemetry-item cpu">Reviewer: Idle</div>
+    </div>
     <div id="taskFeed" class="task-feed">
         <div class="welcome-screen" id="welcomeScreen">
             <div class="welcome-logo">🛡️</div>

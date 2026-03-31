@@ -58,23 +58,21 @@ export class LlamaProcess {
             try { fs.unlinkSync(socketPath); } catch(e) {}
         }
 
+        // Hardware Auto-Detection
+        let nGpuLayers = modelConfig.nGpuLayers ?? (isCpuMode ? 0 : 33); // Default 33 for GPU
+        let threads = modelConfig.threads ?? Math.max(1, os.cpus().length - 2);
+
         const binaryArgs = [
             '-m', modelPathResolved,
             '--host', socketPath,
             '--port', '0',
             '-c', modelConfig.contextSize.toString(),
             '--temp', modelConfig.temperature.toString(),
-            '--parallel', '4', // Default to 4 parallel slots
+            '--parallel', '4', 
+            '-ngl', nGpuLayers.toString(),
+            '-t', threads.toString(),
             ...additionalArgs
         ];
-
-        // Mode Logic: Force -ngl 0 if CPU mode, otherwise use config
-        const nGpuLayers = isCpuMode ? 0 : (modelConfig.nGpuLayers ?? 0);
-        binaryArgs.push('-ngl', nGpuLayers.toString());
-
-        if (modelConfig.threads !== undefined) {
-            binaryArgs.push('-t', modelConfig.threads.toString());
-        }
         if (modelConfig.threadsBatch !== undefined) {
             binaryArgs.push('-tb', modelConfig.threadsBatch.toString());
         }

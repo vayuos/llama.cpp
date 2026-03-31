@@ -372,3 +372,48 @@ body {
 .sidebar-mode .welcome-screen {
     padding: 20px;
 }
+
+/* Telemetry Dashboard (Premium Glass) */
+.telemetry-wrapper {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 10px;
+    color: var(--text-secondary);
+    z-index: 100;
+    transition: all 0.3s ease;
+}
+
+.telemetry-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.telemetry-item::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #444;
+    transition: all 0.3s ease;
+}
+
+.telemetry-item.online {
+    color: var(--text-primary);
+}
+
+.telemetry-item.online::before {
+    background: var(--accent-emerald);
+    box-shadow: 0 0 8px var(--accent-emerald);
+}
+
+.telemetry-item.offline::before {
+    background: #ff5252;
+    box-shadow: 0 0 8px rgba(255, 82, 82, 0.4);
+}

@@ -20,6 +20,11 @@ export const ModelConfigSchema = z.object({
     modelPath: z.string().optional()
 });
 
+export const ConnectionConfigSchema = z.object({
+    mode: z.enum(['local', 'remote']).default('local'),
+    system3Ip: z.string().default('127.0.0.1')
+});
+
 export const RuntimeConfigSchema = z.object({
     autoTestOnStart: z.boolean().default(true),
     showLogs: z.boolean().default(true),
@@ -28,6 +33,7 @@ export const RuntimeConfigSchema = z.object({
 });
 
 export const GravitasConfigSchema = z.object({
+    connection: ConnectionConfigSchema,
     coder: ModelConfigSchema,
     reviewer: ModelConfigSchema,
     vayuforge: z.object({
@@ -76,6 +82,11 @@ export class ConfigManager {
         const workspaceFolder = bestFolder?.uri;
         const config = vscode.workspace.getConfiguration('gravitasCode', workspaceFolder);
 
+        const connection = {
+            mode: config.get<'local' | 'remote'>('connection.mode') ?? 'local',
+            system3Ip: config.get<string>('connection.system3Ip') ?? '127.0.0.1'
+        };
+
         const runtime = {
             autoTestOnStart: config.get<boolean>('runtime.autoTestOnStart') ?? true,
             showLogs: config.get<boolean>('runtime.showLogs') ?? true,
@@ -85,31 +96,43 @@ export class ConfigManager {
 
         const getModelConfig = (section: string): ModelConfig => {
             let host = config.get<string>(`${section}.general.host`) || '127.0.0.1';
-            let port = config.get<number>(`${section}.general.port`) || (section === 'reviewer' ? 8011 : 8010);
+            let port = config.get<number>(`${section}.general.port`) || (section === 'reviewer' ? 8080 : 8089);
             
-            // --- IRONCLAD FALLBACK ---
-            const workspacePath = '/home/viren/runs/full-server/gravitas-code';
-            const settingsPath = path.join(workspacePath, '.vscode', 'settings.json');
-            
-            if (fs.existsSync(settingsPath)) {
-                try {
-                    const raw = fs.readFileSync(settingsPath, 'utf8');
-                    const settings = JSON.parse(raw);
-                    const diskPort = settings[`gravitasCode.${section}.general.port`];
-                    if (diskPort && diskPort !== port) {
-                        port = diskPort;
-                        const logKey = `${section}-${settingsPath}-${port}`;
-                        if (this.lastLoggedSync[section] !== logKey) {
-                            logger.info('system', `[Disk Sync] Resolved ${section} port to ${port} via ${settingsPath}`);
-                            this.lastLoggedSync[section] = logKey;
-                        }
-                    }
-                    const diskHost = settings[`gravitasCode.${section}.general.host`];
-                    if (diskHost) host = diskHost;
-                } catch (e) {}
+            if (connection.mode === 'remote') {
+                host = connection.system3Ip;
             }
 
-            const defaultBaseUrl = `http://${host}:${port}/v1`;
+            // --- DISK SYNC (Priority) ---
+            const workspacePath = workspaceFolder?.fsPath;
+            if (workspacePath) {
+                const settingsPath = path.join(workspacePath, '.vscode', 'settings.json');
+                if (fs.existsSync(settingsPath)) {
+                    try {
+                        const raw = fs.readFileSync(settingsPath, 'utf8');
+                        const settings = JSON.parse(raw);
+                        const diskPort = settings[`gravitasCode.${section}.general.port`];
+                        if (diskPort && diskPort !== port) {
+                            port = diskPort;
+                            const logKey = `${section}-${settingsPath}-${port}`;
+                            if (this.lastLoggedSync[section] !== logKey) {
+                                logger.info('system', `[Disk Sync] Resolved ${section} port to ${port} via ${settingsPath}`);
+                                this.lastLoggedSync[section] = logKey;
+                            }
+                        }
+                        const diskHost = settings[`gravitasCode.${section}.general.host`];
+                        if (diskHost) host = diskHost;
+                    } catch (e) {}
+                }
+            }
+
+            let defaultBaseUrl = `http://${host}:${port}/v1`;
+            
+            // Override with UDS for local Linux
+            if (connection.mode === 'local' && process.platform === 'linux') {
+                const socketPath = path.join(require('os').homedir(), '.gravitas', 'sockets', `${section}.sock`);
+                defaultBaseUrl = `unix://${socketPath}`;
+            }
+
             const userBaseUrl = config.get<string>(`${section}.general.baseUrl`);
 
             return {
@@ -131,11 +154,12 @@ export class ConfigManager {
         const resolvedConfig: GravitasConfig = {
             workspaceRoot: workspaceFolder?.fsPath || '',
             logDir: workspaceFolder ? path.join(workspaceFolder.fsPath, '.gravitas', 'logs') : '',
+            connection,
             runtime,
             coder: getModelConfig('coder'),
             reviewer: getModelConfig('reviewer'),
             vayuforge: {
-                ragEndpoint: config.get<string>('vayuforge.ragEndpoint') || 'http://127.0.0.1:18081/retrieve'
+                ragEndpoint: config.get<string>('vayuforge.ragEndpoint') || `http://${connection.mode === 'remote' ? connection.system3Ip : '127.0.0.1'}:8081/retrieve`
             }
         };
 

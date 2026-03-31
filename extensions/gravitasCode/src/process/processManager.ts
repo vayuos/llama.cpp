@@ -2,9 +2,11 @@ import axios from 'axios';
 import { LlamaProcess } from './llamaProcess';
 import { GravitasConfig } from '../core/config';
 import { LlamaHttpClient } from '../llm/llamaHttpClient';
+import { TelemetryService } from '../llm/telemetry';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import * as vscode from 'vscode';
 
 export class UnifiedProcessManager {
     private static instance: UnifiedProcessManager;
@@ -24,6 +26,10 @@ export class UnifiedProcessManager {
     }
 
     public async startCoder(config: GravitasConfig): Promise<boolean> {
+        if (config.connection.mode === 'remote') {
+            vscode.window.showInformationMessage(`Remote Mode: Coder should be running on System3 (${config.connection.system3Ip}:8089)`);
+            return true;
+        }
         const c = config.coder as any;
         const monorepoBin = '/home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/llama-server';
         const binPath = c.binPath?.trim() ? c.binPath : (config as any).llamaBinPath || monorepoBin;
@@ -31,6 +37,10 @@ export class UnifiedProcessManager {
     }
 
     public async startReviewer(config: GravitasConfig): Promise<boolean> {
+        if (config.connection.mode === 'remote') {
+            vscode.window.showInformationMessage(`Remote Mode: Reviewer should be running on System3 (${config.connection.system3Ip}:8080)`);
+            return true;
+        }
         const r = config.reviewer as any;
         const monorepoBin = '/home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/llama-server';
         const binPath = r.binPath?.trim() ? r.binPath : (config as any).llamaBinPath || monorepoBin;
@@ -53,20 +63,19 @@ export class UnifiedProcessManager {
             return { running: true, external: false, pid: localPid, telemetry: proc.getTelemetry() };
         }
 
-        // Pulse check for external process
-        const sockPath = path.join(os.homedir(), '.gravitas', 'sockets', `${type}.sock`);
-        const endpoint = fs.existsSync(sockPath) 
-            ? `unix://${sockPath}` 
-            : `http://${config[type].host || '127.0.0.1'}:${config[type].port}`;
-            
-        const client = new LlamaHttpClient(endpoint);
+        // Pulse check for external or remote process
+        const isRemote = config.connection.mode === 'remote';
+        const telemetry = TelemetryService.getInstance().getTelemetry(type);
         
-        try {
-            await client.get('/v1/models');
-            return { running: true, external: true, telemetry: 'Live (External)' };
-        } catch (e) {
-            return { running: false, external: false };
+        if (telemetry.status === 'online') {
+            return { 
+                running: true, 
+                external: !localPid, 
+                telemetry: `${telemetry.vram} | ${telemetry.tps} | ${telemetry.latency}` 
+            };
         }
+
+        return { running: false, external: false };
     }
 
     public getProcessStatus(type: 'coder' | 'reviewer'): { pid?: number; telemetry?: string } {

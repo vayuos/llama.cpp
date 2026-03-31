@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { UnifiedProcessManager } from '../process/processManager';
 import { GravitasConfig, ConfigManager } from '../core/config';
+import { TelemetryService } from '../llm/telemetry';
 
 export class RuntimeTreeProvider implements vscode.TreeDataProvider<RuntimeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<RuntimeItem | undefined | null | void> = new vscode.EventEmitter<RuntimeItem | undefined | null | void>();
@@ -10,8 +11,8 @@ export class RuntimeTreeProvider implements vscode.TreeDataProvider<RuntimeItem>
 
     constructor() {
         this.refresh();
-        // Poll status every 10 seconds to reduce overhead and noise
-        setInterval(() => this.refresh(), 10000);
+        // Poll status every 2.5 seconds for a "live" feel
+        setInterval(() => this.refresh(), 2500);
     }
 
     refresh(): void {
@@ -46,15 +47,19 @@ export class RuntimeTreeProvider implements vscode.TreeDataProvider<RuntimeItem>
 
             const status = await pm.getLiveStatus(type, this.config);
             const pid = status.pid ? status.pid.toString() : 'N/A';
-            const telemetry = status.telemetry || (status.running ? 'Live' : 'Stopped');
             const isRunning = status.running;
 
-            const statusLabel = isRunning ? (status.external ? 'Running (External)' : 'Running') : 'Stopped';
+            const statusLabel = isRunning ? (status.external ? 'Online (Remote)' : 'Online (Local)') : 'Offline';
+
+            const telemetry = TelemetryService.getInstance().getTelemetry(type);
 
             return [
                 new RuntimeItem(`Status: ${statusLabel}`, undefined, vscode.TreeItemCollapsibleState.None, isRunning ? 'running' : 'stopped'),
                 new RuntimeItem(`PID: ${pid}`, undefined, vscode.TreeItemCollapsibleState.None, 'pid'),
-                new RuntimeItem(`Metrics: ${telemetry}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics')
+                new RuntimeItem(`VRAM: ${telemetry.vram}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
+                new RuntimeItem(`Perf: ${telemetry.tps}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
+                new RuntimeItem(`Usage: ${telemetry.slots}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
+                new RuntimeItem(`Ping: ${telemetry.latency}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics')
             ];
         }
     }
