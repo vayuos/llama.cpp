@@ -144,19 +144,13 @@ class ChatController {
     }
 
     hideWelcome() {
-        const welcome = document.getElementById('welcomeScreen');
-        if (welcome) welcome.style.display = 'none';
+        // Obsolete: No welcome screen
+        return;
     }
 
     resetUI() {
         this.activeTaskId = null;
-        this.taskFeed.innerHTML = `
-            <div class="welcome-screen" id="welcomeScreen">
-                <div class="welcome-logo">🛡️</div>
-                <div class="welcome-title">Gravitas chat</div>
-                <div class="welcome-hint">Initialize a session to begin autonomous engineering.</div>
-            </div>
-        `;
+        this.taskFeed.innerHTML = '';
     }
 
     focusInput() {

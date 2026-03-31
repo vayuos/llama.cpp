@@ -5,6 +5,7 @@
 #include <cublas_v2.h>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
+#include <curand_kernel.h>
 
 #if CUDART_VERSION >= 12050
 #include <cuda_fp8.h>

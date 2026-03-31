@@ -167,15 +167,6 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     <title>Gravitas chat</title>
     <link href="${styleUri}" rel="stylesheet">
     <script nonce="${nonce}" src="${toolkitUri}"></script>
-    <style>
-        body { padding: 0; display: flex; flex-direction: column; height: 100vh; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        #taskFeed { flex: 1; padding: 12px; gap: 24px; overflow-y: auto; }
-        .task-footer { padding: 16px; background: rgba(10, 10, 12, 0.95); border-top: 1px solid rgba(255,255,255,0.05); }
-        .welcome-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80%; text-align: center; color: var(--text-secondary); padding: 40px; }
-        .welcome-logo { font-size: 32px; margin-bottom: 24px; filter: drop-shadow(0 0 10px var(--accent-primary)); }
-        .welcome-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-        .welcome-hint { font-size: 11px; opacity: 0.6; }
-    </style>
 </head>
 <body class="sidebar-mode">
     <div class="telemetry-wrapper">
@@ -205,11 +196,6 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
     <div id="taskFeed" class="task-feed">
-        <div class="welcome-screen" id="welcomeScreen">
-            <div class="welcome-logo">🛡️</div>
-            <div class="welcome-title">Gravitas chat</div>
-            <div class="welcome-hint">Initialize a session to begin autonomous engineering.</div>
-        </div>
     </div>
     <div id="debugOverlay" style="position:fixed;bottom:80px;left:5px;right:5px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:9px;padding:4px;z-index:9999;border-top:1px solid #333;pointer-events:none;display:none;"></div>
     <div class="task-footer">

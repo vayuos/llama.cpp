@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 
 import { GravitasState } from './core/state';
 import { ConfigManager } from './core/config';
@@ -60,8 +61,13 @@ export class ActivationManager {
         }
         
         const markerExists = fs.existsSync(installMarkerPath);
-
         const isFreshInstall = !markerExists;
+
+        // Ensure Socket Directory exists to prevent ENOENT on status checks
+        const socketDir = path.join(os.homedir(), '.gravitas', 'sockets');
+        if (!fs.existsSync(socketDir)) {
+            fs.mkdirSync(socketDir, { recursive: true });
+        }
 
         if (isFreshInstall) {
             logger.info('system', 'Fresh install detected - cleaning up any existing data...');
