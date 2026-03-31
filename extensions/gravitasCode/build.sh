@@ -1,33 +1,35 @@
 #!/bin/bash
 set -e
 
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-SUPPORT_DIR="$(readlink -f "$SCRIPT_DIR/../support-code")"
-VSIX_TEMP="$SUPPORT_DIR/vsix_temp"
-BUILD_DIR="/tmp/vsix_build"
-OUTPUT="$SCRIPT_DIR/gravitas-code-custom.vsix"
+# Gravitas Code: Native Build Script
+# This script bundles and packages the extension for local installation.
 
-echo "🔨 Building Gravitas Code Extension..."
+echo "--- Building Gravitas Code (Custom Build) ---"
 
-# 1. Source NVM if available
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+# 1. Clean previous build
+rm -f gravitas-code-custom.vsix
+rm -rf dist
 
-# 2. Bundle
-echo "📦 Bundling with esbuild..."
-cd "$SCRIPT_DIR"
+# 2. Dependency Check
+if [ ! -d "node_modules" ]; then
+    echo "Installing dependencies..."
+    npm install
+fi
+
+# 3. Bundle with esbuild
+echo "Bundling extension..."
 npm run bundle
 
-# 3. Package .vsix
-echo "📋 Packaging .vsix..."
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR/extension"
-cp -r dist media img package.json README.md setup.sh .gravitas "$BUILD_DIR/extension/"
-cp "$VSIX_TEMP/extension.vsixmanifest" "$BUILD_DIR/"
-cp "$VSIX_TEMP/[Content_Types].xml" "$BUILD_DIR/"
-cd "$BUILD_DIR"
-zip -r "$OUTPUT" .
+# 4. Package VSIX
+echo "Packaging Extension..."
+# Try to use local vsce if available, otherwise npx
+if [ -f "./node_modules/.bin/vsce" ]; then
+    ./node_modules/.bin/vsce package --out gravitas-code-custom.vsix --allow-star-activation --skip-license
+else
+    npx @vscode/vsce package --out gravitas-code-custom.vsix --allow-star-activation --skip-license
+fi
 
-echo ""
-echo "✅ Built: $OUTPUT"
-echo "   Size: $(du -h "$OUTPUT" | cut -f1)"
+echo "------------------------------------------------"
+echo "BUILD SUCCESS: gravitas-code-custom.vsix"
+echo "Install with: code --install-extension gravitas-code-custom.vsix --force"
+echo "------------------------------------------------"

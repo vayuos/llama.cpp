@@ -418,10 +418,11 @@
         "vscode:prepublish": "npm run bundle",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "bundle": "npx esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && cp node_modules/@vscode/webview-ui-toolkit/dist/toolkit.js media/toolkit.js",
+        "bundle": "npx esbuild src/extension.ts --bundle --minify --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && cp node_modules/@vscode/webview-ui-toolkit/dist/toolkit.js media/toolkit.js",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "test": "node out/test/runTest.js"
+        "test": "node out/test/runTest.js",
+        "package": "vsce package --out gravitas-code-custom.vsix"
     },
     "devDependencies": {
         "@types/emscripten": "^1.41.5",
@@ -430,6 +431,7 @@
         "@typescript-eslint/eslint-plugin": "^5.59.1",
         "@typescript-eslint/parser": "^5.59.1",
         "eslint": "^8.41.0",
-        "typescript": "^5.1.3"
+        "typescript": "^5.1.3",
+        "@vscode/vsce": "^2.19.0"
     }
 }

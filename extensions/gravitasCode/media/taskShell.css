@@ -269,26 +269,32 @@ body {
  */
 .task-footer {
     flex: 0 0 auto;
-    padding: 20px 24px;
-    background: linear-gradient(to top, var(--bg-main) 80%, transparent);
+    padding: 16px;
+    background: linear-gradient(to top, var(--bg-main) 95%, transparent);
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
 .input-container {
-    background: rgba(255, 255, 255, 0.05);
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--glass-border);
-    border-radius: 16px;
+    border-radius: 14px;
     padding: 12px 16px;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 12px;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    box-sizing: border-box;
 }
 
 .input-container:focus-within {
-    border-color: var(--accent-primary);
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+    border-color: rgba(0, 229, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.1);
 }
 
 .command-input {
@@ -297,7 +303,28 @@ body {
     border: none;
     outline: none;
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: none;
+    max-height: 150px;
+    padding: 2px 0;
+}
+
+.submit-btn {
+    flex: 0 0 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 8px;
+}
+
+.submit-btn:hover {
+    color: var(--accent-primary);
+    background: rgba(0, 229, 255, 0.1);
 }
 
 /* Controls */

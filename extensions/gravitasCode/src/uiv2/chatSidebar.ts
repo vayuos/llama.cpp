@@ -214,7 +214,10 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     <div id="debugOverlay" style="position:fixed;bottom:80px;left:5px;right:5px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:9px;padding:4px;z-index:9999;border-top:1px solid #333;pointer-events:none;display:none;"></div>
     <div class="task-footer">
         <div class="input-container">
-            <input type="text" id="commandInput" class="command-input" placeholder="Ask anything..." autocomplete="off">
+            <textarea id="commandInput" class="command-input" placeholder="Ask anything..." autocomplete="off" rows="1"></textarea>
+            <div id="submitBtn" class="submit-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 8L15 1M1 8L15 15M1 8H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
         </div>
     </div>
     <script nonce="${nonce}" src="${scriptUri}"></script>

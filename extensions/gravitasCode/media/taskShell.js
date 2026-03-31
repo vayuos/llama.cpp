@@ -15,6 +15,7 @@ class ChatController {
             this.vscode = acquireVsCodeApi();
             this.taskFeed = document.getElementById('taskFeed');
             this.commandInput = document.getElementById('commandInput');
+            this.submitBtn = document.getElementById('submitBtn');
             this.debugOverlay = document.getElementById('debugOverlay');
             this.coderTelemetry = document.getElementById('coderTelemetry');
             this.reviewerTelemetry = document.getElementById('reviewerTelemetry');
@@ -103,19 +104,37 @@ class ChatController {
             this.userHasScrolledUp = scrollPos < this.taskFeed.scrollHeight - 50;
         });
 
+        this.commandInput.addEventListener('input', () => {
+            this.commandInput.style.height = 'auto';
+            this.commandInput.style.height = (this.commandInput.scrollHeight) + 'px';
+        });
+
         this.commandInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const text = this.commandInput.value.trim();
-                if (text) {
-                    console.log('Gravitas Chat: Submitting prompt...');
-                    this.debugLog(`TX: submitPrompt (${text.substring(0, 10)}...)`);
-                    this.commandInput.disabled = true;
-                    this.vscode.postMessage({ type: 'submitPrompt', text: text });
-                    this.commandInput.value = '';
-                    setTimeout(() => this.commandInput.disabled = false, 500);
-                }
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.submitPrompt();
             }
         });
+
+        if (this.submitBtn) {
+            this.submitBtn.addEventListener('click', () => this.submitPrompt());
+        }
+    }
+
+    submitPrompt() {
+        const text = this.commandInput.value.trim();
+        if (text) {
+            console.log('Gravitas Chat: Submitting prompt...');
+            this.debugLog(`TX: submitPrompt (${text.substring(0, 10)}...)`);
+            this.commandInput.disabled = true;
+            this.vscode.postMessage({ type: 'submitPrompt', text: text });
+            this.commandInput.value = '';
+            this.commandInput.style.height = 'auto'; // Reset height
+            setTimeout(() => {
+                this.commandInput.disabled = false;
+                this.commandInput.focus();
+            }, 500);
+        }
     }
 
     autoScroll() {
@@ -207,13 +226,6 @@ class ChatController {
             <div class="user-bubble">${task.command}</div>
             <div class="task-body" id="body-${task.id}">
                 <div class="operational-status" id="status-${task.id}">Initializing...</div>
-            </div>
-            <div class="task-footer" id="footer-${task.id}">
-                <div class="hardware-stats" id="hardware-stats-${task.id}">
-                    <span class="stat-item"><span class="codicon codicon-dashboard"></span> VRAM: <span id="vram-${task.id}">0MB</span></span>
-                    <span class="stat-item"><span class="codicon codicon-circuit-board"></span> Slots: <span id="slots-${task.id}">0/0</span></span>
-                    <span class="stat-item"><span class="codicon codicon-zap"></span> <span id="tps-${task.id}">0</span> t/s</span>
-                </div>
             </div>
         `;
         return shell;
@@ -315,14 +327,8 @@ class ChatController {
     }
 
     updateHardwareUI(taskId, metrics) {
-        const vram = document.getElementById(`vram-${taskId}`);
-        const slots = document.getElementById(`slots-${taskId}`);
-        const tps = document.getElementById(`tps-${taskId}`);
-        
-        if (vram) vram.textContent = `${metrics.vramMb}MB`;
-        if (slots) slots.textContent = `${metrics.activeSlots}/${metrics.totalSlots}`;
-        // TPS logic: usually calculated in backend but we can show it here if available
-        if (tps && metrics.tps > 0) tps.textContent = metrics.tps.toFixed(1);
+        // Obsolete: Hardware UI now handled by global telemetry in header
+        return;
     }
 
     handleStreamingChunk(taskId, chunk, stage) {
