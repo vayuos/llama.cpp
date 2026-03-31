@@ -1,0 +1,374 @@
+/* Antigravity Premium Chat Design System - v10.0 */
+:root {
+    --bg-main: #0a0a0c;
+    --glass-bg: rgba(20, 20, 25, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --accent-primary: #00e5ff;
+    --accent-secondary: #7000ff;
+    --accent-emerald: #00ffa3;
+    --text-primary: #f0f0f5;
+    --text-secondary: #a0a0b0;
+    --bubble-user: linear-gradient(135deg, #1a1a2e, #16213e);
+    --bubble-agent: rgba(255, 255, 255, 0.03);
+    --shadow-premium: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --font-main: "Inter", var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-main);
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    letter-spacing: -0.01em;
+}
+
+/* 
+ * 1. Chat Feed 
+ */
+#taskFeed {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    scroll-behavior: smooth;
+    background: radial-gradient(circle at 50% -20%, rgba(112, 0, 255, 0.1), transparent 60%);
+}
+
+#taskFeed::-webkit-scrollbar {
+    width: 6px;
+}
+
+#taskFeed::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+/* Chat Shell (Bubble Group) */
+.task-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 95%;
+    animation: springIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes springIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* User Message (The Task Prompt) */
+.user-bubble {
+    align-self: flex-end;
+    background: var(--bubble-user);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 12px 18px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 85%;
+    box-shadow: var(--shadow-premium);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Agent Message (The Response / Output) */
+.agent-shell {
+    align-self: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.agent-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 4px;
+}
+
+.agent-avatar {
+    width: 24px;
+    height: 24px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #000;
+    box-shadow: 0 0 10px var(--accent-primary);
+}
+
+.agent-name {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent-primary);
+}
+
+/* The Body of Agent Feedback */
+.task-body {
+    background: var(--bubble-agent);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    backdrop-filter: blur(16px);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+.view-details-btn:hover {
+    background: var(--btn-hover);
+}
+
+.task-footer {
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    justify-content: space-between;
+}
+
+.hardware-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.agent-status-tag {
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    background: rgba(0, 229, 255, 0.1);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    color: var(--accent-primary);
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.1);
+}
+
+.status-running {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; box-shadow: 0 0 12px var(--accent-primary); }
+    100% { opacity: 0.7; }
+}
+
+/* Attempt & Phase refinements */
+.attempt-container {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.attempt-container:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.attempt-header {
+    padding: 10px 14px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.attempt-status-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.attempt-content {
+    padding: 16px;
+    display: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.attempt-container.expanded .attempt-content {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+/* Terminal & Code Blocks */
+.terminal-block {
+    background: #000;
+    border-radius: 6px;
+    padding: 12px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    color: #cad3f5;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.code-result-container {
+    margin: 8px 0;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.code-header {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 6px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.code-block {
+    margin: 0;
+    padding: 12px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+    color: var(--accent-emerald);
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-x: auto;
+}
+
+/* 
+ * 2. Footer Input (Floating Deck) 
+ */
+.task-footer {
+    flex: 0 0 auto;
+    padding: 20px 24px;
+    background: linear-gradient(to top, var(--bg-main) 80%, transparent);
+}
+
+.input-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.input-container:focus-within {
+    border-color: var(--accent-primary);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+}
+
+.command-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 14px;
+}
+
+/* Controls */
+.task-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.control-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Operational Status & Animations */
+.operational-status {
+    font-size: 11px;
+    color: var(--accent-primary);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.thinking::after {
+    content: '';
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0% { opacity: 0.2; }
+    50% { opacity: 1; }
+    100% { opacity: 0.2; }
+}
+
+.event-log {
+    font-size: 11px;
+    margin: 4px 0;
+    opacity: 0.8;
+}
+
+.sidebar-mode #taskFeed {
+    padding: 16px 12px;
+    gap: 20px;
+}
+
+.sidebar-mode .user-bubble, 
+.sidebar-mode .agent-shell {
+    max-width: 100%;
+}
+
+.sidebar-mode .task-body {
+    padding: 12px;
+}
+
+.sidebar-mode .agent-avatar {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+}
+
+.sidebar-mode .welcome-screen {
+    padding: 20px;
+}

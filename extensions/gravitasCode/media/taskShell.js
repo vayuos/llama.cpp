@@ -1,0 +1,402 @@
+// @ts-nocheck
+/* eslint-disable no-undef */
+
+/**
+ * Gravitas Chat Infrastructure - Frontend Controller
+ * Manages high-fidelity message rendering and lifecycle sync.
+ */
+class ChatController {
+    constructor() {
+        console.log('Gravitas Chat: Initializing ChatController...');
+        this.debugBuffer = [];
+        
+        try {
+            this.currentStatusEl = null;
+            this.currentStopBtn = null;
+            this.commandInput = document.getElementById('commandInput');
+            this.debugOverlay = document.getElementById('debugOverlay');
+            
+            if (!this.taskFeed || !this.commandInput) {
+                console.error('Gravitas Chat: DOM elements missing!', { feed: !!this.taskFeed, input: !!this.commandInput });
+                throw new Error('Required DOM elements (taskFeed or commandInput) not found.');
+            }
+
+            this.activeTaskId = null;
+            this.userHasScrolledUp = false;
+
+            this.initEventListeners();
+            this.reportReady();
+            this.debugLog('System: Internal Boot Sequence Complete.');
+        } catch (error) {
+            this.reportCrash(error);
+        }
+    }
+
+    debugLog(msg) {
+        const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        this.debugBuffer.push(`[${timestamp}] ${msg}`);
+        if (this.debugBuffer.length > 5) this.debugBuffer.shift();
+        
+        if (this.debugOverlay) {
+            this.debugOverlay.innerHTML = this.debugBuffer.join('<br>');
+            // Uncomment next line to show overlay for debugging
+            // this.debugOverlay.style.display = 'block';
+        }
+    }
+
+    reportReady() {
+        console.log('Gravitas Chat: Signaling ready to Extension Host...');
+        this.debugLog('TX: ready');
+        this.vscode.postMessage({ type: 'ready' });
+    }
+
+    reportCrash(error) {
+        console.error('Gravitas Chat: Critical Initialization Error:', error);
+        this.debugLog(`ERR: ${error.message}`);
+        if (this.vscode) {
+            this.vscode.postMessage({ 
+                type: 'error', 
+                message: error.message, 
+                stack: error.stack 
+            });
+        }
+    }
+
+    initEventListeners() {
+        console.log('Gravitas Chat: Binding event listeners...');
+        
+        window.onerror = (message, source, lineno, colno, error) => {
+            this.reportCrash(error || new Error(message));
+        };
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            this.debugLog(`RX: ${message.type}`);
+            
+            switch (message.type) {
+                case 'loadSnapshot':
+                    this.renderSnapshot(message.task);
+                    break;
+                case 'event':
+                    this.handleLiveEvent(message.taskId, message.event);
+                    break;
+                case 'updateTask':
+                    this.updateTaskUI(message.task);
+                    break;
+                case 'reset':
+                    this.resetUI();
+                    break;
+                case 'focus':
+                    this.focusInput();
+                    break;
+            }
+        });
+
+        this.taskFeed.addEventListener('scroll', () => {
+            const scrollPos = this.taskFeed.scrollTop + this.taskFeed.clientHeight;
+            this.userHasScrolledUp = scrollPos < this.taskFeed.scrollHeight - 50;
+        });
+
+        this.commandInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const text = this.commandInput.value.trim();
+                if (text) {
+                    console.log('Gravitas Chat: Submitting prompt...');
+                    this.debugLog(`TX: submitPrompt (${text.substring(0, 10)}...)`);
+                    this.commandInput.disabled = true;
+                    this.vscode.postMessage({ type: 'submitPrompt', text: text });
+                    this.commandInput.value = '';
+                    setTimeout(() => this.commandInput.disabled = false, 500);
+                }
+            }
+        });
+    }
+
+    autoScroll() {
+        if (!this.userHasScrolledUp) {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+    }
+
+    hideWelcome() {
+        const welcome = document.getElementById('welcomeScreen');
+        if (welcome) welcome.style.display = 'none';
+    }
+
+    resetUI() {
+        this.activeTaskId = null;
+        this.taskFeed.innerHTML = `
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-logo">🛡️</div>
+                <div class="welcome-title">Gravitas chat</div>
+                <div class="welcome-hint">Initialize a session to begin autonomous engineering.</div>
+            </div>
+        `;
+    }
+
+    focusInput() {
+        this.commandInput.focus();
+    }
+
+    renderSnapshot(task) {
+        if (!task) return;
+        this.hideWelcome();
+        this.activeTaskId = task.id;
+
+        // Clear existing shell if any
+        let shell = this.getTaskShell(task.id);
+        if (shell) shell.remove();
+
+        shell = this.createTaskShell(task);
+        this.taskFeed.appendChild(shell);
+        
+        // Cache current controls
+        this.currentStatusEl = shell.querySelector('#task-status');
+        this.currentStopBtn = shell.querySelector('#stop-task-btn');
+        
+        if (this.currentStopBtn) {
+            this.currentStopBtn.addEventListener('click', () => {
+                this.vscode.postMessage({ type: 'abortTask', taskId: task.id });
+                this.currentStopBtn.classList.add('hidden');
+            });
+        }
+
+        // Render all existing events
+        task.attempts.forEach(attempt => {
+            attempt.phases.forEach(phase => {
+                phase.events.forEach(event => {
+                    this.renderEvent(task.id, event);
+                });
+            });
+        });
+
+        this.updateTaskUI(task); // Apply final status
+        this.autoScroll();
+    }
+
+    handleLiveEvent(taskId, event) {
+        if (taskId !== this.activeTaskId) return;
+        this.hideWelcome();
+        this.renderEvent(taskId, event);
+        this.autoScroll();
+    }
+
+    createTaskShell(task) {
+        const shell = document.createElement('div');
+        shell.className = 'agent-shell';
+        shell.id = `task-${task.id}`;
+        shell.innerHTML = `
+            <div class="agent-header">
+                <div class="agent-avatar">G</div>
+                <div class="agent-info">
+                    <span class="agent-name">GRAVITAS chat</span>
+                    <div class="header-right">
+                        <vscode-button appearance="icon" id="stop-task-btn" title="Stop Task" class="hidden">
+                            <span class="codicon codicon-stop"></span>
+                        </vscode-button>
+                        <div class="task-status-chip" id="task-status">Ready</div>
+                    </div>
+                </div>
+            </div>
+            <div class="user-bubble">${task.command}</div>
+            <div class="task-body" id="body-${task.id}">
+                <div class="operational-status" id="status-${task.id}">Initializing...</div>
+            </div>
+            <div class="task-footer" id="footer-${task.id}">
+                <div class="hardware-stats" id="hardware-stats-${task.id}">
+                    <span class="stat-item"><span class="codicon codicon-dashboard"></span> VRAM: <span id="vram-${task.id}">0MB</span></span>
+                    <span class="stat-item"><span class="codicon codicon-circuit-board"></span> Slots: <span id="slots-${task.id}">0/0</span></span>
+                    <span class="stat-item"><span class="codicon codicon-zap"></span> <span id="tps-${task.id}">0</span> t/s</span>
+                </div>
+            </div>
+        `;
+        return shell;
+    }
+
+    getTaskShell(taskId) {
+        return document.getElementById(`task-${taskId}`);
+    }
+
+    updateTaskUI(task) {
+        const badge = document.getElementById(`badge-${task.id}`);
+        const status = document.getElementById(`status-${task.id}`);
+        if (badge) badge.innerText = task.status;
+        if (status && task.operationalStatus) {
+            status.innerText = task.operationalStatus;
+            status.classList.toggle('thinking', task.operationalStatus.includes('...'));
+        }
+    }
+
+    renderEvent(taskId, event) {
+        const body = document.getElementById(`body-${taskId}`);
+        if (!body) return;
+
+        // Cleanup: If a "Final result" arrives, clear the streaming buffer
+        const finalResults = ['ThoughtCompleted', 'CoderResultEmitted', 'ReviewerResultEmitted'];
+        if (finalResults.includes(event.type)) {
+            const stream = body.querySelector('.active-stream-block');
+            if (stream) stream.remove();
+        }
+
+        switch (event.type) {
+            case 'TaskStatusEmitted':
+                const statusLine = document.getElementById(`status-${taskId}`);
+                if (statusLine) {
+                    if (this.currentStatusEl) {
+                        this.currentStatusEl.textContent = event.status;
+                    }
+        
+                    // Show/Hide Stop button based on activity
+                    const activeStates = ['Thinking...', 'Reviewing code...', 'Implementing...'];
+                    if (this.currentStopBtn) {
+                        if (activeStates.includes(event.status)) {
+                            this.currentStopBtn.classList.remove('hidden');
+                        } else {
+                            this.currentStopBtn.classList.add('hidden');
+                        }
+                    }
+
+                    statusLine.innerText = event.status;
+                    statusLine.classList.toggle('thinking', event.status.includes('...'));
+                }
+                break;
+            case 'ThoughtStarted':
+                this.addEventLog(body, `💭 Thinking...`, 'thought-log');
+                break;
+            case 'ThoughtCompleted':
+                this.addEventLog(body, `✅ ${event.content}`, 'success-log');
+                break;
+            case 'CoderResultEmitted':
+                this.addCodeLog(body, event.content, event.file);
+                break;
+            case 'ReviewerResultEmitted':
+                const color = event.verdict === 'PASS' ? 'var(--accent-emerald)' : 'var(--vscode-errorForeground)';
+                this.addEventLog(body, `🔎 Review ${event.verdict}`, 'review-log', color);
+                break;
+            case 'StreamingChunkEmitted':
+                this.handleStreamingChunk(taskId, event.chunk, event.stage);
+                break;
+            case 'HardwareMetricsEmitted':
+                this.updateHardwareUI(taskId, event);
+                break;
+        }
+    }
+
+    updateHardwareUI(taskId, metrics) {
+        const vram = document.getElementById(`vram-${taskId}`);
+        const slots = document.getElementById(`slots-${taskId}`);
+        const tps = document.getElementById(`tps-${taskId}`);
+        
+        if (vram) vram.textContent = `${metrics.vramMb}MB`;
+        if (slots) slots.textContent = `${metrics.activeSlots}/${metrics.totalSlots}`;
+        // TPS logic: usually calculated in backend but we can show it here if available
+        if (tps && metrics.tps > 0) tps.textContent = metrics.tps.toFixed(1);
+    }
+
+    handleStreamingChunk(taskId, chunk, stage) {
+        const body = document.getElementById(`body-${taskId}`);
+        if (!body) return;
+
+        // Try to find if we already have an "Active Stream Block"
+        let streamBlock = body.querySelector('.active-stream-block');
+        
+        if (!streamBlock) {
+            // No active stream, create one
+            streamBlock = document.createElement('div');
+            streamBlock.className = 'active-stream-block';
+            
+            if (stage === 'implementation') {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-result-container streaming';
+                wrapper.innerHTML = `
+                    <div class="code-header"><span>impl.ts (streaming)</span></div>
+                    <pre class="code-block"><code></code></pre>
+                `;
+                streamBlock.appendChild(wrapper);
+            } else {
+                streamBlock.className += ' prose-stream';
+                streamBlock.innerHTML = `<div class="markdown-log prose"></div>`;
+            }
+            body.appendChild(streamBlock);
+        }
+
+        // Append chunk
+        if (stage === 'implementation') {
+            const code = streamBlock.querySelector('code');
+            if (code) code.innerText += chunk;
+        } else {
+            const md = streamBlock.querySelector('.markdown-log');
+            if (md) md.innerText += chunk;
+        }
+
+        this.autoScroll();
+    }
+
+    addEventLog(container, text, className, color) {
+        const log = document.createElement('div');
+        log.className = `event-log ${className}`;
+        log.innerText = text;
+        if (color) log.style.color = color;
+        container.appendChild(log);
+    }
+
+    addCodeLog(container, content, fileName) {
+        // Intelligence: Is this a "Code Artifact" or "Message prose"?
+        // 🧪 Refined detection: Ignore filename having a '.' as it's often a default.
+        // Look for actual code signatures.
+        const codeSigs = ['function', 'import ', 'export ', 'class ', 'const ', 'let ', 'var ', 'private ', 'public ', 'def ', 'async '];
+        const looksLikeCode = codeSigs.some(sig => content.includes(sig)) || content.includes('=>') || (content.includes('{') && content.includes('}'));
+        const looksLikeMarkdown = content.includes('###') || content.includes('| --- |') || content.includes('- **') || content.includes('## ');
+
+        if (looksLikeMarkdown && !looksLikeCode) {
+            const md = document.createElement('div');
+            md.className = 'markdown-log prose';
+            md.innerHTML = this.simpleMarkdown(content);
+            container.appendChild(md);
+        } else {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-result-container';
+            
+            const header = document.createElement('div');
+            header.className = 'code-header';
+            header.innerHTML = `<span>${fileName || 'impl.ts'}</span>`;
+            
+            const pre = document.createElement('pre');
+            pre.className = 'code-block';
+            const codeElem = document.createElement('code');
+            codeElem.innerText = content;
+            pre.appendChild(codeElem);
+            
+            wrapper.appendChild(header);
+            wrapper.appendChild(pre);
+            container.appendChild(wrapper);
+        }
+    }
+
+    simpleMarkdown(text) {
+        return text
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/\*\*(.*?)\*\*/gm, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/gm, '<em>$1</em>')
+            .replace(/^\- (.*$)/gim, '<li>$1</li>')
+            .replace(/\| (.*) \|/g, (match, p1) => {
+                if (p1.includes('---')) return '<hr class="table-sep">';
+                const cells = p1.split('|').map(c => `<td>${c.trim()}</td>`).join('');
+                return `<tr>${cells}</tr>`;
+            })
+            .replace(/\n\n/g, '<br>')
+            .replace(/\n/g, ' '); // Basic normalization
+    }
+}
+
+// 🚀 Boot Selection
+(function() {
+    try {
+        console.log('Gravitas Chat: DOM Content Starting Boot...');
+        const chatControl = new ChatController();
+    } catch (e) {
+        console.error('Gravitas Chat: Boot Failure!', e);
+    }
+})();

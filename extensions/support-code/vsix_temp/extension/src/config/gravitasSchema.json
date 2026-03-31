@@ -1,0 +1,43 @@
+{
+    "type": "object",
+    "required": [
+        "codebaseRoot",
+        "coder",
+        "reviewer"
+    ],
+    "properties": {
+        "codebaseRoot": {
+            "type": "string",
+            "minLength": 1
+        },
+        "coder": {
+            "type": "object",
+            "required": [
+                "endpoint"
+            ],
+            "properties": {
+                "endpoint": {
+                    "type": "string"
+                }
+            }
+        },
+        "reviewer": {
+            "type": "object",
+            "required": [
+                "endpoint",
+                "modelName"
+            ],
+            "properties": {
+                "endpoint": {
+                    "type": "string"
+                },
+                "modelName": {
+                    "type": "string"
+                },
+                "strictMode": {
+                    "type": "boolean"
+                }
+            }
+        }
+    }
+}

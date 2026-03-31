@@ -1,0 +1,183 @@
+{
+    "name": "gravitas-code",
+    "displayName": "Gravitas Code",
+    "description": "Deterministic Dual-Agent Code Intelligence (Antigravity Architecture)",
+    "version": "0.1.0",
+    "publisher": "",
+    "icon": "img/logo_only.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/vayuos/Gravitas-Code"
+    },
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Programming Languages",
+        "Machine Learning"
+    ],
+    "main": "./out/extension.js",
+    "dependencies": {
+        "@vscode/webview-ui-toolkit": "^1.4.0",
+        "ajv": "^8.12.0",
+        "axios": "^1.4.0",
+        "web-tree-sitter": "^0.26.5",
+        "zod": "^4.3.6"
+    },
+    "contributes": {
+        "commands": [
+            {
+                "command": "gravitas.pipeline.run",
+                "title": "Gravitas: Run Pipeline",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.config.setRoot",
+                "title": "Gravitas: Set Codebase Root",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.config.switchReviewer",
+                "title": "Gravitas: Switch Reviewer Model",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.config.selectBinary",
+                "title": "Gravitas: Select LLM Server Binary",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.start",
+                "title": "Gravitas: Start LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.stop",
+                "title": "Gravitas: Stop LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.restart",
+                "title": "Gravitas: Restart LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.setup.validate",
+                "title": "Gravitas: Validate Setup",
+                "category": "Gravitas"
+            }
+        ],
+        "configuration": {
+            "title": "Gravitas Code",
+            "properties": {
+                "gravitas.codebaseRoot": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Absolute path to the codebase root to be indexed and analyzed"
+                },
+                "gravitas.coder.binaryPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Absolute path to the llama-server binary for the Coder"
+                },
+                "gravitas.coder.modelPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Absolute path to the .gguf model file for the Coder"
+                },
+                "gravitas.coder.cudaDevices": {
+                    "type": "string",
+                    "default": "0",
+                    "description": "CUDA_VISIBLE_DEVICES to set for the coder model (e.g. '0' or '0,1')"
+                },
+                "gravitas.coder.endpoint": {
+                    "type": "string",
+                    "default": "http://127.0.0.1:8000",
+                    "description": "HTTP endpoint for the GPU coder model"
+                },
+                "gravitas.coder.gpuLayers": {
+                    "type": "number",
+                    "default": 33,
+                    "description": "Number of layers to offload to GPU (-ngl)"
+                },
+                "gravitas.coder.threads": {
+                    "type": "number",
+                    "default": 8,
+                    "description": "Number of threads to use"
+                },
+                "gravitas.coder.contextSize": {
+                    "type": "number",
+                    "default": 8192,
+                    "description": "Context window size (-c)"
+                },
+                "gravitas.reviewer.binaryPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Absolute path to the llama-server binary for the Reviewer"
+                },
+                "gravitas.reviewer.modelPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Absolute path to the .gguf model file for the Reviewer"
+                },
+                "gravitas.reviewer.endpoint": {
+                    "type": "string",
+                    "default": "http://127.0.0.1:8001",
+                    "description": "HTTP endpoint for the CPU reviewer model"
+                },
+                "gravitas.reviewer.modelName": {
+                    "type": "string",
+                    "default": "deepseek-coder-33b-base",
+                    "description": "Logical reviewer model identifier"
+                },
+                "gravitas.reviewer.threads": {
+                    "type": "number",
+                    "default": 16,
+                    "description": "Number of threads to use (CPU intensive)"
+                },
+                "gravitas.reviewer.strictMode": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Force structured JSON-only review output"
+                }
+            }
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "gravitas-explorer",
+                    "title": "Gravitas",
+                    "icon": "$(shield)"
+                }
+            ]
+        },
+        "views": {
+            "gravitas-explorer": [
+                {
+                    "id": "gravitas.chatView",
+                    "name": "Gravitas Controller",
+                    "type": "webview",
+                    "icon": "$(comment-discussion)",
+                    "when": "gravitas.validated"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "tsc -p ./",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/emscripten": "^1.41.5",
+        "@types/node": "20.x",
+        "@types/vscode": "^1.80.0",
+        "@typescript-eslint/eslint-plugin": "^5.59.1",
+        "@typescript-eslint/parser": "^5.59.1",
+        "eslint": "^8.41.0",
+        "typescript": "^5.1.3"
+    }
+}

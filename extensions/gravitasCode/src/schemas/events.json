@@ -1,0 +1,1925 @@
+{
+    "TaskCreated": {
+        "title": "TaskCreated",
+        "description": "Emitted when a new Task Shell is created.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "type",
+            "createdAt",
+            "origin",
+            "command"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "TaskCreated"
+            },
+            "createdAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "origin": {
+                "type": "string",
+                "enum": [
+                    "user",
+                    "system"
+                ]
+            },
+            "command": {
+                "type": "string",
+                "minLength": 1
+            },
+            "metadata": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "TaskStateChanged": {
+        "title": "TaskStateChanged",
+        "description": "Emitted when a Task Shell changes lifecycle state.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "previousState",
+            "newState",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "previousState": {
+                "type": "string",
+                "enum": [
+                    "CREATED",
+                    "RUNNING",
+                    "FINALIZING",
+                    "COMPLETED",
+                    "FAILED",
+                    "ABORTED"
+                ]
+            },
+            "newState": {
+                "type": "string",
+                "enum": [
+                    "CREATED",
+                    "RUNNING",
+                    "FINALIZING",
+                    "COMPLETED",
+                    "FAILED",
+                    "ABORTED"
+                ]
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "reason": {
+                "type": "string"
+            },
+            "details": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "type": {
+                "type": "string",
+                "const": "TaskStateChanged"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "TaskTerminated": {
+        "title": "TaskTerminated",
+        "description": "Final terminal event for a Task Shell with termination reason.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "terminatedAt",
+            "terminationType",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "terminatedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "terminationType": {
+                "type": "string",
+                "enum": [
+                    "USER_ABORT",
+                    "MAX_ATTEMPTS",
+                    "SYSTEM_ABORT"
+                ]
+            },
+            "terminationReasonCode": {
+                "type": "string"
+            },
+            "humanMessage": {
+                "type": "string"
+            },
+            "details": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "TaskTerminated"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "FinalSummaryEmitted": {
+        "title": "FinalSummaryEmitted",
+        "description": "Emitted when final summary block for a Task Shell is available.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "emittedAt",
+            "outcome",
+            "attemptCount",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "emittedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "outcome": {
+                "type": "string",
+                "enum": [
+                    "SUCCESS",
+                    "FAILED",
+                    "ABORTED",
+                    "INCOMPLETE"
+                ]
+            },
+            "attemptCount": {
+                "type": "integer",
+                "minimum": 0
+            },
+            "failedAttempts": {
+                "type": "integer",
+                "minimum": 0
+            },
+            "artifactCount": {
+                "type": "integer",
+                "minimum": 0
+            },
+            "artifactsSummary": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false
+                },
+                "maxItems": 1000
+            },
+            "nextAction": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "FinalSummaryEmitted"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "AttemptStarted": {
+        "title": "AttemptStarted",
+        "description": "Emitted when an Attempt within a Task begins.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "startedAt",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "startedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "initiator": {
+                "type": "string",
+                "enum": [
+                    "system",
+                    "coder",
+                    "user"
+                ]
+            },
+            "contextSummary": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "AttemptStarted"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "AttemptClosed": {
+        "title": "AttemptClosed",
+        "description": "Emitted when an Attempt finishes (closed).",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "closedAt",
+            "verdict",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "closedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "verdict": {
+                "type": "string",
+                "enum": [
+                    "PASS",
+                    "FAIL",
+                    "INCOMPLETE"
+                ]
+            },
+            "issueCount": {
+                "type": "integer",
+                "minimum": 0
+            },
+            "summary": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "AttemptClosed"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "PhaseStarted": {
+        "title": "PhaseStarted",
+        "description": "Emitted when a Phase (Coder/Reviewer/System) begins.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "actor",
+            "title",
+            "startedAt",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "actor": {
+                "type": "string",
+                "enum": [
+                    "coder",
+                    "reviewer",
+                    "system"
+                ]
+            },
+            "title": {
+                "type": "string"
+            },
+            "startedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "meta": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "PhaseStarted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "PhaseCompleted": {
+        "title": "PhaseCompleted",
+        "description": "Emitted when a Phase completes successfully.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "endedAt",
+            "status",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "endedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "status": {
+                "type": "string",
+                "enum": [
+                    "COMPLETED"
+                ]
+            },
+            "resultSummary": {
+                "type": "string"
+            },
+            "meta": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "PhaseCompleted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "PhaseFailed": {
+        "title": "PhaseFailed",
+        "description": "Emitted when a Phase fails with error details.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "failedAt",
+            "errorCode",
+            "errorMessage",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "failedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "errorCode": {
+                "type": "string"
+            },
+            "errorMessage": {
+                "type": "string"
+            },
+            "errorDetails": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "PhaseFailed"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ThoughtStarted": {
+        "title": "ThoughtStarted",
+        "description": "Marks the start of an internal Thought Block (reasoning trace).",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "thoughtId",
+            "startedAt",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "thoughtId": {
+                "type": "string"
+            },
+            "startedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "visibility": {
+                "type": "string",
+                "enum": [
+                    "VISIBLE",
+                    "COLLAPSED_BY_DEFAULT"
+                ]
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ThoughtStarted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ThoughtCompleted": {
+        "title": "ThoughtCompleted",
+        "description": "Marks completion of a Thought Block and includes content reference (opaque).",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "thoughtId",
+            "endedAt",
+            "durationMs",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "thoughtId": {
+                "type": "string"
+            },
+            "endedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "durationMs": {
+                "type": "integer",
+                "minimum": 0
+            },
+            "content": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ThoughtCompleted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ToolExecutionStarted": {
+        "title": "ToolExecutionStarted",
+        "description": "Emitted when a concrete system command/tool begins execution.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "toolExecId",
+            "commandLine",
+            "workingDirectory",
+            "startedAt",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "toolExecId": {
+                "type": "string"
+            },
+            "commandLabel": {
+                "type": "string"
+            },
+            "commandLine": {
+                "type": "string"
+            },
+            "workingDirectory": {
+                "type": "string"
+            },
+            "env": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                }
+            },
+            "startedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ToolExecutionStarted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ToolExecutionOutput": {
+        "title": "ToolExecutionOutput",
+        "description": "Streaming stdout/stderr chunk emitted during tool execution.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "toolExecId",
+            "timestamp",
+            "stream",
+            "text",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "toolExecId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "stream": {
+                "type": "string",
+                "enum": [
+                    "stdout",
+                    "stderr"
+                ]
+            },
+            "text": {
+                "type": "string"
+            },
+            "type": {
+                "type": "string",
+                "const": "ToolExecutionOutput"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ToolExecutionCompleted": {
+        "title": "ToolExecutionCompleted",
+        "description": "Emitted when a tool/command finishes with exit code.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "toolExecId",
+            "endedAt",
+            "exitCode",
+            "status",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "toolExecId": {
+                "type": "string"
+            },
+            "endedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "exitCode": {
+                "type": "integer"
+            },
+            "status": {
+                "type": "string",
+                "enum": [
+                    "SUCCESS",
+                    "FAILURE"
+                ]
+            },
+            "outputSummary": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ToolExecutionCompleted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ProgressStepAdded": {
+        "title": "ProgressStepAdded",
+        "description": "Add a progress step to a progress list inside a tool execution.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "toolExecId",
+            "stepNo",
+            "label",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "toolExecId": {
+                "type": "string"
+            },
+            "stepNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "label": {
+                "type": "string"
+            },
+            "status": {
+                "type": "string",
+                "enum": [
+                    "PENDING",
+                    "RUNNING",
+                    "COMPLETED",
+                    "FAILED"
+                ]
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ProgressStepAdded"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ProgressStepUpdated": {
+        "title": "ProgressStepUpdated",
+        "description": "Updates status/metadata for an existing progress step.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "toolExecId",
+            "stepNo",
+            "status",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "toolExecId": {
+                "type": "string"
+            },
+            "stepNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "status": {
+                "type": "string",
+                "enum": [
+                    "PENDING",
+                    "RUNNING",
+                    "COMPLETED",
+                    "FAILED"
+                ]
+            },
+            "message": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ProgressStepUpdated"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ReviewerResultEmitted": {
+        "title": "ReviewerResultEmitted",
+        "description": "Captured verdict and issue list from a Reviewer Agent.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "attemptNo",
+            "phaseId",
+            "emittedAt",
+            "verdict",
+            "issues",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "attemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "emittedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "verdict": {
+                "type": "string",
+                "enum": [
+                    "PASS",
+                    "FAIL"
+                ]
+            },
+            "issues": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "type",
+                        "file",
+                        "line",
+                        "message"
+                    ],
+                    "properties": {
+                        "type": {
+                            "type": "string"
+                        },
+                        "file": {
+                            "type": "string"
+                        },
+                        "line": {
+                            "type": "integer"
+                        },
+                        "message": {
+                            "type": "string"
+                        },
+                        "severity": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ReviewerResultEmitted"
+            }
+        },
+        "additionalProperties": false
+    },
+    "RegenerationTriggered": {
+        "title": "RegenerationTriggered",
+        "description": "System-authored block explaining why a regeneration attempt is authorized.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "fromAttemptNo",
+            "triggeredAt",
+            "reasonCode",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "fromAttemptNo": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "triggeredAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "reasonCode": {
+                "type": "string",
+                "enum": [
+                    "REVIEWER_FAILURE",
+                    "SCHEMA_VIOLATION",
+                    "BUILD_FAILURE",
+                    "RUNTIME_ERROR",
+                    "POLICY_RETRY"
+                ]
+            },
+            "policyContext": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "details": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "RegenerationTriggered"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "AbortTriggered": {
+        "title": "AbortTriggered",
+        "description": "Emitted when a user or system aborts the Task.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "triggeredAt",
+            "triggeredBy",
+            "reasonCode",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "triggeredAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "triggeredBy": {
+                "type": "string",
+                "enum": [
+                    "user",
+                    "system"
+                ]
+            },
+            "reasonCode": {
+                "type": "string"
+            },
+            "humanMessage": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "AbortTriggered"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "MaxAttemptsReached": {
+        "title": "MaxAttemptsReached",
+        "description": "Emitted when the task has exhausted allowed attempts.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "maxAttempts",
+            "attemptCount",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "maxAttempts": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "attemptCount": {
+                "type": "integer",
+                "minimum": 0
+            },
+            "policy": {
+                "type": "object",
+                "additionalProperties": false
+            },
+            "type": {
+                "type": "string",
+                "const": "MaxAttemptsReached"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "SystemFatalError": {
+        "title": "SystemFatalError",
+        "description": "Emitted when an unrecoverable internal error occurs.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "errorCode",
+            "message",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "errorCode": {
+                "type": "string"
+            },
+            "message": {
+                "type": "string"
+            },
+            "trace": {
+                "type": "string"
+            },
+            "type": {
+                "type": "string",
+                "const": "SystemFatalError"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ArtifactProduced": {
+        "title": "ArtifactProduced",
+        "description": "Emitted when a tangible output artifact is produced by a Task.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "artifactId",
+            "name",
+            "artifactType",
+            "path",
+            "producedByAttempt",
+            "producedAt",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "artifactId": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "artifactType": {
+                "type": "string",
+                "enum": [
+                    "file",
+                    "package",
+                    "diff",
+                    "report",
+                    "other"
+                ]
+            },
+            "path": {
+                "type": "string"
+            },
+            "producedByAttempt": {
+                "type": "integer",
+                "minimum": 1
+            },
+            "producedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ArtifactProduced"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "CollapseStateUpdated": {
+        "title": "CollapseStateUpdated",
+        "description": "UI-only event persisting collapse/expand state per Task Shell.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "updatedAt",
+            "stateMap",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "stateMap": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "required": [
+                        "collapsed"
+                    ],
+                    "properties": {
+                        "collapsed": {
+                            "type": "boolean"
+                        }
+                    }
+                }
+            },
+            "userInitiated": {
+                "type": "boolean"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "CollapseStateUpdated"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "UserOverrideVisibility": {
+        "title": "UserOverrideVisibility",
+        "description": "Records when a user explicitly toggles visibility for an element.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "elementId",
+            "timestamp",
+            "action",
+            "actor",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "elementId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "action": {
+                "type": "string",
+                "enum": [
+                    "EXPAND",
+                    "COLLAPSE",
+                    "RESET_TO_DEFAULT"
+                ]
+            },
+            "actor": {
+                "type": "string",
+                "enum": [
+                    "user",
+                    "system"
+                ]
+            },
+            "notes": {
+                "type": "string"
+            },
+            "type": {
+                "type": "string",
+                "const": "UserOverrideVisibility"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ResourceUsageSampled": {
+        "title": "ResourceUsageSampled",
+        "description": "Snapshots of resource consumption during execution.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "resources",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "resources": {
+                "type": "object",
+                "properties": {
+                    "ramMb": {
+                        "type": "number"
+                    },
+                    "vramMb": {
+                        "type": "number"
+                    },
+                    "cpuPercent": {
+                        "type": "number"
+                    },
+                    "diskIo": {
+                        "type": "object"
+                    }
+                },
+                "additionalProperties": true
+            },
+            "type": {
+                "type": "string",
+                "const": "ResourceUsageSampled"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ResourceLimitExceeded": {
+        "title": "ResourceLimitExceeded",
+        "description": "Alert when a resource limit is breached.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "resourceType",
+            "limitValue",
+            "actualValue",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "resourceType": {
+                "type": "string",
+                "enum": [
+                    "RAM",
+                    "VRAM",
+                    "CPU",
+                    "DISK",
+                    "TIME"
+                ]
+            },
+            "limitValue": {
+                "type": "number"
+            },
+            "actualValue": {
+                "type": "number"
+            },
+            "severity": {
+                "type": "string",
+                "enum": [
+                    "WARNING",
+                    "CRITICAL"
+                ]
+            },
+            "type": {
+                "type": "string",
+                "const": "ResourceLimitExceeded"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "PolicyEvaluated": {
+        "title": "PolicyEvaluated",
+        "description": "Record of a policy decision (e.g., retry authorization).",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "policyName",
+            "decision",
+            "reasoning",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "policyName": {
+                "type": "string"
+            },
+            "decision": {
+                "type": "string",
+                "enum": [
+                    "ALLOW",
+                    "DENY",
+                    "ABORT",
+                    "OVERRIDE"
+                ]
+            },
+            "reasoning": {
+                "type": "string"
+            },
+            "context": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "type": {
+                "type": "string",
+                "const": "PolicyEvaluated"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "UserActionPerformed": {
+        "title": "UserActionPerformed",
+        "description": "Explicit user interaction with the Task Shell UI.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "actionType",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "actionType": {
+                "type": "string",
+                "enum": [
+                    "REGENERATE_CLICKED",
+                    "ARTIFACT_VIEWED",
+                    "ABORT_CLICKED",
+                    "SETTINGS_CHANGED"
+                ]
+            },
+            "targetId": {
+                "type": "string"
+            },
+            "metadata": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "type": {
+                "type": "string",
+                "const": "UserActionPerformed"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "AgentBoundToPhase": {
+        "title": "AgentBoundToPhase",
+        "description": "Links a concrete agent configuration to an execution phase.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "phaseId",
+            "agentId",
+            "modelId",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "agentId": {
+                "type": "string"
+            },
+            "modelId": {
+                "type": "string"
+            },
+            "configFingerprint": {
+                "type": "string"
+            },
+            "parameters": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "AgentBoundToPhase"
+            },
+            "attemptNo": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ArtifactValidated": {
+        "title": "ArtifactValidated",
+        "description": "Record of an artifact passing a validation check.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "artifactId",
+            "validatorId",
+            "status",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "artifactId": {
+                "type": "string"
+            },
+            "validatorId": {
+                "type": "string"
+            },
+            "status": {
+                "type": "string",
+                "enum": [
+                    "PASS",
+                    "FAIL",
+                    "PARTIAL"
+                ]
+            },
+            "message": {
+                "type": "string"
+            },
+            "details": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ArtifactValidated"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ArtifactConsumed": {
+        "title": "ArtifactConsumed",
+        "description": "Record of an artifact being used by a component.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "artifactId",
+            "consumerId",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "artifactId": {
+                "type": "string"
+            },
+            "consumerId": {
+                "type": "string"
+            },
+            "context": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ArtifactConsumed"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ArtifactRejected": {
+        "title": "ArtifactRejected",
+        "description": "Record of an artifact being explicitly rejected by a component/user.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "artifactId",
+            "rejectedBy",
+            "reason",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "artifactId": {
+                "type": "string"
+            },
+            "rejectedBy": {
+                "type": "string"
+            },
+            "reason": {
+                "type": "string"
+            },
+            "details": {
+                "type": "object",
+                "additionalProperties": true
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "ArtifactRejected"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "ReplayVerified": {
+        "title": "ReplayVerified",
+        "description": "Assertion that a task execution stream is deterministic and verified.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "streamHash",
+            "status",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "streamHash": {
+                "type": "string"
+            },
+            "status": {
+                "type": "string",
+                "enum": [
+                    "VERIFIED",
+                    "DRIFT_DETECTED"
+                ]
+            },
+            "driftDetails": {
+                "type": "string"
+            },
+            "type": {
+                "type": "string",
+                "const": "ReplayVerified"
+            },
+            "attemptNo": {
+                "type": "integer"
+            },
+            "phaseId": {
+                "type": "string"
+            }
+        },
+        "additionalProperties": false
+    },
+    "PhaseMetricsReported": {
+        "title": "PhaseMetricsReported",
+        "description": "Aggregate performance metrics for a completed phase.",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "phaseId",
+            "durationMs",
+            "timestamp",
+            "type"
+        ],
+        "properties": {
+            "eventId": {
+                "type": "string"
+            },
+            "taskId": {
+                "type": "string"
+            },
+            "phaseId": {
+                "type": "string"
+            },
+            "durationMs": {
+                "type": "number"
+            },
+            "tokenCount": {
+                "type": "integer"
+            },
+            "costEstimate": {
+                "type": "number"
+            },
+            "efficiencyScore": {
+                "type": "number"
+            },
+            "timestamp": {
+                "type": "string",
+                "format": "date-time"
+            },
+            "type": {
+                "type": "string",
+                "const": "PhaseMetricsReported"
+            },
+            "attemptNo": {
+                "type": "integer"
+            }
+        },
+        "additionalProperties": false
+    }}

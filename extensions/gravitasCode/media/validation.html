@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravitas Validation</title>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #e0e0e0;
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .log-container {
+            background: #000;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            border-left: 3px solid transparent;
+            padding-left: 10px;
+        }
+
+        .log-entry.STEP {
+            border-left-color: #bb86fc;
+            color: #bb86fc;
+            font-weight: bold;
+        }
+
+        .log-entry.SUCCESS {
+            border-left-color: #03dac6;
+            color: #03dac6;
+        }
+
+        .log-entry.FAILURE,
+        .log-entry.ERROR {
+            border-left-color: #cf6679;
+            color: #cf6679;
+        }
+
+        .log-entry.ROLLBACK {
+            border-left-color: #ffb74d;
+            color: #ffb74d;
+        }
+
+        h1 {
+            color: #bb86fc;
+        }
+
+        .status-bar {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .status-validating {
+            background: #3700b3;
+            color: white;
+        }
+
+        .status-success {
+            background: #1b5e20;
+            color: white;
+        }
+
+        .status-failure {
+            background: #b71c1c;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>System Validation</h1>
+    <div id="status" class="status-bar status-validating">Validating System Integrity...</div>
+    <div id="logs" class="log-container"></div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        const logsDiv = document.getElementById('logs');
+        const statusDiv = document.getElementById('status');
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.command) {
+                case 'addLog':
+                    const entry = document.createElement('div');
+                    entry.className = 'log-entry';
+                    if (message.text.startsWith('[STEP]')) entry.classList.add('STEP');
+                    else if (message.text.startsWith('[SUCCESS]')) entry.classList.add('SUCCESS');
+                    else if (message.text.startsWith('[FAILURE]')) entry.classList.add('FAILURE');
+                    else if (message.text.startsWith('[ERROR]')) entry.classList.add('ERROR');
+                    else if (message.text.startsWith('[ROLLBACK]')) entry.classList.add('ROLLBACK');
+
+                    entry.innerText = message.text;
+                    logsDiv.appendChild(entry);
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                    break;
+                case 'setResult':
+                    statusDiv.innerText = message.success ? 'VALIDATION PASSED' : 'VALIDATION FAILED';
+                    statusDiv.className = 'status-bar ' + (message.success ? 'status-success' : 'status-failure');
+                    break;
+            }
+        });
+    </script>
+</body>
+
+</html>

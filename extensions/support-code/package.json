@@ -1,0 +1,510 @@
+{
+    "name": "gravitas-code",
+    "displayName": "Gravitas Code",
+    "description": "Deterministic Dual-Agent Code Intelligence (Antigravity Architecture)",
+    "version": "0.1.0",
+    "publisher": "VayuOS",
+    "icon": "img/logo_only.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/vayuos/Gravitas-Code"
+    },
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "activationEvents": [
+        "*"
+    ],
+    "categories": [
+        "Programming Languages",
+        "Machine Learning"
+    ],
+    "files": [
+        "dist",
+        "media",
+        "img",
+        "package.json",
+        "README.md",
+        "setup.sh",
+        "bun.lock",
+        ".gravitas"
+    ],
+    "main": "./dist/extension.js",
+    "dependencies": {
+        "@types/uuid": "^10.0.0",
+        "@vscode/webview-ui-toolkit": "^1.4.0",
+        "ajv": "^8.12.0",
+        "axios": "^1.4.0",
+        "uuid": "^13.0.0",
+        "web-tree-sitter": "^0.26.5",
+        "zod": "^4.3.6"
+    },
+    "contributes": {
+        "commands": [
+            {
+                "command": "gravitas.pipeline.run",
+                "title": "Gravitas: Run Pipeline",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.start",
+                "title": "Gravitas: Start LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.stop",
+                "title": "Gravitas: Stop LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.setup.validate",
+                "title": "Gravitas: Validate Setup",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.storage.clear",
+                "title": "Gravitas: Clear Storage",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.startCoder",
+                "title": "Start Coder",
+                "category": "Gravitas",
+                "icon": "$(play)"
+            },
+            {
+                "command": "gravitas.runtime.stopCoder",
+                "title": "Stop Coder",
+                "category": "Gravitas",
+                "icon": "$(debug-stop)"
+            },
+            {
+                "command": "gravitas.runtime.restartCoder",
+                "title": "Restart Coder",
+                "category": "Gravitas",
+                "icon": "$(debug-restart)"
+            },
+            {
+                "command": "gravitas.runtime.startReviewer",
+                "title": "Start Reviewer",
+                "category": "Gravitas",
+                "icon": "$(play)"
+            },
+            {
+                "command": "gravitas.runtime.stopReviewer",
+                "title": "Stop Reviewer",
+                "category": "Gravitas",
+                "icon": "$(debug-stop)"
+            },
+            {
+                "command": "gravitas.task.spawn",
+                "title": "Gravitas: Spawn Task Shell",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.restartReviewer",
+                "title": "Restart Reviewer",
+                "category": "Gravitas",
+                "icon": "$(debug-restart)"
+            }
+        ],
+        "menus": {
+            "view/item/context": [
+                {
+                    "command": "gravitas.runtime.startCoder",
+                    "when": "view == gravitas.runtime && viewItem == coder",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "gravitas.runtime.stopCoder",
+                    "when": "view == gravitas.runtime && viewItem == coder",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "gravitas.runtime.restartCoder",
+                    "when": "view == gravitas.runtime && viewItem == coder",
+                    "group": "inline@3"
+                },
+                {
+                    "command": "gravitas.runtime.startReviewer",
+                    "when": "view == gravitas.runtime && viewItem == reviewer",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "gravitas.runtime.stopReviewer",
+                    "when": "view == gravitas.runtime && viewItem == reviewer",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "gravitas.runtime.restartReviewer",
+                    "when": "view == gravitas.runtime && viewItem == reviewer",
+                    "group": "inline@3"
+                }
+            ]
+        },
+        "configuration": [
+            {
+                "title": "1. Global / Runtime",
+                "order": 10,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.llamaBinPath": {
+                        "type": "string",
+                        "description": "Directory containing llama-server binary (or exact path)",
+                        "default": "~/llama/llama.cpp/build/bin/",
+                        "order": 1
+                    },
+                    "gravitasCode.runtime.autoTestOnStart": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Run connectivity and memory tests before enabling agents.",
+                        "order": 2
+                    },
+                    "gravitasCode.runtime.showLogs": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Show system logs in the terminal.",
+                        "order": 3
+                    },
+                    "gravitasCode.runtime.logLevel": {
+                        "type": "string",
+                        "enum": [
+                            "debug",
+                            "info",
+                            "warn",
+                            "error"
+                        ],
+                        "default": "debug",
+                        "description": "Verbosity level for logging.",
+                        "order": 4
+                    },
+                    "gravitasCode.runtime.killSignal": {
+                        "type": "string",
+                        "enum": [
+                            "SIGTERM",
+                            "SIGKILL"
+                        ],
+                        "default": "SIGTERM",
+                        "description": "Signal to use when stopping LLM servers.",
+                        "order": 5
+                    }
+                }
+            },
+            {
+                "title": "2. Coder Agent",
+                "order": 20,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.coder.general.enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether the Coder model is enabled.",
+                        "order": 1
+                    },
+                    "gravitasCode.coder.general.mode": {
+                        "type": "string",
+                        "enum": [
+                            "gpu",
+                            "cpu"
+                        ],
+                        "default": "gpu",
+                        "description": "Execution mode for the Coder model.",
+                        "order": 2
+                    },
+                    "gravitasCode.coder.general.modelPath": {
+                        "type": "string",
+                        "default": "~/models/qwen3/Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf",
+                        "description": "Path to the Coder model binary.",
+                        "order": 3
+                    },
+                    "gravitasCode.coder.general.host": {
+                        "type": "string",
+                        "default": "127.0.0.1",
+                        "description": "Host for the Coder model server.",
+                        "order": 4
+                    },
+                    "gravitasCode.coder.general.port": {
+                        "type": "number",
+                        "default": 8010,
+                        "description": "Port for the Coder model server.",
+                        "order": 5
+                    },
+                    "gravitasCode.coder.general.noWarmup": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Skip server warmup.",
+                        "order": 6
+                    },
+                    "gravitasCode.coder.hardware.cudaVisibleDevices": {
+                        "type": "string",
+                        "default": "0",
+                        "description": "CUDA devices available for the Coder model.",
+                        "order": 10
+                    },
+                    "gravitasCode.coder.hardware.nGpuLayers": {
+                        "type": "number",
+                        "default": 32,
+                        "description": "Number of GPU layers for the Coder model. Reduced from 36 to 32 to fit within 16GB VRAM.",
+                        "order": 11
+                    },
+                    "gravitasCode.coder.hardware.contextSize": {
+                        "type": "number",
+                        "default": 8192,
+                        "description": "Context window size for the Coder model.",
+                        "order": 12
+                    },
+                    "gravitasCode.coder.hardware.threads": {
+                        "type": "number",
+                        "default": 32,
+                        "description": "Number of CPU threads for the Coder model.",
+                        "order": 13
+                    },
+                    "gravitasCode.coder.hardware.threadsBatch": {
+                        "type": "number",
+                        "default": 8,
+                        "description": "Threads for batch processing for the Coder model.",
+                        "order": 14
+                    },
+                    "gravitasCode.coder.hardware.batchSize": {
+                        "type": "number",
+                        "default": 1024,
+                        "description": "Batch size for the Coder model.",
+                        "order": 14
+                    },
+                    "gravitasCode.coder.hardware.ubatchSize": {
+                        "type": "number",
+                        "default": 256,
+                        "description": "Ultra-batch size for the Coder model.",
+                        "order": 15
+                    },
+                    "gravitasCode.coder.hardware.numaInterleave": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable NUMA interleaving for CPU performance.",
+                        "order": 16
+                    },
+                    "gravitasCode.coder.hardware.prefixCommand": {
+                        "type": "string",
+                        "default": "",
+                        "description": "Prefix command to run before the binary (e.g. numactl).",
+                        "order": 17
+                    },
+                    "gravitasCode.coder.sampling.temperature": {
+                        "type": "number",
+                        "default": 0.2,
+                        "description": "Sampling temperature for the Coder model.",
+                        "order": 20
+                    },
+                    "gravitasCode.coder.sampling.topP": {
+                        "type": "number",
+                        "default": 0.9,
+                        "description": "Top-P sampling parameter for the Coder model.",
+                        "order": 21
+                    },
+                    "gravitasCode.coder.sampling.topK": {
+                        "type": "number",
+                        "default": 40,
+                        "description": "Top-K sampling parameter for the Coder model.",
+                        "order": 22
+                    },
+                    "gravitasCode.coder.sampling.repeatPenalty": {
+                        "type": "number",
+                        "default": 1.05,
+                        "description": "Repeat penalty for the Coder model.",
+                        "order": 22
+                    }
+                }
+            },
+            {
+                "title": "3. Reviewer Agent",
+                "order": 30,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.reviewer.general.enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether the Reviewer model is enabled.",
+                        "order": 1
+                    },
+                    "gravitasCode.reviewer.general.mode": {
+                        "type": "string",
+                        "enum": [
+                            "cpu"
+                        ],
+                        "default": "cpu",
+                        "description": "Execution mode for the Reviewer model.",
+                        "order": 2
+                    },
+                    "gravitasCode.reviewer.general.modelPath": {
+                        "type": "string",
+                        "default": "~/models/deepseek/deepseek-coder-33b-base.Q4_K_M.gguf",
+                        "description": "Path to the Reviewer model binary.",
+                        "order": 3
+                    },
+                    "gravitasCode.reviewer.general.host": {
+                        "type": "string",
+                        "default": "127.0.0.1",
+                        "description": "Host for the Reviewer model server.",
+                        "order": 4
+                    },
+                    "gravitasCode.reviewer.general.port": {
+                        "type": "number",
+                        "default": 8011,
+                        "description": "Port for the Reviewer model server.",
+                        "order": 5
+                    },
+                    "gravitasCode.reviewer.general.noWarmup": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Skip server warmup (Reviewer).",
+                        "order": 6
+                    },
+                    "gravitasCode.reviewer.hardware.cudaVisibleDevices": {
+                        "type": "string",
+                        "default": "",
+                        "description": "CUDA devices (if any) for the Reviewer model.",
+                        "order": 10
+                    },
+                    "gravitasCode.reviewer.hardware.nGpuLayers": {
+                        "type": "number",
+                        "default": 0,
+                        "description": "Number of GPU layers for the Reviewer model.",
+                        "order": 11
+                    },
+                    "gravitasCode.reviewer.hardware.contextSize": {
+                        "type": "number",
+                        "default": 8192,
+                        "description": "Context window size for the Reviewer model.",
+                        "order": 12
+                    },
+                    "gravitasCode.reviewer.hardware.threads": {
+                        "type": "number",
+                        "default": 128,
+                        "description": "Number of CPU threads for the Reviewer model.",
+                        "order": 13
+                    },
+                    "gravitasCode.reviewer.hardware.threadsBatch": {
+                        "type": "number",
+                        "default": 128,
+                        "description": "Threads for batch processing (Reviewer).",
+                        "order": 14
+                    },
+                    "gravitasCode.reviewer.hardware.batchSize": {
+                        "type": "number",
+                        "default": 1024,
+                        "description": "Batch size for the Reviewer model.",
+                        "order": 15
+                    },
+                    "gravitasCode.reviewer.hardware.ubatchSize": {
+                        "type": "number",
+                        "default": 256,
+                        "description": "Ultra-batch size for the Reviewer model.",
+                        "order": 16
+                    },
+                    "gravitasCode.reviewer.hardware.numaInterleave": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable NUMA interleaving for CPU performance.",
+                        "order": 17
+                    },
+                    "gravitasCode.reviewer.hardware.prefixCommand": {
+                        "type": "string",
+                        "default": "",
+                        "description": "Prefix command to run before the binary (e.g. numactl).",
+                        "order": 18
+                    },
+                    "gravitasCode.reviewer.sampling.temperature": {
+                        "type": "number",
+                        "default": 0,
+                        "description": "Sampling temperature (Reviewer).",
+                        "order": 20
+                    },
+                    "gravitasCode.reviewer.sampling.topK": {
+                        "type": "number",
+                        "default": 1,
+                        "description": "Top-K sampling parameter (Reviewer).",
+                        "order": 21
+                    },
+                    "gravitasCode.reviewer.sampling.topP": {
+                        "type": "number",
+                        "default": 0,
+                        "description": "Top-P sampling parameter (Reviewer).",
+                        "order": 22
+                    },
+                    "gravitasCode.reviewer.sampling.repeatPenalty": {
+                        "type": "number",
+                        "default": 1,
+                        "description": "Repeat penalty for the Reviewer model.",
+                        "order": 23
+                    }
+                }
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "gravitas-explorer",
+                    "title": "Gravitas",
+                    "icon": "$(shield)"
+                }
+            ]
+        },
+        "views": {
+            "gravitas-explorer": [
+                {
+                    "id": "gravitas.agentConsole",
+                    "name": "Agent Console",
+                    "type": "webview",
+                    "icon": "$(comment-discussion)",
+                    "when": "gravitas.validated"
+                },
+                {
+                    "id": "gravitas.runtime",
+                    "name": "Runtime Control",
+                    "type": "tree",
+                    "icon": "$(play)",
+                    "when": "gravitas.validated"
+                },
+                {
+                    "id": "gravitas.context",
+                    "name": "Context Scope",
+                    "type": "tree",
+                    "icon": "$(file-submodule)",
+                    "when": "gravitas.validated"
+                },
+                {
+                    "id": "gravitas.presets",
+                    "name": "Presets & Profiles",
+                    "type": "tree",
+                    "icon": "$(settings-gear)",
+                    "when": "gravitas.validated"
+                },
+                {
+                    "id": "gravitas.setupView",
+                    "name": "Setup Required",
+                    "type": "webview",
+                    "icon": "$(tools)",
+                    "when": "!gravitas.validated"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run bundle",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "bundle": "npx esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && cp node_modules/@vscode/webview-ui-toolkit/dist/toolkit.js media/toolkit.js",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/emscripten": "^1.41.5",
+        "@types/node": "^20.19.32",
+        "@types/vscode": "^1.80.0",
+        "@typescript-eslint/eslint-plugin": "^5.59.1",
+        "@typescript-eslint/parser": "^5.59.1",
+        "eslint": "^8.41.0",
+        "typescript": "^5.1.3"
+    }
+}

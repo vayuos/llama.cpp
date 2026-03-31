@@ -1,0 +1,8 @@
+{
+    "gravitasCode.reviewer.general.host": "127.0.0.1",
+    "gravitasCode.reviewer.general.port": 8089,
+    "gravitasCode.reviewer.hardware.contextSize": 102400,
+    "gravitasCode.coder.general.host": "127.0.0.1",
+    "gravitasCode.coder.general.port": 8089,
+    "gravitasCode.coder.hardware.contextSize": 102400
+}

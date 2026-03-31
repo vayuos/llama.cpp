@@ -1,0 +1,172 @@
+--- Testing 34 Event Schemas ---
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/createdAt"
+unknown format "date-time" ignored in schema at path "#/properties/createdAt"
+✅ TaskCreated: Minimal Valid Payload PASSED
+✅ TaskCreated: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ TaskStateChanged: Minimal Valid Payload PASSED
+✅ TaskStateChanged: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/terminatedAt"
+unknown format "date-time" ignored in schema at path "#/properties/terminatedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ TaskTerminated: Minimal Valid Payload PASSED
+✅ TaskTerminated: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/emittedAt"
+unknown format "date-time" ignored in schema at path "#/properties/emittedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ FinalSummaryEmitted: Minimal Valid Payload PASSED
+✅ FinalSummaryEmitted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ AttemptStarted: Minimal Valid Payload PASSED
+✅ AttemptStarted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/closedAt"
+unknown format "date-time" ignored in schema at path "#/properties/closedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ AttemptClosed: Minimal Valid Payload PASSED
+✅ AttemptClosed: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ PhaseStarted: Minimal Valid Payload PASSED
+✅ PhaseStarted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/endedAt"
+unknown format "date-time" ignored in schema at path "#/properties/endedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ PhaseCompleted: Minimal Valid Payload PASSED
+✅ PhaseCompleted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/failedAt"
+unknown format "date-time" ignored in schema at path "#/properties/failedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ PhaseFailed: Minimal Valid Payload PASSED
+✅ PhaseFailed: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ThoughtStarted: Minimal Valid Payload PASSED
+✅ ThoughtStarted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/endedAt"
+unknown format "date-time" ignored in schema at path "#/properties/endedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ThoughtCompleted: Minimal Valid Payload PASSED
+✅ ThoughtCompleted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/startedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ToolExecutionStarted: Minimal Valid Payload PASSED
+✅ ToolExecutionStarted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ToolExecutionOutput: Minimal Valid Payload PASSED
+✅ ToolExecutionOutput: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/endedAt"
+unknown format "date-time" ignored in schema at path "#/properties/endedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ToolExecutionCompleted: Minimal Valid Payload PASSED
+✅ ToolExecutionCompleted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ProgressStepAdded: Minimal Valid Payload PASSED
+✅ ProgressStepAdded: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ProgressStepUpdated: Minimal Valid Payload PASSED
+✅ ProgressStepUpdated: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/emittedAt"
+unknown format "date-time" ignored in schema at path "#/properties/emittedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+❌ ReviewerResultEmitted: Minimal Valid Payload FAILED [ " must have required property 'issues'" ]
+✅ ReviewerResultEmitted: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/triggeredAt"
+unknown format "date-time" ignored in schema at path "#/properties/triggeredAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ RegenerationTriggered: Minimal Valid Payload PASSED
+✅ RegenerationTriggered: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/triggeredAt"
+unknown format "date-time" ignored in schema at path "#/properties/triggeredAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ AbortTriggered: Minimal Valid Payload PASSED
+✅ AbortTriggered: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ MaxAttemptsReached: Minimal Valid Payload PASSED
+✅ MaxAttemptsReached: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ SystemFatalError: Minimal Valid Payload PASSED
+✅ SystemFatalError: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/producedAt"
+unknown format "date-time" ignored in schema at path "#/properties/producedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+❌ ArtifactProduced: Minimal Valid Payload FAILED [ '/type must be equal to one of the allowed values' ]
+✅ ArtifactProduced: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/updatedAt"
+unknown format "date-time" ignored in schema at path "#/properties/updatedAt"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ CollapseStateUpdated: Minimal Valid Payload PASSED
+✅ CollapseStateUpdated: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ UserOverrideVisibility: Minimal Valid Payload PASSED
+✅ UserOverrideVisibility: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ResourceUsageSampled: Minimal Valid Payload PASSED
+✅ ResourceUsageSampled: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ResourceLimitExceeded: Minimal Valid Payload PASSED
+✅ ResourceLimitExceeded: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ PolicyEvaluated: Minimal Valid Payload PASSED
+✅ PolicyEvaluated: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ UserActionPerformed: Minimal Valid Payload PASSED
+✅ UserActionPerformed: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ AgentBoundToPhase: Minimal Valid Payload PASSED
+✅ AgentBoundToPhase: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ArtifactValidated: Minimal Valid Payload PASSED
+✅ ArtifactValidated: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ArtifactConsumed: Minimal Valid Payload PASSED
+✅ ArtifactConsumed: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ArtifactRejected: Minimal Valid Payload PASSED
+✅ ArtifactRejected: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ ReplayVerified: Minimal Valid Payload PASSED
+✅ ReplayVerified: Invalid Payload (Missing eventId) correctly REJECTED
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+unknown format "date-time" ignored in schema at path "#/properties/timestamp"
+✅ PhaseMetricsReported: Minimal Valid Payload PASSED
+✅ PhaseMetricsReported: Invalid Payload (Missing eventId) correctly REJECTED
+--- Final Results: 32 Passed, 2 Failed ---

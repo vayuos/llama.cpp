@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravitas Task Shell</title>
+    <link href="${styleUri}" rel="stylesheet">
+    <script type="module" src="${toolkitUri}"></script>
+</head>
+
+<body>
+    <!-- 1. Task Feed: Legacy and Active Tasks -->
+    <div id="taskFeed" class="task-feed">
+        <!-- Task Shells appended here -->
+    </div>
+
+    <!-- 2. Footer: Global Command Input -->
+    <div class="task-footer">
+        <div class="input-container">
+            <span class="input-icon">⚡</span>
+            <input type="text" id="commandInput" class="command-input" placeholder="Ask Gravitas anything..."
+                autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <script src="${scriptUri}"></script>
+</body>
+
+</html>

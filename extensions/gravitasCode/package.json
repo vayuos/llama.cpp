@@ -1,0 +1,419 @@
+{
+    "name": "gravitas-code",
+    "displayName": "Gravitas Code",
+    "description": "Deterministic Dual-Agent Code Intelligence (Gravitas Architecture)",
+    "version": "0.1.0",
+    "publisher": "VayuOS",
+    "icon": "img/logo_only.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/vayuos/Gravitas-Code"
+    },
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "activationEvents": [
+        "*"
+    ],
+    "categories": [
+        "Programming Languages",
+        "Machine Learning"
+    ],
+    "files": [
+        "dist",
+        "media",
+        "img",
+        "package.json",
+        "README.md",
+        "setup.sh",
+        ".gravitas"
+    ],
+    "main": "./dist/extension.js",
+    "dependencies": {
+        "@types/uuid": "^10.0.0",
+        "@vscode/webview-ui-toolkit": "^1.4.0",
+        "ajv": "^8.12.0",
+        "axios": "^1.4.0",
+        "uuid": "^13.0.0",
+        "web-tree-sitter": "^0.26.5",
+        "zod": "^4.3.6"
+    },
+    "contributes": {
+        "commands": [
+            {
+                "command": "gravitas.pipeline.run",
+                "title": "Gravitas: Run Pipeline",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.start",
+                "title": "Gravitas: Start LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.stop",
+                "title": "Gravitas: Stop LLM Server",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.storage.clear",
+                "title": "Gravitas: Clear Storage",
+                "category": "Gravitas"
+            },
+            {
+                "command": "gravitas.runtime.startCoder",
+                "title": "Start Coder",
+                "category": "Gravitas",
+                "icon": "$(play)"
+            },
+            {
+                "command": "gravitas.runtime.stopCoder",
+                "title": "Stop Coder",
+                "category": "Gravitas",
+                "icon": "$(debug-stop)"
+            },
+            {
+                "command": "gravitas.runtime.restartCoder",
+                "title": "Restart Coder",
+                "category": "Gravitas",
+                "icon": "$(debug-restart)"
+            },
+            {
+                "command": "gravitas.runtime.startReviewer",
+                "title": "Start Reviewer",
+                "category": "Gravitas",
+                "icon": "$(play)"
+            },
+            {
+                "command": "gravitas.runtime.stopReviewer",
+                "title": "Stop Reviewer",
+                "category": "Gravitas",
+                "icon": "$(debug-stop)"
+            },
+            {
+                "command": "gravitas.task.spawn",
+                "title": "New Task",
+                "category": "Gravitas",
+                "icon": "$(add)"
+            },
+            {
+                "command": "gravitas.task.delete",
+                "title": "Delete Task",
+                "category": "Gravitas",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "gravitas.task.clearAll",
+                "title": "Clear All History",
+                "category": "Gravitas",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "gravitas.runtime.restartReviewer",
+                "title": "Restart Reviewer",
+                "category": "Gravitas",
+                "icon": "$(debug-restart)"
+            }
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "gravitas.task.spawn",
+                    "when": "view == gravitas.chat",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gravitas.task.spawn",
+                    "when": "view == gravitas.taskHistory",
+                    "group": "navigation"
+                },
+                {
+                    "command": "gravitas.task.clearAll",
+                    "when": "view == gravitas.taskHistory",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "gravitas.task.delete",
+                    "when": "view == gravitas.taskHistory && viewItem == task",
+                    "group": "inline"
+                },
+                {
+                    "command": "gravitas.runtime.startCoder",
+                    "when": "view == gravitas.runtime && viewItem == coder",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "gravitas.runtime.stopCoder",
+                    "when": "view == gravitas.runtime && viewItem == coder",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "gravitas.runtime.restartCoder",
+                    "when": "view == gravitas.runtime && viewItem == coder",
+                    "group": "inline@3"
+                },
+                {
+                    "command": "gravitas.runtime.startReviewer",
+                    "when": "view == gravitas.runtime && viewItem == reviewer",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "gravitas.runtime.stopReviewer",
+                    "when": "view == gravitas.runtime && viewItem == reviewer",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "gravitas.runtime.restartReviewer",
+                    "when": "view == gravitas.runtime && viewItem == reviewer",
+                    "group": "inline@3"
+                }
+            ]
+        },
+        "configuration": [
+            {
+                "title": "1. Global / Runtime",
+                "order": 10,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.runtime.autoTestOnStart": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Run connectivity and memory tests before enabling agents.",
+                        "order": 2
+                    },
+                    "gravitasCode.runtime.showLogs": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Show system logs in the terminal.",
+                        "order": 3
+                    },
+                    "gravitasCode.runtime.logLevel": {
+                        "type": "string",
+                        "enum": [
+                            "debug",
+                            "info",
+                            "warn",
+                            "error"
+                        ],
+                        "default": "debug",
+                        "description": "Verbosity level for logging.",
+                        "order": 4
+                    },
+                    "gravitasCode.runtime.killSignal": {
+                        "type": "string",
+                        "enum": [
+                            "SIGTERM",
+                            "SIGKILL"
+                        ],
+                        "default": "SIGTERM",
+                        "description": "Signal to use when stopping LLM servers.",
+                        "order": 5
+                    }
+                }
+            },
+            {
+                "title": "2. Coder Agent",
+                "order": 20,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.coder.general.enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether the Coder model is enabled.",
+                        "order": 1
+                    },
+                    "gravitasCode.coder.general.host": {
+                        "type": "string",
+                        "default": "127.0.0.1",
+                        "description": "Host for the Coder model server.",
+                        "order": 2
+                    },
+                    "gravitasCode.coder.general.port": {
+                        "type": "number",
+                        "default": 8089,
+                        "description": "Port (Coder/Implementation). [VayuForge Standard: 8089]",
+                        "order": 3
+                    },
+                    "gravitasCode.coder.general.modelPath": {
+                        "type": "string",
+                        "description": "Path to the Coder model binary (optional).",
+                        "order": 4
+                    },
+                    "gravitasCode.coder.general.baseUrl": {
+                        "type": "string",
+                        "description": "Full URL for the Coder model server (e.g. http://127.0.0.1:8089). Overrides Host and Port.",
+                        "order": 6
+                    },
+                    "gravitasCode.coder.general.noWarmup": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Skip server warmup.",
+                        "order": 6
+                    },
+                    "gravitasCode.coder.hardware.contextSize": {
+                        "type": "number",
+                        "default": 8192,
+                        "description": "Context size (KV cache) for the Coder model.",
+                        "order": 10
+                    },
+                    "gravitasCode.coder.sampling.temperature": {
+                        "type": "number",
+                        "default": 0.2,
+                        "description": "Sampling temperature for the Coder model.",
+                        "order": 20
+                    },
+                    "gravitasCode.coder.sampling.topP": {
+                        "type": "number",
+                        "default": 0.9,
+                        "description": "Top-P sampling parameter for the Coder model.",
+                        "order": 21
+                    },
+                    "gravitasCode.coder.sampling.topK": {
+                        "type": "number",
+                        "default": 40,
+                        "description": "Top-K sampling parameter for the Coder model.",
+                        "order": 22
+                    },
+                    "gravitasCode.coder.sampling.repeatPenalty": {
+                        "type": "number",
+                        "default": 1.05,
+                        "description": "Repeat penalty for the Coder model.",
+                        "order": 22
+                    }
+                }
+            },
+            {
+                "title": "3. Reviewer Agent",
+                "order": 30,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.reviewer.general.enabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether the Reviewer model is enabled.",
+                        "order": 1
+                    },
+                    "gravitasCode.reviewer.general.host": {
+                        "type": "string",
+                        "default": "127.0.0.1",
+                        "description": "Host (Reviewer).",
+                        "order": 2
+                    },
+                    "gravitasCode.reviewer.general.port": {
+                        "type": "number",
+                        "default": 8080,
+                        "description": "Port (Reviewer/Validation). [VayuForge Standard: 8080]",
+                        "order": 3
+                    },
+                    "gravitasCode.reviewer.general.modelPath": {
+                        "type": "string",
+                        "description": "Path to the Reviewer model binary (optional).",
+                        "order": 4
+                    },
+                    "gravitasCode.reviewer.general.baseUrl": {
+                        "type": "string",
+                        "description": "Full URL for the Reviewer model server (e.g. http://127.0.0.1:8080). Overrides Host and Port.",
+                        "order": 6
+                    },
+                    "gravitasCode.reviewer.general.noWarmup": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Skip server warmup (Reviewer).",
+                        "order": 7
+                    },
+                    "gravitasCode.reviewer.hardware.contextSize": {
+                        "type": "number",
+                        "default": 8192,
+                        "description": "Context size (KV cache) for the Reviewer model.",
+                        "order": 10
+                    },
+                    "gravitasCode.reviewer.sampling.temperature": {
+                        "type": "number",
+                        "default": 0,
+                        "description": "Sampling temperature (Reviewer).",
+                        "order": 20
+                    },
+                    "gravitasCode.reviewer.sampling.topK": {
+                        "type": "number",
+                        "default": 1,
+                        "description": "Top-K sampling parameter (Reviewer).",
+                        "order": 21
+                    },
+                    "gravitasCode.reviewer.sampling.topP": {
+                        "type": "number",
+                        "default": 0,
+                        "description": "Top-P sampling parameter (Reviewer).",
+                        "order": 22
+                    },
+                    "gravitasCode.reviewer.sampling.repeatPenalty": {
+                        "type": "number",
+                        "default": 1,
+                        "description": "Repeat penalty for the Reviewer model.",
+                        "order": 23
+                    }
+                }
+            },
+            {
+                "title": "4. VayuForge RAG",
+                "order": 40,
+                "type": "object",
+                "properties": {
+                    "gravitasCode.vayuforge.ragEndpoint": {
+                        "type": "string",
+                        "default": "http://127.0.0.1:8081/retrieve",
+                        "description": "Endpoint for the VayuForge RAG Knowledge System. [VayuForge Standard: 8081]",
+                        "order": 1
+                    }
+                }
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "gravitas-explorer",
+                    "title": "Gravitas",
+                    "icon": "$(shield)"
+                }
+            ]
+        },
+        "views": {
+            "gravitas-explorer": [
+                {
+                    "id": "gravitas.chat",
+                    "type": "webview",
+                    "name": "Gravitas chat",
+                    "icon": "img/logo_only.png"
+                },
+                {
+                    "id": "gravitas.taskHistory",
+                    "name": "Task History",
+                    "visibility": "visible"
+                },
+                {
+                    "id": "gravitas.runtime",
+                    "name": "Runtime Control"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run bundle",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "bundle": "npx esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && cp node_modules/@vscode/webview-ui-toolkit/dist/toolkit.js media/toolkit.js",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "test": "node out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/emscripten": "^1.41.5",
+        "@types/node": "^20.19.32",
+        "@types/vscode": "^1.80.0",
+        "@typescript-eslint/eslint-plugin": "^5.59.1",
+        "@typescript-eslint/parser": "^5.59.1",
+        "eslint": "^8.41.0",
+        "typescript": "^5.1.3"
+    }
+}

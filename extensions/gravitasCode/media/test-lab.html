@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravitas Live Test Lab</title>
+    <link href="taskShell.css" rel="stylesheet">
+    <script>
+        // Mock VS Code API
+        window.acquireVsCodeApi = () => ({
+            postMessage: (msg) => console.log('VSCODE_POST:', msg),
+            getState: () => ({}),
+            setState: (s) => console.log('VSCODE_SET_STATE:', s)
+        });
+    </script>
+    <script type="module" src="toolkit.js"></script>
+    <style>
+        /* Test environment visual aids */
+        body {
+            background: #000;
+        }
+
+        #debug-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 255, 0, 0.1);
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 10px;
+            border: 1px solid #0f0;
+            z-index: 9999;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="debug-panel">UI_SIMULATION_ACTIVE</div>
+    <div id="taskFeed" class="task-feed"></div>
+    <div class="task-footer">
+        <input type="text" id="commandInput" class="command-input" placeholder="> Enter command to spawn new task..."
+            autocomplete="off">
+    </div>
+
+    <script src="taskShell.js"></script>
+    <script>
+        // Start Simulation
+        async function runSimulation() {
+            const taskId = 'test-task-123';
+
+            // 1. Initial Snapshot
+            window.postMessage({
+                type: 'loadSnapshot',
+                task: {
+                    id: taskId,
+                    command: 'npm run build --live-demo',
+                    status: 'RUNNING',
+                    attempts: [
+                        {
+                            attemptNo: 1,
+                            status: 'OPEN',
+                            phases: []
+                        }
+                    ]
+                }
+            }, '*');
+
+            await new Promise(r => setTimeout(r, 500));
+
+            // 2. Start Coder Phase
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'PhaseStarted',
+                    phaseId: 'phase-1',
+                    attemptNo: 1,
+                    actor: 'coder',
+                    title: 'Optimizing Module Structure'
+                }
+            }, '*');
+
+            // 3. Telemetry Update
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'ResourceUsageSampled',
+                    phaseId: 'phase-1',
+                    resources: { ramMb: 412, cpuPercent: 14, vramMb: 0 }
+                }
+            }, '*');
+
+            // 4. Thought
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'ThoughtEmitted',
+                    phaseId: 'phase-1',
+                    content: 'I am auditing the secondary dependency layer to identify potential circular references. Glassmorphism looks great.'
+                }
+            }, '*');
+
+            // 5. Tool Call
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'ToolExecutionStarted',
+                    phaseId: 'phase-1',
+                    toolName: 'grep_search',
+                    commandLine: 'grep -r "Antigravity" .'
+                }
+            }, '*');
+
+            // 6. Artifact Production
+            const artifactId = 'art-1';
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'ArtifactProduced',
+                    phaseId: 'phase-1',
+                    artifactId,
+                    name: 'walkthrough.md',
+                    path: '/home/viren/runs/full-server/gravitas-code/walkthrough.md',
+                    artifactType: 'file',
+                    producedByAttempt: 1,
+                    producedAt: new Date().toISOString()
+                }
+            }, '*');
+
+            // 7. Artifact Validation (PASS)
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'ArtifactValidated',
+                    phaseId: 'phase-1',
+                    artifactId,
+                    status: 'PASS',
+                    validatorId: 'fs-checker',
+                    message: 'File verified on disk.'
+                }
+            }, '*');
+
+            // 8. Complete Phase
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'PhaseCompleted',
+                    phaseId: 'phase-1',
+                    status: 'COMPLETED'
+                }
+            }, '*');
+
+            // 9. Task Completion
+            window.postMessage({
+                type: 'event',
+                taskId,
+                event: {
+                    type: 'TaskTerminated',
+                    status: 'COMPLETED',
+                    finalSummary: 'Successfully completed the Gravitas verification run.'
+                }
+            }, '*');
+        }
+
+        setTimeout(runSimulation, 1000);
+    </script>
+</body>
+
+</html>

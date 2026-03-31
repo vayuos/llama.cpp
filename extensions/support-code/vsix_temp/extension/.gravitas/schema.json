@@ -1,0 +1,88 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "llamaBinaryPath": {
+            "type": "string"
+        },
+        "coderModel": {
+            "type": "object",
+            "properties": {
+                "modelPath": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "number"
+                },
+                "gpuLayers": {
+                    "type": "number"
+                },
+                "ctx": {
+                    "type": "number"
+                },
+                "batch": {
+                    "type": "number"
+                },
+                "ubatch": {
+                    "type": "number"
+                },
+                "temp": {
+                    "type": "number"
+                },
+                "topP": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "modelPath",
+                "port",
+                "gpuLayers",
+                "ctx",
+                "batch",
+                "ubatch",
+                "temp",
+                "topP"
+            ]
+        },
+        "reviewerModel": {
+            "type": "object",
+            "properties": {
+                "modelPath": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "number"
+                },
+                "threads": {
+                    "type": "number"
+                },
+                "ctx": {
+                    "type": "number"
+                },
+                "temp": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "modelPath",
+                "port",
+                "threads",
+                "ctx",
+                "temp"
+            ]
+        },
+        "workspaceRoot": {
+            "type": "string"
+        },
+        "logDir": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "llamaBinaryPath",
+        "coderModel",
+        "reviewerModel",
+        "workspaceRoot",
+        "logDir"
+    ]
+}
