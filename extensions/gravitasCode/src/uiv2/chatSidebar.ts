@@ -179,8 +179,30 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
 </head>
 <body class="sidebar-mode">
     <div class="telemetry-wrapper">
-        <div id="coderTelemetry" class="telemetry-item gpu">Coder: Idle</div>
-        <div id="reviewerTelemetry" class="telemetry-item cpu">Reviewer: Idle</div>
+        <div class="dashboard-section" id="coderDash">
+            <div class="section-header">
+                <div id="coderStatus" class="status-dot"></div>
+                <span class="section-label">CODER.ACE</span>
+                <span id="coderLoad" class="load-tag">IDLE</span>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-item"><span class="label">VRAM</span><span id="coderVram" class="value">0%</span></div>
+                <div class="metric-item highlight"><span class="label">GEN</span><span id="coderTps" class="value">0.0</span></div>
+                <div class="metric-item"><span class="label">KV</span><span id="coderKv" class="value">0%</span></div>
+            </div>
+        </div>
+        <div class="dashboard-section" id="reviewerDash">
+            <div class="section-header">
+                <div id="reviewerStatus" class="status-dot"></div>
+                <span class="section-label">REVIEWER.ACE</span>
+                <span id="reviewerLoad" class="load-tag">IDLE</span>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-item"><span class="label">VRAM</span><span id="reviewerVram" class="value">0%</span></div>
+                <div class="metric-item highlight"><span class="label">GEN</span><span id="reviewerTps" class="value">0.0</span></div>
+                <div class="metric-item"><span class="label">KV</span><span id="reviewerKv" class="value">0%</span></div>
+            </div>
+        </div>
     </div>
     <div id="taskFeed" class="task-feed">
         <div class="welcome-screen" id="welcomeScreen">

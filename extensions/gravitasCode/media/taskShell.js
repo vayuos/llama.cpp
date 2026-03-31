@@ -289,13 +289,28 @@ class ChatController {
     }
 
     updateGlobalTelemetry(coder, reviewer) {
-        if (this.coderTelemetry) {
-            this.coderTelemetry.textContent = `Coder: ${coder.vram} | ${coder.tps}`;
-            this.coderTelemetry.className = `telemetry-item ${coder.status === 'online' ? 'online' : 'offline'}`;
+        this.updateAgentDash('coder', coder);
+        this.updateAgentDash('reviewer', reviewer);
+    }
+
+    updateAgentDash(prefix, data) {
+        const dash = document.getElementById(`${prefix}Dash`);
+        const vram = document.getElementById(`${prefix}Vram`);
+        const tps = document.getElementById(`${prefix}Tps`);
+        const kv = document.getElementById(`${prefix}Kv`);
+        const load = document.getElementById(`${prefix}Load`);
+
+        if (dash) {
+            dash.classList.remove('online', 'offline');
+            dash.classList.add(data.status);
         }
-        if (this.reviewerTelemetry) {
-            this.reviewerTelemetry.textContent = `Reviewer: ${reviewer.vram} | ${reviewer.tps}`;
-            this.reviewerTelemetry.className = `telemetry-item ${reviewer.status === 'online' ? 'online' : 'offline'}`;
+        if (vram) vram.textContent = data.vram;
+        if (tps) tps.textContent = data.tps;
+        if (kv) kv.textContent = data.slots;
+        if (load) {
+            load.textContent = data.load.toUpperCase();
+            load.style.background = data.load === 'Idle' ? 'rgba(255,255,255,0.05)' : 'rgba(0, 229, 255, 0.2)';
+            load.style.color = data.load === 'Idle' ? 'rgba(255,255,255,0.3)' : 'var(--accent-primary)';
         }
     }
 

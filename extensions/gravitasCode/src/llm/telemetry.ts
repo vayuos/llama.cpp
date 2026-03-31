@@ -10,8 +10,10 @@ export interface TelemetryData {
     status: 'online' | 'offline' | 'error';
     vram: string;
     tps: string;
+    promptTps: string;
     slots: string;
     latency: string;
+    load: string;
 }
 
 export class TelemetryService {
@@ -46,10 +48,12 @@ export class TelemetryService {
     public getTelemetry(type: 'coder' | 'reviewer'): TelemetryData {
         return this.state.get(type) || {
             status: 'offline',
-            vram: 'N/A',
-            tps: 'Idle',
-            slots: '0/4',
-            latency: '0ms'
+            vram: '0%',
+            tps: '0 strategy',
+            promptTps: '0',
+            slots: '0%',
+            latency: '---',
+            load: 'Idle'
         };
     }
 
@@ -72,24 +76,30 @@ export class TelemetryService {
             const latency = `${Date.now() - start}ms`;
             
             // Parse TPS
-            const tpsMatch = metrics.match(/predicted_tokens_seconds\s+([0-9.]+)/);
-            const tps = tpsMatch ? `${parseFloat(tpsMatch[1]).toFixed(1)}` : '0.0';
+            const genTpsMatch = metrics.match(/predicted_tokens_seconds\s+([0-9.]+)/);
+            const promptTpsMatch = metrics.match(/prompt_tokens_seconds\s+([0-9.]+)/);
+            
+            const genTps = genTpsMatch ? parseFloat(genTpsMatch[1]) : 0;
+            const promptTps = promptTpsMatch ? parseFloat(promptTpsMatch[1]) : 0;
 
             // Parse Slots
             const slotsMatch = metrics.match(/kv_cache_usage_ratio\s+([0-9.]+)/);
             const slots = slotsMatch ? `${Math.round(parseFloat(slotsMatch[1])*100)}%` : '0%';
 
-            // Parse VRAM (requires /v1/hardware or local smi)
-            let vram = 'CPU';
+            // Parse Load/Activity
+            let load = 'Idle';
+            if (genTps > 0) load = 'Generating';
+            else if (promptTps > 0) load = 'Processing';
+
+            // Parse VRAM
+            let vram = '0%';
             if (isRemote) {
                 try {
                     const hw = await client.get('/v1/hardware');
                     if (hw && hw.vram) {
                         vram = `${Math.round(hw.vram.used / hw.vram.total * 100)}%`;
                     }
-                } catch(e) {
-                    vram = 'Remote';
-                }
+                } catch(e) { vram = '---'; }
             } else {
                 vram = await this.getLocalVram(modelConfig);
             }
@@ -97,17 +107,21 @@ export class TelemetryService {
             this.state.set(type, {
                 status: 'online',
                 vram,
-                tps: parseFloat(tps) > 0 ? `TPS: ${tps}` : 'Idle',
-                slots: `KV: ${slots}`,
-                latency
+                tps: genTps > 0 ? `${genTps.toFixed(1)}` : '0.0',
+                promptTps: promptTps > 0 ? `${promptTps.toFixed(1)}` : '0.0',
+                slots,
+                latency,
+                load
             });
         } catch (e) {
             this.state.set(type, {
                 status: 'offline',
-                vram: 'Offline',
-                tps: '---',
-                slots: '---',
-                latency: '---'
+                vram: '0%',
+                tps: '0.0',
+                promptTps: '0.0',
+                slots: '0%',
+                latency: '---',
+                load: 'Offline'
             });
         }
     }

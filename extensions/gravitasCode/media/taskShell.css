@@ -373,47 +373,97 @@ body {
     padding: 20px;
 }
 
-/* Telemetry Dashboard (Premium Glass) */
+/* 
+ * 3. Engineering Dashboard (Premium Glass) 
+ */
 .telemetry-wrapper {
     display: flex;
-    justify-content: space-between;
-    padding: 8px 16px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
+    gap: 16px;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, rgba(20, 20, 25, 0.9) 0%, rgba(10, 10, 12, 0.95) 100%);
+    backdrop-filter: blur(25px) saturate(180%);
     border-bottom: 1px solid var(--glass-border);
-    font-size: 10px;
-    color: var(--text-secondary);
-    z-index: 100;
-    transition: all 0.3s ease;
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 
-.telemetry-item {
+.dashboard-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    gap: 8px;
 }
 
-.telemetry-item::before {
-    content: "";
+.status-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #444;
-    transition: all 0.3s ease;
+    background: #333;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.telemetry-item.online {
-    color: var(--text-primary);
-}
-
-.telemetry-item.online::before {
+.dashboard-section.online .status-dot {
     background: var(--accent-emerald);
-    box-shadow: 0 0 8px var(--accent-emerald);
+    box-shadow: 0 0 12px var(--accent-emerald);
 }
 
-.telemetry-item.offline::before {
+.dashboard-section.offline .status-dot {
     background: #ff5252;
-    box-shadow: 0 0 8px rgba(255, 82, 82, 0.4);
+    box-shadow: 0 0 12px rgba(255, 82, 82, 0.5);
+}
+
+.section-label {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
+.load-tag {
+    font-size: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 229, 255, 0.1);
+    color: var(--accent-primary);
+    margin-left: auto;
+    font-weight: 700;
+    border: 1px solid rgba(0, 229, 255, 0.1);
+}
+
+.metrics-grid {
+    display: flex;
+    justify-content: flex-start;
+    gap: 12px;
+}
+
+.metric-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.metric-item .label {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.metric-item .value {
+    font-size: 10px;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.metric-item.highlight .value {
+    color: var(--accent-primary);
+    text-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
 }
