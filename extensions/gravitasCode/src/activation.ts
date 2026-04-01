@@ -265,6 +265,11 @@ export class ActivationManager {
                     logger.error('system', result.message);
                 }
             }),
+            vscode.commands.registerCommand('gravitas.views.focus', () => {
+                chatSidebarProvider.focus();
+                // Ensure the view is visible in the sidebar
+                vscode.commands.executeCommand('workbench.view.extension.gravitas-explorer');
+            }),
         );
 
         // Update status on any state change

@@ -27,7 +27,7 @@ export class UnifiedProcessManager {
 
     public async startCoder(config: GravitasConfig): Promise<boolean> {
         if (config.connection.mode === 'remote') {
-            vscode.window.showInformationMessage(`Remote Mode: Coder should be running on System3 (${config.connection.system3Ip}:8089)`);
+            vscode.window.showInformationMessage(`Remote Mode: Coder should be running on System3 (${config.connection.system3Ip}:8080)`);
             return true;
         }
         const c = config.coder as any;
@@ -38,7 +38,7 @@ export class UnifiedProcessManager {
 
     public async startReviewer(config: GravitasConfig): Promise<boolean> {
         if (config.connection.mode === 'remote') {
-            vscode.window.showInformationMessage(`Remote Mode: Reviewer should be running on System3 (${config.connection.system3Ip}:8080)`);
+            vscode.window.showInformationMessage(`Remote Mode: Reviewer should be running on System3 (${config.connection.system3Ip}:18080)`);
             return true;
         }
         const r = config.reviewer as any;

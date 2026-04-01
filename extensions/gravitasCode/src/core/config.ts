@@ -8,7 +8,7 @@ export const ModelConfigSchema = z.object({
     enabled: z.boolean().default(true),
     baseUrl: z.string().optional(),
     host: z.string().default('127.0.0.1'),
-    port: z.number().default(8080),
+    port: z.number().default(18080),
     binPath: z.string().optional(),
     contextSize: z.number().default(102400),
     temperature: z.number().default(0.2),
@@ -65,7 +65,8 @@ export class ConfigManager {
     public async loadConfig(): Promise<GravitasConfig | null> {
         const logger = CentralLogger.getInstance();
         
-        // SMART SCOPING
+        try {
+            // SMART SCOPING
         let bestFolder = vscode.workspace.workspaceFolders?.[0];
         
         if (vscode.workspace.workspaceFolders) {
@@ -96,7 +97,7 @@ export class ConfigManager {
 
         const getModelConfig = (section: string): ModelConfig => {
             let host = config.get<string>(`${section}.general.host`) || '127.0.0.1';
-            let port = config.get<number>(`${section}.general.port`) || (section === 'reviewer' ? 8080 : 8089);
+            let port = config.get<number>(`${section}.general.port`) || (section === 'reviewer' ? 18080 : 8080);
             
             if (connection.mode === 'remote') {
                 host = connection.system3Ip;
@@ -165,6 +166,19 @@ export class ConfigManager {
 
         this.cachedConfig = resolvedConfig;
         return resolvedConfig;
+        } catch (e: any) {
+            logger.error('system', `Failed to load configuration: ${e.message}`);
+            // Return a minimal fallback config to allow UI to register
+            return {
+                workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '',
+                logDir: '',
+                connection: { mode: 'local', system3Ip: '127.0.0.1' },
+                runtime: { autoTestOnStart: false, showLogs: true, logLevel: 'info', killSignal: 'SIGTERM' },
+                coder: { enabled: true, host: '127.0.0.1', port: 8040 },
+                reviewer: { enabled: true, host: '127.0.0.1', port: 18080 },
+                vayuforge: { ragEndpoint: 'http://127.0.0.1:18081/retrieve' }
+            } as any;
+        }
     }
 
     public getCachedConfig(): GravitasConfig | null {

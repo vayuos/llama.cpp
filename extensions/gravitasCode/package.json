@@ -113,6 +113,12 @@
                 "title": "Restart Reviewer",
                 "category": "Gravitas",
                 "icon": "$(debug-restart)"
+            },
+            {
+                "command": "gravitas.views.focus",
+                "title": "Restore/Focus Gravitas View",
+                "category": "Gravitas",
+                "icon": "$(shield)"
             }
         ],
         "menus": {
@@ -248,8 +254,8 @@
                     },
                     "gravitasCode.coder.general.port": {
                         "type": "number",
-                        "default": 8089,
-                        "description": "Port (Coder/Implementation). [VayuForge Standard: 8089]",
+                        "default": 8040,
+                        "description": "Port (Coder/Implementation). [VayuForge Standard: 8040]",
                         "order": 3
                     },
                     "gravitasCode.coder.general.modelPath": {
@@ -259,7 +265,7 @@
                     },
                     "gravitasCode.coder.general.baseUrl": {
                         "type": "string",
-                        "description": "Full URL for the Coder model server (e.g. http://127.0.0.1:8089). Overrides Host and Port.",
+                        "description": "Full URL for the Coder model server (e.g. http://127.0.0.1:8040). Overrides Host and Port.",
                         "order": 6
                     },
                     "gravitasCode.coder.general.noWarmup": {
@@ -319,8 +325,8 @@
                     },
                     "gravitasCode.reviewer.general.port": {
                         "type": "number",
-                        "default": 8080,
-                        "description": "Port (Reviewer/Validation). [VayuForge Standard: 8080]",
+                        "default": 18080,
+                        "description": "Port (Reviewer/Validation). [VayuForge Standard: 18080]",
                         "order": 3
                     },
                     "gravitasCode.reviewer.general.modelPath": {
@@ -330,7 +336,7 @@
                     },
                     "gravitasCode.reviewer.general.baseUrl": {
                         "type": "string",
-                        "description": "Full URL for the Reviewer model server (e.g. http://127.0.0.1:8080). Overrides Host and Port.",
+                        "description": "Full URL for the Reviewer model server (e.g. http://127.0.0.1:18080). Overrides Host and Port.",
                         "order": 6
                     },
                     "gravitasCode.reviewer.general.noWarmup": {
