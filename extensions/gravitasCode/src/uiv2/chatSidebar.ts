@@ -35,9 +35,13 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
         });
 
         TelemetryService.getInstance().onDidUpdate(() => {
-            const coder = TelemetryService.getInstance().getTelemetry('coder');
-            const reviewer = TelemetryService.getInstance().getTelemetry('reviewer');
-            this.postOrBuffer({ type: 'telemetry', coder, reviewer });
+            const ts = TelemetryService.getInstance();
+            this.postOrBuffer({ 
+                type: 'telemetry', 
+                coder: ts.getTelemetry('coder'), 
+                reviewer: ts.getTelemetry('reviewer'),
+                rag: ts.getTelemetry('rag')
+            });
         });
         
         this._isSubscribed = true;
