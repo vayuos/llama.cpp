@@ -42,6 +42,10 @@ const reducer_1 = require("./reducer");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const integrity_1 = require("./integrity");
+/**
+ * Authoritative Task Store and Lifecycle Manager.
+ * Implements Gap 1-3: State, Ledger, Pure Reducers.
+ */
 class TaskManager {
     constructor(context) {
         this.tasks = {};
@@ -63,7 +67,6 @@ class TaskManager {
         }
     }
     getStoragePath() {
-        // Preference: Workspace storage if available, otherwise global storage
         if (this.context.storageUri) {
             return this.context.storageUri.fsPath;
         }
@@ -101,6 +104,7 @@ class TaskManager {
                         .map(line => JSON.parse(line));
                     if (events.length > 0) {
                         this.tasks[taskId] = this.rebuildTaskFromEvents(taskId, events);
+                        console.log(`[TaskManager] Recovered task ${taskId} with ${events.length} events.`);
                     }
                 }
             }
@@ -108,23 +112,24 @@ class TaskManager {
                 console.error(`[TaskManager] Failed to restore task ${taskId}:`, err);
             }
         }
-        console.log(`[TaskManager] Restored ${Object.keys(this.tasks).length} tasks from ledger.`);
     }
     rebuildTaskFromEvents(taskId, events) {
         return (0, reducer_1.reduceTask)(taskId, events);
     }
-    findPhase(task, attemptNo, phaseId) {
-        const attempt = task.attempts.find(a => a.attemptNo === attemptNo);
-        return attempt?.phases.find(p => p.id === phaseId);
+    getTask(id) {
+        return this.tasks[id];
     }
-    findCurrentPhase(task, attemptNo) {
-        const attempt = task.attempts.find(a => a.attemptNo === attemptNo);
-        return attempt?.phases[attempt.phases.length - 1];
+    getAllTasks() {
+        return Object.values(this.tasks).sort((a, b) => b.createdAt - a.createdAt);
+    }
+    getLastTask() {
+        const all = this.getAllTasks();
+        return all.length > 0 ? all[0] : undefined;
+    }
+    getCurrentAttempt(task) {
+        return task.attempts[task.attempts.length - 1];
     }
     async saveTasks() {
-        // No longer saving full TaskStore to globalState! 
-        // Meta-index can still live there if we want faster boot, but for now we follow Gap 2 strictly.
-        // We might want to save JUST the task IDs to globalState for tracking order.
         await this.context.globalState.update('gravitas_tasks_v2_ids', Object.keys(this.tasks));
     }
     createTask(command, origin = 'user', parentTaskId, regenerationType) {
@@ -142,12 +147,10 @@ class TaskManager {
             attempts: []
         };
         this.tasks[id] = newTask;
-        // Ensure task dir exists
         const taskDir = path.join(this.getStoragePath(), id);
         if (!fs.existsSync(taskDir)) {
             fs.mkdirSync(taskDir, { recursive: true });
         }
-        // Emit TaskCreated as the first ledger entry
         this.emitEvent(id, {
             type: 'TaskCreated',
             createdAt: new Date().toISOString(),
@@ -159,38 +162,29 @@ class TaskManager {
         this._fireUpdate(newTask);
         return newTask;
     }
-    getTask(id) {
-        return this.tasks[id];
-    }
-    getAllTasks() {
-        // Return sorted by creation time desc
-        return Object.values(this.tasks).sort((a, b) => b.createdAt - a.createdAt);
-    }
     updateTaskState(id, newState) {
         const task = this.tasks[id];
         if (!task)
             return;
-        // Simple validation: Enforce monotonic flow (basic check)
-        // In a real strict system we'd check transitions map
         task.status = newState;
         task.updatedAt = Date.now();
+        this.emitEvent(id, {
+            type: 'TaskStateChanged',
+            previousState: task.status, // previous state capture might be useful for history
+            newState
+        });
         this.saveTasks();
         this._fireUpdate(task);
     }
-    /**
-     * Starts a new monotonic attempt.
-     * Enforces that previous attempt is CLOSED (or closes it).
-     */
     startNextAttempt(id) {
         const task = this.tasks[id];
         if (!task)
             throw new Error('Task not found');
-        // Close previous if open
-        const lastAttempt = task.attempts[task.attempts.length - 1];
+        const lastAttempt = this.getCurrentAttempt(task);
         if (lastAttempt && lastAttempt.state === 'OPEN') {
             lastAttempt.state = 'CLOSED';
             lastAttempt.endedAt = Date.now();
-            lastAttempt.verdict = lastAttempt.verdict || 'INCOMPLETE'; // Default if not set
+            lastAttempt.verdict = lastAttempt.verdict || 'INCOMPLETE';
         }
         const attemptNo = task.attempts.length + 1;
         const attemptId = (0, uuid_1.v4)();
@@ -211,13 +205,9 @@ class TaskManager {
             startedAt: new Date().toISOString(),
             initiator: 'system'
         });
-        // Implicitly start a System phase for setup
         this.startPhase(id, 'system', 'Attempt Initialization');
         return attempt;
     }
-    /**
-     * Starts a new Phase Block.
-     */
     startPhase(taskId, actor, title) {
         const task = this.tasks[taskId];
         if (!task)
@@ -225,7 +215,6 @@ class TaskManager {
         const attempt = this.getCurrentAttempt(task);
         if (!attempt || attempt.state === 'CLOSED')
             throw new Error('No open attempt');
-        // Close previous phase
         const lastPhase = attempt.phases[attempt.phases.length - 1];
         if (lastPhase && lastPhase.status === 'RUNNING') {
             lastPhase.status = 'COMPLETED';
@@ -253,6 +242,28 @@ class TaskManager {
         });
         return phaseId;
     }
+    completePhase(taskId) {
+        const task = this.tasks[taskId];
+        if (!task)
+            return;
+        const attempt = this.getCurrentAttempt(task);
+        if (!attempt)
+            return;
+        const phase = attempt.phases[attempt.phases.length - 1];
+        if (phase && phase.status === 'RUNNING') {
+            phase.status = 'COMPLETED';
+            phase.endedAt = Date.now();
+            this.emitEvent(taskId, {
+                type: 'PhaseCompleted',
+                attemptNo: attempt.attemptNo,
+                phaseId: phase.id,
+                endedAt: new Date().toISOString(),
+                status: 'COMPLETED'
+            });
+            this.saveTasks();
+            this._fireUpdate(task);
+        }
+    }
     bindAgent(taskId, phaseId, agentId, modelId, configFingerprint) {
         this.emitEvent(taskId, {
             type: 'AgentBoundToPhase',
@@ -279,6 +290,18 @@ class TaskManager {
             reasoning
         });
     }
+    recordArtifact(taskId, filePath, type, metadata) {
+        const fileName = path.basename(filePath);
+        this.emitEvent(taskId, {
+            type: 'ArtifactProduced',
+            artifactId: (0, uuid_1.v4)(),
+            name: fileName,
+            path: filePath,
+            artifactType: type,
+            producedAt: new Date().toISOString(),
+            metadata
+        });
+    }
     recordUserAction(taskId, actionType, targetId, metadata) {
         this.emitEvent(taskId, {
             type: 'UserActionPerformed',
@@ -287,193 +310,117 @@ class TaskManager {
             metadata
         });
     }
-    // GAP 1: Authoritative Emitters
-    emitTaskEvent(taskId, type, payload) {
-        this.emitEvent(taskId, { type, ...payload });
-    }
-    emitAttemptEvent(taskId, attemptNo, type, payload) {
-        this.emitEvent(taskId, { attemptNo, type, ...payload });
-    }
-    emitPhaseEvent(taskId, phaseId, type, payload) {
-        const task = this.tasks[taskId];
-        const attempt = task ? this.getCurrentAttempt(task) : undefined;
-        this.emitEvent(taskId, {
-            attemptNo: attempt?.attemptNo || 1,
-            phaseId,
-            type,
-            ...payload
-        });
-    }
-    completePhase(taskId) {
-        const task = this.tasks[taskId];
+    emitEvent(id, event) {
+        const task = this.tasks[id];
         if (!task)
             return;
-        const attempt = this.getCurrentAttempt(task);
-        if (!attempt)
-            return;
-        const phase = attempt.phases[attempt.phases.length - 1];
-        if (phase && phase.status === 'RUNNING') {
-            phase.status = 'COMPLETED';
-            phase.endedAt = Date.now();
-            this.saveTasks();
+        // Auto-enrich execution events with current attempt/phase if missing
+        const isExecutionEvent = ['ToolExecutionStarted', 'ToolExecutionOutput', 'ToolExecutionCompleted', 'ThoughtEmitted', 'TerminalLog'].includes(event.type);
+        if (isExecutionEvent && !event.attemptNo) {
+            const currentAttempt = this.getCurrentAttempt(task);
+            if (currentAttempt) {
+                event.attemptNo = currentAttempt.attemptNo;
+                if (!event.phaseId) {
+                    const currentPhase = currentAttempt.phases[currentAttempt.phases.length - 1];
+                    event.phaseId = currentPhase?.id || 'none';
+                }
+            }
         }
-    }
-    /**
-     * Seals the current attempt with a verdict.
-     */
-    completeAttempt(taskId, verdict) {
-        const task = this.tasks[taskId];
-        if (!task)
-            return;
-        const attempt = this.getCurrentAttempt(task);
-        if (!attempt || attempt.state === 'CLOSED')
-            return;
-        // Close active phase
-        this.completePhase(taskId);
-        attempt.verdict = verdict;
-        attempt.state = 'CLOSED';
-        attempt.endedAt = Date.now();
-        task.updatedAt = Date.now();
+        if (!event.timestamp) {
+            event.timestamp = new Date().toISOString();
+        }
+        if (!event.eventId) {
+            event.eventId = (0, uuid_1.v4)();
+        }
+        if (!event.taskId) {
+            event.taskId = id;
+        }
+        // VALIDATION
+        const validation = this.eventValidator.validate(event.type, event);
+        if (!validation.valid) {
+            console.error(`[TaskManager] Event validation failed for ${event.type}:`, validation.errors);
+        }
+        // STATE REDUCTION
+        this.tasks[id] = (0, reducer_1.applyEvent)(task, event);
+        // PERSISTENCE
+        try {
+            const eventPath = this.getTaskEventsPath(id);
+            const line = JSON.stringify(event) + '\n';
+            fs.appendFileSync(eventPath, line, 'utf8');
+            const logger = require('../core/logger').CentralLogger.getInstance();
+            logger.debug('system', `Task ${id}: Persisted event ${event.type} (${line.length} bytes)`);
+        }
+        catch (err) {
+            console.error(`[TaskManager] Failed to persist event:`, err);
+        }
         this.saveTasks();
-        this._fireUpdate(task);
-        this.emitEvent(taskId, {
-            type: 'AttemptClosed', // Using AttemptClosed.v1.json
-            attemptNo: attempt.attemptNo,
-            verdict: verdict,
-            closedAt: new Date().toISOString(),
-            summary: task.summary || 'Attempt finished'
-        });
+        this._fireUpdate(this.tasks[id]);
+        this._onDidEmitEvent.fire({ taskId: id, event });
     }
     sampleResources(taskId) {
         const mem = process.memoryUsage();
         const ramMb = Math.round(mem.rss / 1024 / 1024);
-        // Calculate CPU %
         const now = Date.now();
         const cpuUsage = process.cpuUsage(this.cpuUsageBaseline);
         const elapsedUs = (now - this.lastTelemetryTime) * 1000;
         const totalUs = cpuUsage.user + cpuUsage.system;
         const cpuPercent = elapsedUs > 0 ? Math.min(100, Math.round((totalUs / elapsedUs) * 100)) : 0;
-        // Reset baseline
         this.cpuUsageBaseline = process.cpuUsage();
         this.lastTelemetryTime = now;
         this.emitEvent(taskId, {
             type: 'ResourceUsageSampled',
             resources: {
                 ramMb,
-                vramMb: 0, // Mock: GPU drivers are complex, keeping it 0 for now
+                vramMb: 0,
                 cpuPercent
             }
         });
-        // Resource Limit Guard (Configurable thresholds)
-        // Default: 1GB RAM, 90% CPU
-        const RAM_LIMIT = 1024;
-        const CPU_LIMIT = 90;
-        if (ramMb > RAM_LIMIT) {
+    }
+    async pollHardwareMetrics(taskId) {
+        try {
+            // We reuse the existing Coder client's HTTP bridge
+            const llm = require('../agents/loop').AgentLoopController.getInstance().getCoderClient();
+            const slots = await llm.http.get('/slots');
+            const metrics = await llm.http.get('/metrics');
             this.emitEvent(taskId, {
-                type: 'ResourceLimitExceeded',
-                resourceType: 'RAM',
-                limitValue: RAM_LIMIT,
-                actualValue: ramMb,
-                severity: 'CRITICAL'
+                type: 'HardwareMetricsEmitted',
+                vramMb: this.extractVram(metrics),
+                activeSlots: slots.filter((s) => s.status === 'processing').length,
+                totalSlots: slots.length,
+                tps: 0 // Will be calculated in the UI from iteration timing
             });
         }
-        if (cpuPercent > CPU_LIMIT) {
-            this.emitEvent(taskId, {
-                type: 'ResourceLimitExceeded',
-                resourceType: 'CPU',
-                limitValue: CPU_LIMIT,
-                actualValue: cpuPercent,
-                severity: 'WARNING'
-            });
+        catch (e) {
+            // Silence silent polling errors to avoid log spam
         }
     }
-    recordArtifact(taskId, filePath, type, metadata) {
-        const artifactId = (0, uuid_1.v4)();
+    extractVram(metrics) {
+        // Simple regex to find llama_vram_used in Prometheus-style metrics
+        const match = metrics.match(/llama_vram_used_bytes\s+(\d+)/);
+        return match ? Math.round(parseInt(match[1]) / 1024 / 1024) : 0;
+    }
+    emitStreamingChunk(taskId, chunk, stage) {
         const task = this.tasks[taskId];
-        const attemptNo = task ? task.attempts.length : 1;
-        const fileName = path.basename(filePath);
-        // Ensure type is within enum: "file" | "package" | "diff" | "report" | "other"
-        const allowedTypes = ["file", "package", "diff", "report", "other"];
-        const artifactType = allowedTypes.includes(type) ? type : "other";
-        this.emitEvent(taskId, {
-            type: 'ArtifactProduced',
-            artifactId,
-            name: fileName,
-            path: filePath,
-            artifactType: artifactType,
-            producedByAttempt: attemptNo,
-            producedAt: new Date().toISOString(),
-            timestamp: new Date().toISOString()
-        });
-        // Auto-validate existence (Phase 19)
-        const exists = fs.existsSync(filePath);
-        this.validateArtifact(taskId, artifactId, exists ? 'PASS' : 'FAIL', 'fs-checker', exists ? 'File verified on disk.' : 'File not found after production.', { path: filePath, size: exists ? fs.statSync(filePath).size : 0 });
-    }
-    validateArtifact(taskId, artifactId, status, validatorId, message, details) {
-        this.emitEvent(taskId, {
-            type: 'ArtifactValidated',
-            artifactId,
-            validatorId,
-            status,
-            message,
-            details
-        });
-    }
-    // Deprecated compat shim
-    addAttempt(id) {
-        return this.startNextAttempt(id).id;
-    }
-    emitEvent(id, eventPayload) {
-        const task = this.tasks[id];
         if (!task)
             return;
-        const attempt = this.getCurrentAttempt(task);
-        if (!attempt || attempt.state === 'CLOSED')
-            return;
-        // Enrich with mandatory schema fields + Gaps: Auto-routing
-        const currentPhase = attempt.phases[attempt.phases.length - 1];
-        const event = {
-            eventId: (0, uuid_1.v4)(),
-            taskId: id,
-            timestamp: new Date().toISOString(),
-            attemptNo: attempt.attemptNo,
-            phaseId: currentPhase?.id,
-            ...eventPayload
-        };
-        // Validate
-        const validation = this.eventValidator.validate(event.type, event);
-        if (!validation.valid) {
-            console.error(`[TaskManager] Event validation failed for ${event.type}:`, validation.errors);
-            // In strict mode we might reject, but for now we log.
-        }
-        // PHASE ROUTING (Now handled internally by applyEvent for state consistency)
-        this.tasks[id] = (0, reducer_1.applyEvent)(task, event);
-        // PERSISTENCE (Gap 2: Persistent Ledger)
-        try {
-            const eventPath = this.getTaskEventsPath(id);
-            const line = JSON.stringify(event) + '\n';
-            fs.appendFileSync(eventPath, line, 'utf8');
-        }
-        catch (err) {
-            console.error(`[TaskManager] Failed to persist event to ledger:`, err);
-        }
-        this.saveTasks();
-        this._fireUpdate(task);
-        this._onDidEmitEvent.fire({ taskId: id, event });
-    }
-    getCurrentAttempt(task) {
-        return task.attempts[task.attempts.length - 1];
+        // We emit it as a live event but don't necessarily persist every single token to disk 
+        // to avoid killing disk I/O. The final block will be persisted via Attempt/Phase completion.
+        this._onDidEmitEvent.fire({
+            taskId,
+            event: {
+                type: 'StreamingChunkEmitted',
+                taskId,
+                chunk,
+                stage,
+                timestamp: new Date().toISOString(),
+                eventId: (0, uuid_1.v4)()
+            }
+        });
     }
     addTerminalChunk(id, data, toolExecId = 'root', stream = 'stdout') {
-        const task = this.tasks[id];
-        const attempt = task ? this.getCurrentAttempt(task) : null;
-        const phase = attempt ? attempt.phases[attempt.phases.length - 1] : null;
         this.emitEvent(id, {
             type: 'ToolExecutionOutput',
-            attemptNo: attempt?.attemptNo || 1,
-            phaseId: phase?.id || 'none',
             toolExecId,
-            timestamp: new Date().toISOString(),
             stream,
             text: data
         });
@@ -498,13 +445,32 @@ class TaskManager {
         this.saveTasks();
         this._fireUpdate(task);
     }
+    completeAttempt(taskId, verdict) {
+        const task = this.tasks[taskId];
+        if (!task)
+            return;
+        const attempt = this.getCurrentAttempt(task);
+        if (!attempt || attempt.state === 'CLOSED')
+            return;
+        attempt.verdict = verdict;
+        attempt.state = 'CLOSED';
+        attempt.endedAt = Date.now();
+        this.emitEvent(taskId, {
+            type: 'AttemptClosed',
+            attemptNo: attempt.attemptNo,
+            verdict,
+            closedAt: new Date().toISOString(),
+            summary: 'Attempt finalized via completeAttempt'
+        });
+        this.saveTasks();
+        this._fireUpdate(task);
+    }
     abortTask(id) {
         const task = this.tasks[id];
         if (!task)
             return;
         if (['COMPLETED', 'FAILED', 'ABORTED'].includes(task.status))
             return;
-        // Close active attempt/phase?
         const attempt = this.getCurrentAttempt(task);
         if (attempt && attempt.state === 'OPEN') {
             attempt.verdict = 'INCOMPLETE';
@@ -526,8 +492,40 @@ class TaskManager {
     }
     clearAllTasks() {
         this.tasks = {};
+        const baseDir = this.getStoragePath();
+        if (fs.existsSync(baseDir)) {
+            const taskDirs = fs.readdirSync(baseDir, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+            for (const taskId of taskDirs) {
+                try {
+                    const taskDir = path.join(baseDir, taskId);
+                    fs.rmSync(taskDir, { recursive: true, force: true });
+                }
+                catch (err) {
+                    console.error(`[TaskManager] Failed to delete task dir ${taskId}:`, err);
+                }
+            }
+        }
         this.saveTasks();
-        // Notify listeners? might need a clear event
+        this._onDidTaskUpdate.fire({ id: 'cleared', status: types_1.TaskState.CREATED });
+    }
+    deleteTask(id) {
+        if (this.tasks[id]) {
+            delete this.tasks[id];
+            // Delete from disk
+            const taskDir = path.join(this.getStoragePath(), id);
+            if (fs.existsSync(taskDir)) {
+                try {
+                    fs.rmSync(taskDir, { recursive: true, force: true });
+                }
+                catch (err) {
+                    console.error(`[TaskManager] Failed to delete task dir ${id}:`, err);
+                }
+            }
+            this.saveTasks();
+            this._onDidTaskUpdate.fire({ id: 'deleted', status: types_1.TaskState.CREATED });
+        }
     }
     async verifyTaskIntegrity(id) {
         const eventsPath = this.getTaskEventsPath(id);
@@ -537,14 +535,6 @@ class TaskManager {
         try {
             const content = fs.readFileSync(eventsPath, 'utf8');
             const result = (0, integrity_1.verifyContentIntegrity)(content);
-            if (result.driftDetails === 'Baseline established (No previous verification found)') {
-                // Emit initial baseline
-                this.emitEvent(id, {
-                    type: 'ReplayVerified',
-                    streamHash: result.hash,
-                    status: 'VERIFIED'
-                });
-            }
             return result;
         }
         catch (err) {

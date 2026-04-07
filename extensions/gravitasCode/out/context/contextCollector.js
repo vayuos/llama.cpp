@@ -1,64 +1,39 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContextCollector = void 0;
-const cp = __importStar(require("child_process"));
-const symbolResolver_1 = require("./symbolResolver");
+const axios_1 = __importDefault(require("axios"));
 class ContextCollector {
-    constructor() {
-        this.resolver = new symbolResolver_1.SymbolResolver();
-    }
-    async init() {
-        await this.resolver.init();
-    }
-    async search(query, config) {
-        return new Promise((resolve, reject) => {
-            const root = config.codebaseRoot;
-            if (!root)
-                return resolve([]);
-            cp.exec(`rg -l "${query}" ${root}`, (err, stdout) => {
-                if (err && err.code !== 1)
-                    return reject(err);
-                if (!stdout)
-                    return resolve([]);
-                resolve(stdout.split('\n').filter(f => f.trim() !== '').slice(0, 5));
-            });
-        });
-    }
-    async getContextForSymbol(file, symbol) {
-        return this.resolver.resolve(file, symbol);
+    async retrieve(query, config) {
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        if (!config.vayuforge || !config.vayuforge.ragEndpoint) {
+            logger.debug('system', 'ContextCollector: RAG endpoint not configured, skipping retrieval.');
+            return '';
+        }
+        logger.debug('system', `ContextCollector: Attempting RAG retrieval for query: "${query.substring(0, 50)}..." at ${config.vayuforge.ragEndpoint}`);
+        try {
+            const response = await axios_1.default.post(config.vayuforge.ragEndpoint, {
+                query: query
+            }, { timeout: 10000 });
+            if (response.data && response.data.context) {
+                logger.debug('system', `ContextCollector: Retrieved ${response.data.context.length} chars (Standard Format)`);
+                return response.data.context;
+            }
+            else if (Array.isArray(response.data)) {
+                // Handle Continue.dev adapter format as fallback
+                const sources = response.data.map((item) => item.name).join(', ');
+                logger.debug('system', `ContextCollector: Detected Continue.dev format. Sources: [${sources}]`);
+                return response.data.map((item) => `Source: ${item.name}\n${item.content}`).join('\n\n');
+            }
+            logger.warn('system', 'ContextCollector: RAG response was empty or malformed.');
+            return '';
+        }
+        catch (error) {
+            logger.error('system', `ContextCollector: VayuForge RAG error: ${error.message}`);
+            return '';
+        }
     }
 }
 exports.ContextCollector = ContextCollector;

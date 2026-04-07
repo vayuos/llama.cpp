@@ -40,6 +40,26 @@ export class UnifiedProcessManager {
         return require('../core/logger').CentralLogger.getInstance();
     }
 
+    private getBinaryPath(config: GravitasConfig, modelConfig: any): string {
+        const monorepoBin = '/home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/llama-server';
+        
+        // Priority 1: Specifically configured path in settings
+        if (modelConfig.binPath?.trim()) return modelConfig.binPath.trim();
+        
+        // Priority 2: Global extension setting
+        if ((config as any).llamaBinPath) return (config as any).llamaBinPath;
+
+        // Priority 3: Check if llama-server is in the current directory or build folder relative to extension
+        const localBuild = path.join(__dirname, '..', '..', '..', 'build', 'bin', 'llama-server');
+        if (fs.existsSync(localBuild)) return localBuild;
+
+        // Priority 4: Hardcoded VyuOS/VyuForge monorepo path
+        if (fs.existsSync(monorepoBin)) return monorepoBin;
+
+        // Priority 5: System PATH
+        return 'llama-server';
+    }
+
     public async startCoder(config: GravitasConfig): Promise<boolean> {
         this.getLogger().debug('system', `UnifiedProcessManager: Requested startCoder. Mode: ${config.connection.mode}`);
         if (config.connection.mode === 'remote') {
@@ -48,8 +68,7 @@ export class UnifiedProcessManager {
             return true;
         }
         const c = config.coder as any;
-        const monorepoBin = '/home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/llama-server';
-        const binPath = c.binPath?.trim() ? c.binPath : (config as any).llamaBinPath || monorepoBin;
+        const binPath = this.getBinaryPath(config, c);
         return this.getCoder().start(binPath, c, []);
     }
 
@@ -61,8 +80,7 @@ export class UnifiedProcessManager {
             return true;
         }
         const r = config.reviewer as any;
-        const monorepoBin = '/home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/llama-server';
-        const binPath = r.binPath?.trim() ? r.binPath : (config as any).llamaBinPath || monorepoBin;
+        const binPath = this.getBinaryPath(config, r);
         return this.getReviewer().start(binPath, r, []);
     }
 

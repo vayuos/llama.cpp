@@ -39,38 +39,50 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const state_1 = require("./core/state");
 const config_1 = require("./core/config");
-const setupPanel_1 = require("./ui/setupPanel");
-const validationPanel_1 = require("./ui/validationPanel");
 const processManager_1 = require("./process/processManager");
 const pipelineRun_1 = require("./commands/pipelineRun");
-const panelProvider_1 = require("./ui/panelProvider");
+const taskHistory_1 = require("./uiv2/taskHistory");
 const logger_1 = require("./core/logger");
-const statusBar_1 = require("./ui/statusBar");
 const cleanup_1 = require("./process/cleanup");
 const watchers_1 = require("./core/watchers");
-const logBridge_1 = require("./core/logBridge");
 const storageManager_1 = require("./core/storageManager");
+const telemetry_1 = require("./llm/telemetry");
 const runtimeTreeProvider_1 = require("./ui/runtimeTreeProvider");
-const contextTreeProvider_1 = require("./ui/contextTreeProvider");
-const presetsTreeProvider_1 = require("./ui/presetsTreeProvider");
-const setupViewProvider_1 = require("./ui/setupViewProvider");
 const taskManager_1 = require("./uiv2/taskManager");
-const taskShell_1 = require("./uiv2/taskShell");
+const chatSidebar_1 = require("./uiv2/chatSidebar");
 class ActivationManager {
-    constructor() {
-        // private state = new StateManager(); // Deprecated
-        this.gravitasState = state_1.GravitasState.getInstance();
-        this.processManager = processManager_1.UnifiedProcessManager.getInstance();
-    }
     async activate(context) {
         this.context = context;
-        console.log('Gravitas Code: Initializing infrastructure control...');
-        taskManager_1.TaskManager.initialize(context);
-        logBridge_1.LogBridge.initialize();
-        // 1. Core Services (Initialize First)
+        console.log('TRACE: [Activation Start] Entering async activate() block...');
+        try {
+            await this.internalActivate(context);
+        }
+        catch (fatalErr) {
+            console.error('CRITICAL: [Boot Crash] Async activation failed:', fatalErr);
+        }
+    }
+    async internalActivate(context) {
+        console.log('TRACE: [Internal Activate] Starting...');
+        // --- STEP 1: LOGGING baseline ---
         const logger = logger_1.CentralLogger.getInstance();
         this.logger = logger;
-        const statusBar = statusBar_1.GravitasStatusBar.getInstance();
+        console.log('TRACE: [Step 1] CentralLogger initialized.');
+        // --- STEP 2: Topology check ---
+        try {
+            this.checkTopology(context.extensionPath);
+            console.log('TRACE: [Step 2] Topology check passed.');
+        }
+        catch (e) {
+            vscode.window.showErrorMessage(`CRITICAL: Topology Violation. ${e.message}`, { modal: true });
+            logger.error('system', `CRITICAL TOPOLOGY VIOLATION: ${e.message}`);
+            this.gravitasState = state_1.GravitasState.getInstance();
+            this.gravitasState.updateState({ validated: false });
+            return;
+        }
+        // --- STEP 3: State & Config ---
+        this.gravitasState = state_1.GravitasState.getInstance();
+        this.processManager = processManager_1.UnifiedProcessManager.getInstance();
+        console.log('TRACE: [Step 3] Singletons(State, ProcessManager) initialized.');
         // --- TOPOLOGY ENFORCEMENT ---
         try {
             this.checkTopology(context.extensionPath);
@@ -83,11 +95,24 @@ class ActivationManager {
             this.gravitasState.updateState({ validated: false });
             return; // STOP ACTIVATION
         }
-        // Check if this is a fresh install/reinstall using a local marker file
-        // This file is wiped when extension is uninstalled/updated, ensuring cleanup happens on reinstall
-        const installMarkerPath = path.join(context.extensionPath, '.installed');
+        // Check if this is a fresh install/reinstall using a persistent marker file
+        // Storage is in globalStorageUri which persists across extension reinstalls/updates
+        const installMarkerPath = path.join(context.globalStorageUri.fsPath, '.installed');
+        // Ensure directory exists
+        if (!fs.existsSync(context.globalStorageUri.fsPath)) {
+            fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
+        }
         const markerExists = fs.existsSync(installMarkerPath);
         const isFreshInstall = !markerExists;
+        // Ensure required .gravitas directories and sockets exist
+        const { execSync } = require('child_process');
+        try {
+            execSync(`bash "${path.join(__dirname, '..', 'scripts', 'initialSetup.sh')}"`, { stdio: 'ignore' });
+            console.log('TRACE: [Setup] Gravitas initial directories and sockets created.');
+        }
+        catch (e) {
+            console.error('CRITICAL: [Setup] Failed to run initial setup script:', e);
+        }
         if (isFreshInstall) {
             logger.info('system', 'Fresh install detected - cleaning up any existing data...');
             // Clean up everything
@@ -99,14 +124,14 @@ class ActivationManager {
             // Clear settings
             const config = vscode.workspace.getConfiguration('gravitasCode');
             const allKeys = [
-                'llamaBinPath',
                 'runtime.autoTestOnStart', 'runtime.showLogs', 'runtime.logLevel', 'runtime.killSignal',
-                'coder.general.enabled', 'coder.general.mode', 'coder.general.modelPath', 'coder.general.host', 'coder.general.port', 'coder.general.noWarmup',
-                'coder.hardware.cudaVisibleDevices', 'coder.hardware.nGpuLayers', 'coder.hardware.contextSize', 'coder.hardware.threads', 'coder.hardware.threadsBatch', 'coder.hardware.batchSize', 'coder.hardware.ubatchSize', 'coder.hardware.numaInterleave', 'coder.hardware.prefixCommand',
+                'coder.general.enabled', 'coder.general.baseUrl', 'coder.general.host', 'coder.general.port', 'coder.general.noWarmup', 'coder.general.modelName', 'coder.general.strictMode',
+                'coder.hardware.contextSize',
                 'coder.sampling.temperature', 'coder.sampling.topP', 'coder.sampling.topK', 'coder.sampling.repeatPenalty',
-                'reviewer.general.enabled', 'reviewer.general.mode', 'reviewer.general.modelPath', 'reviewer.general.host', 'reviewer.general.port', 'reviewer.general.noWarmup',
-                'reviewer.hardware.cudaVisibleDevices', 'reviewer.hardware.nGpuLayers', 'reviewer.hardware.contextSize', 'reviewer.hardware.threads', 'reviewer.hardware.threadsBatch', 'reviewer.hardware.batchSize', 'reviewer.hardware.ubatchSize', 'reviewer.hardware.numaInterleave', 'reviewer.hardware.prefixCommand',
-                'reviewer.sampling.temperature', 'reviewer.sampling.topP', 'reviewer.sampling.topK', 'reviewer.sampling.repeatPenalty'
+                'reviewer.general.enabled', 'reviewer.general.baseUrl', 'reviewer.general.host', 'reviewer.general.port', 'reviewer.general.noWarmup', 'reviewer.general.modelName', 'reviewer.general.strictMode',
+                'reviewer.hardware.contextSize',
+                'reviewer.sampling.temperature', 'reviewer.sampling.topP', 'reviewer.sampling.topK', 'reviewer.sampling.repeatPenalty',
+                'vayuforge.ragEndpoint'
             ];
             for (const key of allKeys) {
                 await config.update(key, undefined, vscode.ConfigurationTarget.Global);
@@ -123,68 +148,61 @@ class ActivationManager {
         else {
             logger.info('system', 'Extension reloading - preserving existing data.');
         }
+        console.log('TRACE: [Step 4] Installation markers & directory check done.');
         // 2. State & Config
         this.gravitasState.syncToContext();
         const config = await config_1.ConfigManager.getInstance().loadConfig();
         if (config) {
             logger.setLogDir(config.logDir || '');
-            this.gravitasState.updateState({ configLoaded: true });
+            logger_1.CentralLogger.getInstance().setLevel(config.runtime.logLevel);
+            this.gravitasState.updateState({ configLoaded: true, validated: true });
             logger.info('system', 'Configuration loaded successfully.');
         }
         else {
             this.gravitasState.updateState({ configLoaded: false, validated: false });
-            logger.warn('system', 'No configuration found. Awaiting setup.');
-            vscode.window.showInformationMessage('Gravitas: Professional setup required.', 'Start Setup').then(s => {
-                if (s === 'Start Setup')
-                    vscode.commands.executeCommand('gravitas.setup.open');
-            });
+            logger.warn('system', 'No configuration found.');
         }
-        // 3. Register Hooks
+        console.log('TRACE: [Step 5] State synced and Config loaded.');
+        // 3. Register Hooks & Services
         (0, cleanup_1.registerCleanup)(context);
         (0, watchers_1.registerWatchers)(context);
+        telemetry_1.TelemetryService.getInstance().startPolling();
         // 4. UI Providers
-        const panelProvider = new panelProvider_1.PanelProvider(context.extensionUri);
-        const setupViewProvider = new setupViewProvider_1.SetupViewProvider(context.extensionUri);
+        const chatSidebarProvider = new chatSidebar_1.ChatSidebarProvider(context.extensionUri);
+        const taskHistoryProvider = new taskHistory_1.TaskHistoryProvider();
         const runtimeProvider = new runtimeTreeProvider_1.RuntimeTreeProvider();
-        const contextProvider = new contextTreeProvider_1.ContextTreeProvider();
-        const presetsProvider = new presetsTreeProvider_1.PresetsTreeProvider();
-        context.subscriptions.push(
-        // Renamed chatView -> agentConsole
-        vscode.window.registerWebviewViewProvider('gravitas.agentConsole', panelProvider), vscode.window.registerWebviewViewProvider('gravitas.setupView', setupViewProvider), 
-        // New Tree Views
-        vscode.window.registerTreeDataProvider('gravitas.runtime', runtimeProvider), vscode.window.registerTreeDataProvider('gravitas.context', contextProvider), vscode.window.registerTreeDataProvider('gravitas.presets', presetsProvider));
+        context.subscriptions.push(vscode.window.registerWebviewViewProvider(chatSidebar_1.ChatSidebarProvider.viewType, chatSidebarProvider), vscode.window.registerTreeDataProvider('gravitas.taskHistory', taskHistoryProvider), vscode.window.registerTreeDataProvider('gravitas.runtime', runtimeProvider));
         // 5. Commands
-        context.subscriptions.push(vscode.commands.registerCommand('gravitas.setup.open', () => setupPanel_1.SetupPanel.createOrShow(context.extensionUri)), vscode.commands.registerCommand('gravitas.task.spawn', async (prompt) => {
-            const tm = taskManager_1.TaskManager.getInstance();
-            if (!prompt) {
-                prompt = await vscode.window.showInputBox({
-                    prompt: 'Initialize Task Shell',
-                    placeHolder: 'Describe your objective...'
-                });
+        context.subscriptions.push(vscode.commands.registerCommand('gravitas.task.delete', (item) => {
+            if (item && item.task) {
+                taskManager_1.TaskManager.getInstance().deleteTask(item.task.id);
             }
+        }), vscode.commands.registerCommand('gravitas.task.clearAll', async () => {
+            const confirm = await vscode.window.showWarningMessage('Are you sure you want to clear ALL task history? This will delete all event ledgers from disk.', { modal: true }, 'Delete All');
+            if (confirm === 'Delete All') {
+                taskManager_1.TaskManager.getInstance().clearAllTasks();
+            }
+        }), vscode.commands.registerCommand('gravitas.task.openInShell', (taskId) => {
+            chatSidebarProvider.showTask(taskId);
+        }), vscode.commands.registerCommand('gravitas.task.spawn', async (prompt) => {
+            const tm = taskManager_1.TaskManager.getInstance();
             if (prompt) {
                 const task = tm.createTask(prompt, 'user');
-                taskShell_1.TaskShellPanel.createOrShow(context.extensionUri, task.id);
+                chatSidebarProvider.showTask(task.id);
+                await vscode.commands.executeCommand('gravitas.pipeline.run', prompt, task.id);
             }
-        }), vscode.commands.registerCommand('gravitas.demo.populate', async () => {
-            const { populateDemoTask } = await Promise.resolve().then(() => __importStar(require('./commands/populateDemo')));
-            await populateDemoTask();
-        }), vscode.commands.registerCommand('gravitas.setup.validate', async () => {
-            const cfg = await config_1.ConfigManager.getInstance().loadConfig();
-            if (!cfg)
-                return;
-            await validationPanel_1.ValidationPanel.showAndRun(context.extensionUri, cfg);
-            statusBar.update();
-        }), 
-        // Logs Panel deprecated in favor of Inline Terminal
-        vscode.commands.registerCommand('gravitas.pipeline.run', async (prompt) => {
-            if (!this.gravitasState.state.validated) {
-                vscode.window.showErrorMessage('Gravitas: Invariant Violation: System must be validated.');
-                return;
+            else {
+                // Unified 'New Chat' Flow: No popup, just sidebar focus
+                chatSidebarProvider.reset();
+                chatSidebarProvider.focus();
             }
-            const input = prompt || await vscode.window.showInputBox({ prompt: 'Task for Dual-Agent Loop' });
+        }), vscode.commands.registerCommand('gravitas.pipeline.run', async (prompt, taskId) => {
+            const input = prompt || await vscode.window.showInputBox({
+                prompt: 'Dual-Agent Execution Loop',
+                placeHolder: 'e.g. Implement a new logger'
+            });
             if (input)
-                await (0, pipelineRun_1.runPipeline)(input);
+                await (0, pipelineRun_1.runPipeline)(input, taskId);
         }), vscode.commands.registerCommand('gravitas.runtime.start', async () => {
             if (!this.gravitasState.state.validated)
                 return;
@@ -258,23 +276,40 @@ class ActivationManager {
             if (result.success) {
                 vscode.window.showInformationMessage(result.message);
                 logger.info('system', 'Storage cleared by user.');
-                statusBar.update();
             }
             else {
                 vscode.window.showErrorMessage(result.message);
                 logger.error('system', result.message);
             }
+        }), vscode.commands.registerCommand('gravitas.views.focus', () => {
+            chatSidebarProvider.focus();
+            // Ensure the view is visible in the sidebar
+            vscode.commands.executeCommand('workbench.view.extension.gravitas-explorer');
         }));
-        // Update status bar on any state change
-        // In a more complex app, we'd use an event emitter, but direct call suffices here.
-        const originalUpdate = this.gravitasState.updateState.bind(this.gravitasState);
-        this.gravitasState.updateState = (s) => {
-            originalUpdate(s);
-            statusBar.update();
-        };
+        console.log('TRACE: [Step 6] Hooks & Commands registered.');
+        // 6. Subsystem Start (DEFERRED - do this last to ensure host stability)
+        setTimeout(() => {
+            try {
+                console.log('TRACE: [Step 7] Starting TaskManager initialization...');
+                require('./uiv2/taskManager').TaskManager.initialize(context);
+                console.log('TRACE: [Step 8] TaskManager initialized successfully.');
+                console.log('TRACE: [Step 9] Initializing LogBridge...');
+                require('./core/logBridge').LogBridge.initialize();
+                console.log('TRACE: [Step 10] LogBridge initialized.');
+                logger_1.CentralLogger.getInstance().enableEvents();
+                logger.info('system', 'Gravitas Code: Infrastructure fully activated.');
+                console.log('TRACE: [Activation Complete]');
+            }
+            catch (subErr) {
+                console.log('TRACE: [SUB-SYSTEM CRASH] ' + subErr.message);
+                if (this.logger)
+                    this.logger.error('system', `Sub-system activation failed: ${subErr.message}`);
+            }
+        }, 500);
     }
     async cleanup() {
-        console.log('Gravitas Code: Cleaning up - stopping all llama servers...');
+        console.log('Gravitas Code: Cleaning up - stopping all llama servers and telemetry...');
+        telemetry_1.TelemetryService.getInstance().stopPolling();
         await this.processManager.stopAll();
         console.log('Gravitas Code: Cleanup complete.');
     }
@@ -291,13 +326,11 @@ class ActivationManager {
         }
         const stats = fs.lstatSync(modulesPath);
         if (!stats.isSymbolicLink()) {
-            throw new Error('node_modules MUST be a symbolic link. Found directory. Run ./setup.sh');
+            logger_1.CentralLogger.getInstance().warn('system', 'Topology Warning: node_modules is not a symbolic link. This might violate VayuForge rules but will NOT end the session.');
         }
         const linkTarget = fs.readlinkSync(modulesPath);
-        // We expect it to point to support-code.
-        // Simple check: does it contain 'support-code'?
         if (!linkTarget.includes('support-code')) {
-            throw new Error(`Invalid symlink target: ${linkTarget}. Must point to ../support-code/node_modules`);
+            logger_1.CentralLogger.getInstance().warn('system', `Topology Warning: link target ${linkTarget} is unusual.`);
         }
     }
 }

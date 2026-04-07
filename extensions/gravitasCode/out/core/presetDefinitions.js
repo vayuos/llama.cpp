@@ -4,46 +4,44 @@ exports.GRAVITAS_PRESETS = void 0;
 exports.GRAVITAS_PRESETS = {
     'default': {
         label: 'Default (Mixed)',
-        description: 'Standard configuration',
+        description: 'Standard configuration for Gravitas',
         config: {
-            'coder.general.mode': 'gpu',
             'coder.hardware.contextSize': 8192,
-            'coder.hardware.nGpuLayers': 36,
-            'reviewer.general.mode': 'cpu',
-            'reviewer.hardware.contextSize': 8192
+            'reviewer.hardware.contextSize': 8192,
+            'coder.sampling.temperature': 0.2,
+            'reviewer.sampling.temperature': 0.0
         }
     },
     'high_accuracy': {
         label: 'High Accuracy',
-        description: 'Max context, slow sampler',
+        description: 'Deterministic sampling for Reviewer',
         config: {
-            'coder.general.mode': 'gpu',
             'coder.hardware.contextSize': 8192,
             'coder.sampling.temperature': 0.2,
-            'reviewer.general.mode': 'cpu',
+            'coder.sampling.topP': 0.9,
             'reviewer.hardware.contextSize': 8192,
-            'reviewer.sampling.temperature': 0.1
+            'reviewer.sampling.temperature': 0.0,
+            'reviewer.sampling.topK': 1
         }
     },
     'fast_draft': {
         label: 'Fast Draft',
-        description: 'Small context, fast sampler',
+        description: 'Optimized context for rapid iteration',
         config: {
-            'coder.general.mode': 'gpu',
-            'coder.hardware.contextSize': 1024,
-            'coder.sampling.temperature': 0.8,
-            'reviewer.general.mode': 'cpu',
-            'reviewer.hardware.contextSize': 1024
+            'coder.hardware.contextSize': 8192,
+            'coder.sampling.temperature': 0.3,
+            'reviewer.hardware.contextSize': 8192,
+            'reviewer.sampling.temperature': 0.0
         }
     },
     'safe_mode': {
         label: 'Safe Mode',
-        description: 'Force CPU for all agents',
+        description: 'Standard context with zero temperature',
         config: {
-            'coder.general.mode': 'cpu',
-            'coder.hardware.nGpuLayers': 0,
-            'reviewer.general.mode': 'cpu',
-            'reviewer.hardware.nGpuLayers': 0
+            'coder.hardware.contextSize': 8192,
+            'coder.sampling.temperature': 0.0,
+            'reviewer.hardware.contextSize': 8192,
+            'reviewer.sampling.temperature': 0.0
         }
     }
 };

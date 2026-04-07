@@ -37,60 +37,59 @@ exports.RuntimeTreeProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const processManager_1 = require("../process/processManager");
 const config_1 = require("../core/config");
+const telemetry_1 = require("../llm/telemetry");
 class RuntimeTreeProvider {
     constructor() {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
         this.config = null;
         this.refresh();
-        // Poll status every 2 seconds
-        setInterval(() => this.refresh(), 2000);
+        // Poll status every 2.5 seconds for a "live" feel
+        setInterval(() => this.refresh(), 2500);
     }
     refresh() {
-        config_1.ConfigManager.getInstance().loadConfig().then(c => {
-            this.config = c;
+        const mgr = config_1.ConfigManager.getInstance();
+        // Prefer cached config for status checks if available
+        const cached = mgr.getCachedConfig();
+        if (cached) {
+            this.config = cached;
             this._onDidChangeTreeData.fire();
-        });
+        }
+        else {
+            mgr.loadConfig().then(c => {
+                this.config = c;
+                this._onDidChangeTreeData.fire();
+            });
+        }
     }
     getTreeItem(element) {
         return element;
     }
-    getChildren(element) {
+    async getChildren(element) {
         if (!element) {
-            // Root items: Coder and Reviewer
-            return Promise.resolve([
+            return [
                 new RuntimeItem('Coder Model', 'coder', vscode.TreeItemCollapsibleState.Expanded),
                 new RuntimeItem('Reviewer Model', 'reviewer', vscode.TreeItemCollapsibleState.Expanded)
-            ]);
+            ];
         }
         else {
-            // Children: Status details
             const pm = processManager_1.UnifiedProcessManager.getInstance();
             const type = element.modelType;
             if (!type || !this.config)
-                return Promise.resolve([]);
-            // We need a way to check if running. For now, we'll implement a basic check.
-            // Since LlamaProcess doesn't expose public PID/State cleanly yet, we might need to update it.
-            // For this iteration, we will assume UnifiedProcessManager can give us basic status text or we infer it.
-            // Let's add a `getStatus(type)` method to UnifiedProcessManager ideally, but for now we'll stub it or use pings if we had them.
-            // A better way for V1 is strict config read + generic status.
-            // Since we can't easily get live PID without modifying LlamaProcess, we will list config details for now 
-            // and assume "Unknown" status until we wire up state tracking deeper.
-            // Actually, let's extend this later. For now simple properties.
-            const cfg = type === 'coder' ? this.config.coder : this.config.reviewer;
-            const status = this.getStatus(type);
+                return [];
+            const status = await pm.getLiveStatus(type, this.config);
             const pid = status.pid ? status.pid.toString() : 'N/A';
-            const telemetry = status.telemetry || 'Idle';
-            const isRunning = !!status.pid;
-            // Simple status string logic
-            const statusLabel = isRunning ? 'Running' : 'Stopped';
-            return Promise.resolve([
+            const isRunning = status.running;
+            const statusLabel = isRunning ? (status.external ? 'Online (Remote)' : 'Online (Local)') : 'Offline';
+            const telemetry = telemetry_1.TelemetryService.getInstance().getTelemetry(type);
+            return [
                 new RuntimeItem(`Status: ${statusLabel}`, undefined, vscode.TreeItemCollapsibleState.None, isRunning ? 'running' : 'stopped'),
-                new RuntimeItem(`Port: ${cfg.port}`, undefined, vscode.TreeItemCollapsibleState.None, 'port'),
                 new RuntimeItem(`PID: ${pid}`, undefined, vscode.TreeItemCollapsibleState.None, 'pid'),
-                new RuntimeItem(`Metrics: ${telemetry}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
-                new RuntimeItem(`Mode: ${cfg.mode.toUpperCase()}`, undefined, vscode.TreeItemCollapsibleState.None, 'mode')
-            ]);
+                new RuntimeItem(`VRAM: ${telemetry.vram}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
+                new RuntimeItem(`Perf: ${telemetry.tps}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
+                new RuntimeItem(`Usage: ${telemetry.slots}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics'),
+                new RuntimeItem(`Ping: ${telemetry.latency}`, undefined, vscode.TreeItemCollapsibleState.None, 'metrics')
+            ];
         }
     }
     getStatus(type) {

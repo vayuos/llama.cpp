@@ -47,14 +47,13 @@ class TaskShellPanel {
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
         this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
         this._setWebviewMessageListener(this._panel.webview);
-        // Listen for task updates (legacy, will be replaced by event-driven incrementally)
+        // 1. Task State Stream: Synchronizes full task snapshots when the reducer fires
         taskManager_1.TaskManager.getInstance().onDidTaskUpdate((task) => {
             if (task.id === this._currentTaskId) {
-                // We could send full state, but event-driven is preferred.
-                // this._panel.webview.postMessage({ type: 'updateTask', task });
+                this._panel.webview.postMessage({ type: 'updateTask', task });
             }
         });
-        // Listen for live events (Gap 5: Incremental sync)
+        // 2. Incremental Event Stream: Live sync of telemetry (Thoughts, Tools, Artifacts)
         taskManager_1.TaskManager.getInstance().onDidEmitEvent(({ taskId, event }) => {
             if (taskId === this._currentTaskId || !this._currentTaskId) {
                 this._panel.webview.postMessage({ type: 'event', taskId, event });

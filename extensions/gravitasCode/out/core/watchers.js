@@ -36,15 +36,35 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWatchers = registerWatchers;
 const vscode = __importStar(require("vscode"));
 const state_1 = require("./state");
+const config_1 = require("./config");
 const logger_1 = require("./logger");
 function registerWatchers(context) {
     const logger = logger_1.CentralLogger.getInstance();
     const state = state_1.GravitasState.getInstance();
     // Watch for VS Code configuration changes (if any)
-    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('gravitas')) {
-            logger.warn('system', 'Configuration change detected. Invalidating validation.');
-            state.updateState({ validated: false });
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
+        if (e.affectsConfiguration('gravitasCode')) {
+            logger.debug('system', 'watchers: VS Code configuration "gravitasCode" changed.');
+            if (e.affectsConfiguration('gravitasCode.runtime.logLevel')) {
+                const config = await config_1.ConfigManager.getInstance().loadConfig();
+                if (config) {
+                    logger.setLevel(config.runtime.logLevel);
+                    logger.info('system', `watchers: Log level updated to: ${config.runtime.logLevel}`);
+                }
+            }
+            const criticalKeys = [
+                'gravitasCode.coder.general.port',
+                'gravitasCode.coder.general.host',
+                'gravitasCode.reviewer.general.port',
+                'gravitasCode.reviewer.general.host',
+                'gravitasCode.coder.general.modelPath',
+                'gravitasCode.reviewer.general.modelPath'
+            ];
+            const changedCritical = criticalKeys.filter(k => e.affectsConfiguration(k));
+            if (changedCritical.length > 0) {
+                logger.warn('system', `watchers: Critical changes detected in: ${changedCritical.join(', ')}. Invalidating validation.`);
+                state.updateState({ validated: false });
+            }
         }
     }));
 }

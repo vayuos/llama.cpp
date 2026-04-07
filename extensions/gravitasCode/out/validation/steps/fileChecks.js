@@ -42,7 +42,7 @@ class BinaryCheckStep {
     }
     async execute(config) {
         const rawPath = config.llamaBinPath || '(empty)';
-        const resolvedPath = (0, pathUtils_1.resolveBinaryPath)(config.llamaBinPath);
+        const resolvedPath = (0, pathUtils_1.resolveBinaryPath)(config.llamaBinPath || '');
         if (fs.existsSync(resolvedPath)) {
             const stat = fs.statSync(resolvedPath);
             if (stat.isDirectory()) {
@@ -61,8 +61,8 @@ class ModelCheckStep {
     async execute(config) {
         const rawCoder = config.coder.modelPath || '(empty)';
         const rawReviewer = config.reviewer.modelPath || '(empty)';
-        const coderPath = (0, pathUtils_1.resolveTilde)(config.coder.modelPath);
-        const reviewerPath = (0, pathUtils_1.resolveTilde)(config.reviewer.modelPath);
+        const coderPath = (0, pathUtils_1.resolveTilde)(config.coder.modelPath || '');
+        const reviewerPath = (0, pathUtils_1.resolveTilde)(config.reviewer.modelPath || '');
         if (!fs.existsSync(coderPath)) {
             return { success: false, message: `Coder model not found. User setting: "${rawCoder}", Attempted absolute path: "${coderPath}"` };
         }

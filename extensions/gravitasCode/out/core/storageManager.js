@@ -38,6 +38,8 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
 const state_1 = require("./state");
+const logger_1 = require("./logger");
+const taskManager_1 = require("../uiv2/taskManager");
 class StorageManager {
     constructor() { }
     static getInstance() {
@@ -47,26 +49,33 @@ class StorageManager {
         return StorageManager.instance;
     }
     /**
-     * Clear all log files in ~/.gravitas/logs/
+     * Clear all log files in current log directory
      */
     clearLogs() {
         try {
+            const logger = logger_1.CentralLogger.getInstance();
             const logDir = path.join(os.homedir(), '.gravitas', 'logs');
-            if (!fs.existsSync(logDir)) {
-                return { success: true, message: 'No logs directory found (already clean).' };
-            }
-            const files = fs.readdirSync(logDir);
-            let deletedCount = 0;
-            for (const file of files) {
-                const filePath = path.join(logDir, file);
-                if (fs.statSync(filePath).isFile()) {
-                    fs.unlinkSync(filePath);
-                    deletedCount++;
+            const wipeDir = (dir) => {
+                if (!fs.existsSync(dir)) {
+                    logger.debug('system', `StorageManager: Directory ${dir} does not exist, skipping wipe.`);
+                    return 0;
                 }
-            }
+                const files = fs.readdirSync(dir);
+                let count = 0;
+                for (const file of files) {
+                    const filePath = path.join(dir, file);
+                    if (fs.statSync(filePath).isFile()) {
+                        fs.unlinkSync(filePath);
+                        logger.debug('system', `StorageManager: Deleted file ${filePath}`);
+                        count++;
+                    }
+                }
+                return count;
+            };
+            const deletedLegacy = wipeDir(path.join(os.homedir(), '.gravitas', 'logs'));
             return {
                 success: true,
-                message: `Cleared ${deletedCount} log file(s) from ${logDir}`
+                message: `Cleared ${deletedLegacy} legacy log file(s).`
             };
         }
         catch (error) {
@@ -77,7 +86,7 @@ class StorageManager {
         }
     }
     /**
-     * Reset validation state
+     * Reset validation state and global state
      */
     resetValidation() {
         try {
@@ -88,39 +97,40 @@ class StorageManager {
                 coderStatus: 'stopped',
                 reviewerStatus: 'stopped'
             });
+            logger_1.CentralLogger.getInstance().info('system', 'StorageManager: Validation state and hardware status reset.');
             return {
                 success: true,
-                message: 'Validation state reset successfully.'
+                message: 'State reset successfully.'
             };
         }
         catch (error) {
             return {
                 success: false,
-                message: `Failed to reset validation: ${error}`
+                message: `Failed to reset state: ${error}`
             };
         }
     }
     /**
-     * Clear everything: logs + validation state
+     * Clear everything: logs + validation state + Task Ledgers
      */
     clearAll() {
-        const logsResult = this.clearLogs();
-        const validationResult = this.resetValidation();
-        if (logsResult.success && validationResult.success) {
+        try {
+            // 1. Clear System Logs
+            const logsResult = this.clearLogs();
+            // 2. Clear Validation State
+            const validationResult = this.resetValidation();
+            // 3. Clear Task Ledgers (The "Dummy Chats")
+            taskManager_1.TaskManager.getInstance().clearAllTasks();
+            logger_1.CentralLogger.getInstance().info('system', 'StorageManager: Deep Wipe (logs, state, tasks) completed.');
             return {
                 success: true,
-                message: `Storage cleared successfully.\n${logsResult.message}\n${validationResult.message}`
+                message: `ABSOLUTE WIPE COMPLETE.\n- Logs: ${logsResult.message}\n- State: ${validationResult.message}\n- Tasks: All ledgers and task history deleted physically.`
             };
         }
-        else {
-            const errors = [];
-            if (!logsResult.success)
-                errors.push(logsResult.message);
-            if (!validationResult.success)
-                errors.push(validationResult.message);
+        catch (error) {
             return {
                 success: false,
-                message: `Partial failure:\n${errors.join('\n')}`
+                message: `Deep Wipe failed: ${error}`
             };
         }
     }

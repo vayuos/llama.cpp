@@ -26,6 +26,7 @@
         "package.json",
         "README.md",
         "setup.sh",
+        "scripts",
         ".gravitas",
         "schemas"
     ],

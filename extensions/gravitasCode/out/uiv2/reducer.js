@@ -35,10 +35,13 @@ function applyEvent(task, event) {
         case 'TaskCreated':
             task.createdAt = timestamp;
             task.origin = event.origin;
-            task.command = event.command;
+            task.command = event.command || 'unknown';
             break;
         case 'TaskStateChanged':
             task.status = event.newState;
+            break;
+        case 'TaskStatusEmitted':
+            task.operationalStatus = event.status; // Real-time feedback
             break;
         case 'AttemptStarted':
             task.attempts.push({

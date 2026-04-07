@@ -57,9 +57,20 @@ class EventValidator {
         return EventValidator.instance;
     }
     loadSchemas() {
-        const registryPath = path.join(__dirname, '..', 'schemas', 'events.json');
+        const possiblePaths = [
+            path.join(__dirname, '..', 'schemas', 'events.json'), // Production (dist/)
+            path.join(__dirname, '..', '..', 'schemas', 'events.json'), // Development (out/uiv2/)
+            path.join(__dirname, '..', '..', 'src', 'schemas', 'events.json'), // Source-relative
+        ];
+        let registryPath = '';
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                registryPath = p;
+                break;
+            }
+        }
         try {
-            if (fs.existsSync(registryPath)) {
+            if (registryPath) {
                 const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
                 for (const [key, schema] of Object.entries(registry)) {
                     this.schemas.set(key, schema);
@@ -67,7 +78,7 @@ class EventValidator {
                 }
             }
             else {
-                console.error('Event registry not found at:', registryPath);
+                console.error('Event registry not found. Checked:', possiblePaths);
             }
         }
         catch (err) {

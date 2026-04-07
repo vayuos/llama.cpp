@@ -2,9 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
+console.log('BOOT: [Bundle Evaluation Success] - Entering extension.ts');
 const activation_1 = require("./activation");
-const manager = new activation_1.ActivationManager();
+let manager;
 async function activate(context) {
+    manager = new activation_1.ActivationManager();
     await manager.activate(context);
 }
 async function deactivate() {

@@ -20,9 +20,12 @@ class LogBridge {
         }, null, this.disposables);
     }
     handleLogEntry(entry) {
-        // Forward relevant logs to the active shell
-        // We only care about user-facing logs or critical system logs
-        // For simplicity, we pipe everything formatted properly
+        // 🛡️ Loop Prevention: Only forward user-facing logs (coder, reviewer, validation)
+        // system and ui logs should stay in the Master Log/Output Channel to avoid infinite TaskManager loops.
+        const allowedSources = ['coder', 'reviewer'];
+        if (!allowedSources.includes(entry.source)) {
+            return;
+        }
         const timestamp = new Date(entry.timestamp).toLocaleTimeString();
         const line = `[${timestamp}] [${entry.source.toUpperCase()}] ${entry.message}\n`;
         // We need to know WHICH task to log to.

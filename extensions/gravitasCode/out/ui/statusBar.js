@@ -51,19 +51,14 @@ class GravitasStatusBar {
     update() {
         const state = state_1.GravitasState.getInstance().state;
         if (!state.configLoaded) {
-            this.item.text = "$(settings) Gravitas: Setup Needed";
+            this.item.text = "$(settings) Gravitas: No Config";
             this.item.color = new vscode.ThemeColor('errorForeground');
-            this.item.command = 'gravitas.setup.open';
-        }
-        else if (!state.validated) {
-            this.item.text = "$(shield) Gravitas: Not Validated";
-            this.item.color = "#ebcb8b"; // Warning yellow
-            this.item.command = 'gravitas.setup.validate';
+            this.item.command = undefined;
         }
         else {
             this.item.text = "$(check) Gravitas: Ready";
             this.item.color = "#a3be8c"; // Success green
-            this.item.command = 'gravitas.setup.open'; // Or logs
+            this.item.command = 'gravitas.pipeline.run';
         }
     }
 }

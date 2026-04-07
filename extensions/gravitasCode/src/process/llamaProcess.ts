@@ -215,50 +215,72 @@ export class LlamaProcess {
 
     private async pollTelemetry(config: any) {
         if (!this.process) return;
+        
         try {
-            // First run `nvidia-smi` to get VRAM
-            const smi = await new Promise<string>((resolve) => {
-                require('child_process').exec('nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader', (err: any, stdout: string) => resolve(stdout || ''));
-            });
+            // 1. GPU VRAM Monitoring
             let vramStr = 'CPU Mode';
             const mode = config.mode || 'cpu';
-            if (mode !== 'cpu' && smi && smi.trim() && !smi.includes('failed')) {
-                const lines = smi.trim().split('\n');
-                let deviceId = 0;
-                if (config.cudaVisibleDevices && config.cudaVisibleDevices.toString().trim() !== '') {
-                    deviceId = parseInt(config.cudaVisibleDevices.split(',')[0]);
-                }
-                
-                if (lines[deviceId]) {
-                    const [used, total] = lines[deviceId].split(',').map((s: string) => s.trim().split(' ')[0]);
-                    const pct = Math.round((parseInt(used)/parseInt(total))*100);
-                    vramStr = `VRAM: ${pct}% (${used}MB)`;
+            
+            if (mode !== 'cpu') {
+                try {
+                    const { execSync } = require('child_process');
+                    const smi = execSync('nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits', { encoding: 'utf8', timeout: 1000 });
+                    
+                    if (smi && smi.trim()) {
+                        const lines = smi.trim().split('\n');
+                        let deviceId = 0;
+                        if (config.cudaVisibleDevices && config.cudaVisibleDevices.toString().trim() !== '') {
+                            deviceId = parseInt(config.cudaVisibleDevices.split(',')[0]);
+                        }
+                        
+                        if (lines[deviceId]) {
+                            const [used, total] = lines[deviceId].split(',').map((s: string) => s.trim());
+                            const pct = Math.round((parseInt(used)/parseInt(total))*100);
+                            vramStr = `VRAM: ${pct}% (${used}MB)`;
+                        }
+                    }
+                } catch (smiErr) {
+                    vramStr = 'VRAM: N/A';
                 }
             }
 
-            // Now read /metrics from UDS to get TPS
-            const sockPath = path.join(os.homedir(), '.gravitas', 'sockets', `${this.type}.sock`);
+            // 2. Performance Metrics via Unix Domain Socket
+            const socketDir = path.join(os.homedir(), '.gravitas', 'sockets');
+            const sockPath = path.join(socketDir, `${this.type}.sock`);
+            
             if (fs.existsSync(sockPath)) {
-                // Inline to avoid circular imports if any, using native http
+                // Use the dedicated LlamaHttpClient for UDS communication
                 const { LlamaHttpClient } = require('../llm/llamaHttpClient');
                 const client = new LlamaHttpClient(`unix://${sockPath}`);
                 let tpsStr: string | null = null;
+                
                 try {
+                    // llama-server /metrics endpoint returns Prometheus formatting
                     const metrics = await client.get('/metrics');
                     const tpsMatch = metrics.match(/predicted_tokens_seconds\s+([0-9.]+)/);
-                    if (tpsMatch && parseFloat(tpsMatch[1]) > 0.1) {
+                    const kvMatch = metrics.match(/kv_cache_usage_ratio\s+([0-9.]+)/);
+                    
+                    if (tpsMatch && parseFloat(tpsMatch[1]) > 0.01) {
                         tpsStr = `TPS: ${parseFloat(tpsMatch[1]).toFixed(1)}`;
-                    } else if (parseFloat(tpsMatch?.[1] || "0") === 0) {
+                    } else {
                         tpsStr = 'Idle';
                     }
-                } catch(e) {}
+                    
+                    if (kvMatch) {
+                        const kvPct = Math.round(parseFloat(kvMatch[1]) * 100);
+                        tpsStr += ` | KV: ${kvPct}%`;
+                    }
+                } catch(e) {
+                    // If /metrics isn't ready yet, it's just 'Spawning...'
+                    tpsStr = 'Booting...';
+                }
                 
                 this.telemetryStr = `${vramStr}${tpsStr ? ' | ' + tpsStr : ''}`.trim();
             } else {
                  this.telemetryStr = vramStr;
             }
-        } catch(e) {
-            // Error silently ignored for telemetry ping
+        } catch(e: any) {
+            this.telemetryStr = 'Status: Error';
         }
     }
 }

@@ -55,7 +55,12 @@ class GravitasState {
         return { ...this._state };
     }
     updateState(newState) {
+        const logger = require('./logger').CentralLogger.getInstance();
+        const prev = { ...this._state };
         this._state = { ...this._state, ...newState };
+        // Detailed diff logging
+        const changes = Object.keys(newState).map(k => `${k}: ${prev[k]} -> ${newState[k]}`);
+        logger.debug('system', `GravitasState: Updated. Changes: [${changes.join(', ')}]`);
         this.syncToContext();
     }
     syncToContext() {

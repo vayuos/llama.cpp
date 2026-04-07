@@ -227,9 +227,11 @@ export class AgentLoopController {
             }
 
             // 3. Feedback Loop
-            currentPrompt = `Previous code implementation had issues: ${review.summary}. Please fix the following: ${review.recommendedChanges.join(', ')}`;
+            this.logger.info('system', `AgentLoopController: Review FAILED. Moving to iteration ${iteration + 1} with feedback.`);
+            currentPrompt = `${prompt}\n\n[ITERATION ${iteration} FEEDBACK]\nThe previous implementation failed review with the following summary: ${review.summary}\n\nPlease address these specific issues:\n- ${review.recommendedChanges.join('\n- ')}\n\nIMPORTANT: Provide the COMPLETE updated implementation.`;
             
             if (iteration === this.maxIterations) {
+                this.logger.error('system', 'AgentLoopController: Maximum iterations reached without passing review.');
                 tm.failTask(taskId, 'Maximum iterations reached without successful review.');
             }
         }
