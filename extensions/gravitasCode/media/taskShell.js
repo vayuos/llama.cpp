@@ -317,9 +317,16 @@ class ChatController {
         }
     }
 
-    updateGlobalTelemetry(coder, reviewer) {
+    updateGlobalTelemetry(coder, reviewer, rag) {
         this.updateAgentDash('coder', coder);
         this.updateAgentDash('reviewer', reviewer);
+        if (rag) {
+            const ragDot = document.getElementById('ragStatus');
+            if (ragDot) {
+                ragDot.className = `status-dot ${rag.status.toLowerCase()}`;
+                ragDot.title = `RAG Server: ${rag.status}`;
+            }
+        }
     }
 
     updateAgentDash(prefix, data) {

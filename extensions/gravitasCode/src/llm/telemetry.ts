@@ -48,7 +48,7 @@ export class TelemetryService {
         }
     }
 
-    public getTelemetry(type: 'coder' | 'reviewer'): TelemetryData {
+    public getTelemetry(type: 'coder' | 'reviewer' | 'rag'): TelemetryData {
         return this.state.get(type) || {
             status: 'offline',
             vram: '0%',
@@ -66,10 +66,11 @@ export class TelemetryService {
         const config = await ConfigManager.getInstance().loadConfig();
         if (!config) return;
 
-        // Concurrent polling for performance
+        // Concurrent polling for performance (Agents + RAG)
         await Promise.allSettled([
             this.pollAgent('coder', config.coder, config),
-            this.pollAgent('reviewer', config.reviewer, config)
+            this.pollAgent('reviewer', config.reviewer, config),
+            this.pollRag(config)
         ]);
 
         this._onDidUpdate.fire();
@@ -219,5 +220,16 @@ export class TelemetryService {
                 resolve('GPU');
             });
         });
+    }
+
+    private async pollRag(config: any) {
+        const url = (config.vayuforge?.ragEndpoint || 'http://127.0.0.1:8081/retrieve').replace('/retrieve', '/health');
+        try {
+            const axios = require('axios');
+            await axios.get(url, { timeout: 1000 });
+            this.state.set('rag', { status: 'online' } as any);
+        } catch (e) {
+            this.state.set('rag', { status: 'offline' } as any);
+        }
     }
 }

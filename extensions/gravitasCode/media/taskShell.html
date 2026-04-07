@@ -10,7 +10,33 @@
 </head>
 
 <body>
-    <!-- 1. Task Feed: Legacy and Active Tasks -->
+    <!-- 0. Engineering HUD: Global Real-time Metrics -->
+    <div class="telemetry-wrapper">
+        <div id="coderDash" class="telemetry-segment">
+            <div class="agent-label">CODER</div>
+            <div class="metrics-grid">
+                <span id="coderVram" class="metric" title="VRAM Utilization">---</span>
+                <span id="coderTps" class="metric" title="Tokens Per Second">0.0</span>
+                <span id="coderKv" class="metric" title="KV Cache Usage">0%</span>
+                <span id="coderLoad" class="metric load-status">IDLE</span>
+            </div>
+        </div>
+        <div id="reviewerDash" class="telemetry-segment">
+            <div class="agent-label">REVIEWER</div>
+            <div class="metrics-grid">
+                <span id="reviewerVram" class="metric" title="VRAM Utilization">---</span>
+                <span id="reviewerTps" class="metric" title="Tokens Per Second">0.0</span>
+                <span id="reviewerKv" class="metric" title="KV Cache Usage">0%</span>
+                <span id="reviewerLoad" class="metric load-status">IDLE</span>
+            </div>
+        </div>
+        <div id="ragDash" class="telemetry-segment mini">
+            <div class="agent-label">RAG</div>
+            <div id="ragStatus" class="status-dot offline"></div>
+        </div>
+    </div>
+
+    <!-- 1. Task Feed -->
     <div id="taskFeed" class="task-feed">
         <!-- Welcome Screen -->
         <div id="welcomeScreen" class="welcome-screen">

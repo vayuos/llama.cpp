@@ -3,40 +3,35 @@ import * as vscode from 'vscode';
 import { GravitasConfig } from '../core/config';
 
 export class ContextCollector {
+    private readonly MAX_CONTEXT_CHARS = 32768; // 🛡️ Safety: Prevent context window overflow
+
     async retrieve(query: string, config: GravitasConfig): Promise<string> {
         const logger = require('../core/logger').CentralLogger.getInstance();
         
-        // 1. Always start with Local Context as a high-fidelity baseline
+        // 1. Local Baseline
         let localContext = await this.collectLocalContext();
         
-        // 2. Attempt RAG retrieval if configured
-        if (!config.vayuforge || !config.vayuforge.ragEndpoint) {
-            logger.debug('system', 'ContextCollector: RAG endpoint not configured, returning local context only.');
-            return localContext;
-        }
-
-        logger.debug('system', `ContextCollector: Attempting RAG retrieval for query: "${query.substring(0, 50)}..." at ${config.vayuforge.ragEndpoint}`);
-
-        try {
-            const response = await axios.post(config.vayuforge.ragEndpoint, {
-                query: query
-            }, { 
-                timeout: 10000,
-                headers: { 'Accept': 'application/json' }
-            });
-
-            if (response.data && response.data.context) {
-                logger.debug('system', `ContextCollector: Retrieved ${response.data.context.length} chars (RAG Hybrid Mode).`);
-                return `Remote RAG Context:\n${response.data.context}\n\n${localContext}`;
-            } else if (Array.isArray(response.data)) {
-                const ragContext = response.data.map((item: any) => `Source: ${item.name}\n${item.content}`).join('\n\n');
-                return `Remote RAG Context:\n${ragContext}\n\n${localContext}`;
+        let finalContext = localContext;
+        // 2. RAG Hybrid
+        if (config.vayuforge && config.vayuforge.ragEndpoint) {
+            try {
+                const response = await axios.post(config.vayuforge.ragEndpoint, { query }, { timeout: 10000 });
+                if (response.data && response.data.context) {
+                    finalContext = `Remote RAG Context:\n${response.data.context}\n\n${localContext}`;
+                } else if (Array.isArray(response.data)) {
+                    const rag = response.data.map((item: any) => `Source: ${item.name}\n${item.content}`).join('\n\n');
+                    finalContext = `Remote RAG Context:\n${rag}\n\n${localContext}`;
+                }
+            } catch (e: any) {
+                logger.error('system', `ContextCollector: RAG Error: ${e.message}`);
             }
-        } catch (error: any) {
-            logger.error('system', `ContextCollector: RAG fallthrough to local only: ${error.message}`);
         }
 
-        return localContext;
+        if (finalContext.length > this.MAX_CONTEXT_CHARS) {
+            logger.warn('system', `ContextCollector: Truncating context from ${finalContext.length} chars to safety limit.`);
+            return finalContext.substring(0, this.MAX_CONTEXT_CHARS) + '\n\n[TRUNCATED FOR TOKEN SAFETY]';
+        }
+        return finalContext;
     }
 
     private async collectLocalContext(): Promise<string> {
