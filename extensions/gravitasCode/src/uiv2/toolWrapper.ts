@@ -49,6 +49,9 @@ export class ToolWrapper {
             commandLabel: label || tool.description
         });
 
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        logger.info('system', `ToolWrapper: Starting NATIVE tool: ${name}(${args.join(', ')})`);
+
         try {
             // Attempt to parse JSON arguments if provided as first arg
             const parsedArgs = args.length > 0 ? JSON.parse(args[0]) : {};
@@ -61,6 +64,8 @@ export class ToolWrapper {
                 stream: 'stdout',
                 text: output
             });
+
+            logger.info('system', `ToolWrapper: NATIVE tool ${name} COMPLETED. Output: ${output.substring(0, 1000)}${output.length > 1000 ? '...' : ''}`);
 
             this.tm.emitEvent(taskId, {
                 type: 'ToolExecutionCompleted',
@@ -110,6 +115,9 @@ export class ToolWrapper {
             commandLabel: label || command
         });
 
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        logger.info('system', `ToolWrapper: Spawning EXTERNAL process: ${command} ${args.join(' ')} (CWD: ${options.cwd})`);
+
         return new Promise((resolve) => {
             let output = '';
             const child = cp.spawn(command, args, options);
@@ -143,6 +151,8 @@ export class ToolWrapper {
                     stream: 'stderr',
                     text: `Execution Error: ${err.message}`
                 });
+                const logger = require('../core/logger').CentralLogger.getInstance();
+                logger.error('system', `ToolWrapper: Spawning EXTERNAL process error: ${err.message}`);
             });
 
             child.on('close', (code) => {
@@ -154,6 +164,7 @@ export class ToolWrapper {
                     exitCode,
                     status: exitCode === 0 ? 'SUCCESS' : 'FAILURE'
                 });
+                logger.info('system', `ToolWrapper: EXTERNAL process ${command} COMPLETED. ExitCode: ${exitCode}. Final Output: ${output.substring(0, 1000)}${output.length > 1000 ? '...' : ''}`);
                 resolve({ exitCode, output });
             });
         });

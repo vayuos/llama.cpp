@@ -328,3 +328,16 @@ const llama_kv_cache_context * llama_kv_cache_iswa_context::get_swa()  const {
 
     return static_cast<const llama_kv_cache_context *>(ctx_swa.get());
 }
+
+void llama_kv_cache_iswa::get_metrics(llama_context_metrics & metrics) const {
+    llama_context_metrics metrics_base;
+    llama_context_metrics metrics_swa;
+
+    kv_base->get_metrics(metrics_base);
+    kv_swa->get_metrics(metrics_swa);
+
+    metrics.n_used = metrics_base.n_used + metrics_swa.n_used;
+    metrics.n_ctx_total = metrics_base.n_ctx_total + metrics_swa.n_ctx_total;
+    metrics.kv_cache_utilization = (float)metrics.n_used / (float)std::max(1u, metrics.n_ctx_total);
+    metrics.n_tokens_max = metrics_base.n_tokens_max + metrics_swa.n_tokens_max;
+}

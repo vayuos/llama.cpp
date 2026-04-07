@@ -1754,6 +1754,7 @@ json server_task_result_metrics::to_json() {
         { "t_prompt_processing_total",       t_prompt_processing_total },
 
         { "n_tokens_max",                    n_tokens_max },
+        { "kv_cache_utilization",            kv_cache_utilization },
 
         { "n_prompt_tokens_processed",       n_prompt_tokens_processed },
         { "t_prompt_processing",             t_prompt_processing },

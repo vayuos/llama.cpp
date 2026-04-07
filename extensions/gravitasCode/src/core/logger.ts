@@ -26,16 +26,25 @@ const LEVEL_WEIGHTS: Record<LogLevel, number> = {
  */
 export class CentralLogger {
     private static instance: CentralLogger;
-    private outputChannel: vscode.OutputChannel;
+    private outputChannel: vscode.OutputChannel | null = null;
     private logFile: string | null = null;
     private minLevelWeight: number = 0; // Default to debug until initialized
     private _onDidLog = new vscode.EventEmitter<LogEntry>();
     public readonly onDidLog = this._onDidLog.event;
+    private isLogging: boolean = false;
+    private isEnabled: boolean = false; // 🛡️ Safe Boot: Events disabled until activate() completes
 
     private constructor() {
-        this.outputChannel = vscode.window.createOutputChannel('Gravitas Logs');
-        // Initial setup for early boot logs
+        // 🛡️ Zero-API Constructor: No VS Code calls here to avoid early boot crashes.
+        // Initial setup for early boot logs (pure path logic)
         this.setLogDir(path.join(os.homedir(), '.gravitas', 'logs'));
+    }
+
+    private getOutputChannel(): vscode.OutputChannel {
+        if (!this.outputChannel) {
+            this.outputChannel = vscode.window.createOutputChannel('Gravitas Logs');
+        }
+        return this.outputChannel;
     }
 
     public static getInstance(): CentralLogger {
@@ -50,6 +59,14 @@ export class CentralLogger {
      */
     public setLevel(level: LogLevel) {
         this.minLevelWeight = LEVEL_WEIGHTS[level] ?? 0;
+    }
+
+    /**
+     * Safety: Enables firing of onDidLog events. Should only be called
+     * at the end of the activation sequence.
+     */
+    public enableEvents() {
+        this.isEnabled = true;
     }
 
     public setLogDir(logDir: string) {
@@ -67,28 +84,40 @@ export class CentralLogger {
     public log(source: LogSource, message: string, level: LogLevel = 'info') {
         const weight = LEVEL_WEIGHTS[level] ?? 1;
         
+        // 🛡️ Loop Prevention: Immediate return if we are already in a logging call
+        if (this.isLogging) {
+            return;
+        }
+
         // 🛡️ Filtering: Only output if level meets minimum priority
         if (weight < this.minLevelWeight) {
             return;
         }
 
-        const entry: LogEntry = {
-            timestamp: new Date().toISOString(),
-            source,
-            message,
-            level
-        };
+        this.isLogging = true;
+        try {
+            const entry: LogEntry = {
+                timestamp: new Date().toISOString(),
+                source,
+                message,
+                level
+            };
 
-        const formatted = `[${entry.timestamp}] [${entry.source.toUpperCase()}] [${entry.level.toUpperCase()}] ${entry.message}`;
-        this.outputChannel.appendLine(formatted);
+            const formatted = `[${entry.timestamp}] [${entry.source.toUpperCase()}] [${entry.level.toUpperCase()}] ${entry.message}`;
+            this.getOutputChannel().appendLine(formatted);
 
-        if (this.logFile) {
-            try {
-                fs.appendFileSync(this.logFile, formatted + '\n');
-            } catch (e) {}
+            if (this.logFile) {
+                try {
+                    fs.appendFileSync(this.logFile, formatted + '\n');
+                } catch (e) {}
+            }
+
+            if (this.isEnabled) {
+                this._onDidLog.fire(entry);
+            }
+        } finally {
+            this.isLogging = false;
         }
-
-        this._onDidLog.fire(entry);
     }
 
     public debug(source: LogSource, message: string) { this.log(source, message, 'debug'); }

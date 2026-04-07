@@ -19,6 +19,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     private _isSubscribed = false;
 
     constructor(private readonly _extensionUri: vscode.Uri) {
+        CentralLogger.getInstance().debug('system', 'ChatSidebarProvider: Initializing...');
         this.subscribeToEvents();
     }
 
@@ -80,6 +81,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
         if (this._isReady && this._view) {
             this._view.webview.postMessage(message);
         } else {
+            CentralLogger.getInstance().debug('system', `ChatSidebarProvider: Buffering message of type ${message.type}. Ready: ${this._isReady}, View: ${!!this._view}`);
             this._messageBuffer.push(message);
         }
     }
@@ -113,6 +115,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
 
     private _setWebviewMessageListener(webview: vscode.Webview) {
         webview.onDidReceiveMessage(async (message) => {
+            CentralLogger.getInstance().debug('system', `ChatSidebarProvider: Received message from frontend - type: ${message.type}`);
             switch (message.type) {
                 case 'ready': {
                     CentralLogger.getInstance().info('system', 'Gravitas Chat: Handshake received from frontend.');

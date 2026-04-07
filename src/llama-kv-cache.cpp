@@ -2286,3 +2286,11 @@ void llama_kv_cache_context::set_input_kq_mask(ggml_tensor * dst, const llama_ub
 void llama_kv_cache_context::set_input_pos_bucket(ggml_tensor * dst, const llama_ubatch * ubatch) const {
     kv->set_input_pos_bucket(dst, ubatch);
 }
+void llama_kv_cache::get_metrics(llama_context_metrics & metrics) const {
+    metrics.n_used = 0;
+    for (uint32_t s = 0; s < n_stream; ++s) {
+        metrics.n_used += v_cells[s].get_used();
+    }
+    metrics.n_ctx_total = get_size() * n_stream;
+    metrics.kv_cache_utilization = (float)metrics.n_used / (float)std::max(1, metrics.n_ctx_total);
+}

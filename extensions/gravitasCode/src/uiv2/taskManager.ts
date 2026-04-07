@@ -82,6 +82,7 @@ export class TaskManager {
 
                     if (events.length > 0) {
                         this.tasks[taskId] = this.rebuildTaskFromEvents(taskId, events);
+                        console.log(`[TaskManager] Recovered task ${taskId} with ${events.length} events.`);
                     }
                 }
             } catch (err) {
@@ -355,6 +356,8 @@ export class TaskManager {
             const eventPath = this.getTaskEventsPath(id);
             const line = JSON.stringify(event) + '\n';
             fs.appendFileSync(eventPath, line, 'utf8');
+            const logger = require('../core/logger').CentralLogger.getInstance();
+            logger.debug('system', `Task ${id}: Persisted event ${event.type} (${line.length} bytes)`);
         } catch (err) {
             console.error(`[TaskManager] Failed to persist event:`, err);
         }

@@ -1755,6 +1755,10 @@ private:
                     res->n_tasks_deferred    = queue_tasks.queue_tasks_deferred_size();
                     res->t_start             = metrics.t_start;
 
+                    const auto ctx_metrics = llama_get_context_metrics(ctx);
+                    res->kv_cache_utilization = ctx_metrics.kv_cache_utilization;
+                    res->n_tokens_max         = ctx_metrics.n_tokens_max;
+
                     res->n_prompt_tokens_processed_total = metrics.n_prompt_tokens_processed_total;
                     res->t_prompt_processing_total       = metrics.t_prompt_processing_total;
                     res->n_tokens_predicted_total        = metrics.n_tokens_predicted_total;

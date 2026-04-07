@@ -91,7 +91,7 @@ export class ConfigManager {
         const runtime = {
             autoTestOnStart: config.get<boolean>('runtime.autoTestOnStart') ?? true,
             showLogs: config.get<boolean>('runtime.showLogs') ?? true,
-            logLevel: (config.get<string>('runtime.logLevel') as any) ?? 'info',
+            logLevel: (config.get<string>('runtime.logLevel') as any) ?? 'debug',
             killSignal: (config.get<string>('runtime.killSignal') as any) ?? 'SIGTERM'
         };
 
@@ -126,7 +126,7 @@ export class ConfigManager {
                 }
             }
 
-            let defaultBaseUrl = `http://${host}:${port}/v1`;
+            let defaultBaseUrl = `http://${host}:${port}`;
             
             // Override with UDS for local Linux
             if (connection.mode === 'local' && process.platform === 'linux') {
@@ -135,10 +135,15 @@ export class ConfigManager {
             }
 
             const userBaseUrl = config.get<string>(`${section}.general.baseUrl`);
+            let finalBaseUrl = userBaseUrl && userBaseUrl.trim() !== "" ? userBaseUrl : defaultBaseUrl;
+
+            // --- NORMALIZE: Ensure no /v1 suffix for health/metrics compatibility ---
+            finalBaseUrl = finalBaseUrl.replace(/\/v1\/?$/, "");
+            finalBaseUrl = finalBaseUrl.replace(/\/$/, "");
 
             return {
                 enabled: config.get<boolean>(`${section}.general.enabled`) ?? true,
-                baseUrl: userBaseUrl && userBaseUrl.trim() !== "" ? userBaseUrl : defaultBaseUrl,
+                baseUrl: finalBaseUrl,
                 host: host,
                 port: port,
                 modelPath: config.get<string>(`${section}.general.modelPath`) || '',
@@ -173,7 +178,7 @@ export class ConfigManager {
                 workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '',
                 logDir: '',
                 connection: { mode: 'local', system3Ip: '127.0.0.1' },
-                runtime: { autoTestOnStart: false, showLogs: true, logLevel: 'info', killSignal: 'SIGTERM' },
+                runtime: { autoTestOnStart: false, showLogs: true, logLevel: 'debug', killSignal: 'SIGTERM' },
                 coder: { enabled: true, host: '127.0.0.1', port: 8040 },
                 reviewer: { enabled: true, host: '127.0.0.1', port: 18080 },
                 vayuforge: { ragEndpoint: 'http://127.0.0.1:18081/retrieve' }

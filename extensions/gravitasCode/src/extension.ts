@@ -1,9 +1,11 @@
+console.log('BOOT: [Bundle Evaluation Success] - Entering extension.ts');
 import * as vscode from 'vscode';
 import { ActivationManager } from './activation';
 
-const manager = new ActivationManager();
+let manager: ActivationManager;
 
 export async function activate(context: vscode.ExtensionContext) {
+    manager = new ActivationManager();
     await manager.activate(context);
 }
 

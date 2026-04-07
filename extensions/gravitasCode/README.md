@@ -1,100 +1,486 @@
-# Gravitas Code
+# Gravitas Code: Deterministic AI Intelligence
 
-**Deterministic Dual-Agent Code Intelligence** (Gravitas Architecture) for VS Code.
-
-> [!CAUTION]
-> **DEVELOPERS: READ `DEVELOPER_RULES.md` FIRST.**
-> Strict topology rules apply to this codebase. Failure to follow them will break the build environment.
-
-Gravitas Code is a professional-grade AI extension designed for high-integrity code manipulation. It employs a twin-agent architecture (Coder and Reviewer) to ensure all AI-generated code is validated against system invariants before being applied to your workspace.
+**Gravitas Code** is a production-grade VS Code extension engineered for high-integrity systems development. It operates on a **Deterministic Dual-Agent Architecture** (Coder + Reviewer), ensuring that every AI-generated modification is validated against strict system invariants before integration.
 
 ---
 
-## 🛡️ Architectural Invariants
+## 🛡️ Architectural Invariants (Laws of Gravity)
 
-> [!IMPORTANT]
-> **Nothing works until everything is tested and validated.**
+* **Validation Gate**
+  The agent pipeline remains locked until a complete validation suite (Ports, Files, Server Health) succeeds.
 
-1. **Validation Gate**: The Chat UI and agentic pipeline are hard-locked until the system passes a multi-step validation suite (Ports, Files, and Server health).
-2. **Deterministic Review**: Every code generation is reviewed by a separate model that must provide strictly parsable JSON feedback.
-3. **Hardware Isolation**: Coder and Reviewer can be pinned to specific devices (e.g., Coder on GPU, Reviewer on CPU/different GPU) via configuration.
-4. **Configuration Integrity**: Any manual or UI-driven configuration change immediately invalidates the system state, requiring re-validation.
+* **Deterministic Review**
+  All generated outputs are audited by a Reviewer model that must return strictly structured JSON.
+
+* **Hardware Isolation**
+  Agents can be bound to specific compute resources (e.g., Coder → GPU, Reviewer → CPU).
+
+* **State Integrity**
+  Any configuration change invalidates the system state and forces re-validation.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Setup & Initialization
 
-### 1. Installation
+### Installation
 
-The extension is packaged as a `.vsix` for local deployment.
-
-**Using CLI:**
 ```bash
 code --install-extension support-code/gravitas-code-0.1.0.vsix
-```
-
-**Uninstall:**
-```bash
 code --uninstall-extension VayuOS.gravitas-code
 ```
 
-### 2. Dependency Setup
-
-Run the included automated setup script to prepare the environment and handle local `node_modules` relocation for optimization:
+### Environment Setup
 
 ```bash
 cd gravitas-code
-# This script installs Bun (if missing), handles dependencies, and fixes permissions.
 sudo ./setup.sh
 ```
 
-### 3. Initialize & Validate
-
-1. **Setup Wizard**: Open the "Shield" icon in the Activity Bar or run `Gravitas: Validate Setup` to configure binaries and models.
-2. **Validation Pipeline**: Run `Gravitas: Validate Setup`. You will see a live trace of the multi-gate safety checks.
-3. **Execution**: Once validated, the **Gravitas Controller** (Chat) becomes available for agentic tasks.
+This script installs dependencies, configures Bun, and ensures proper permissions.
 
 ---
 
-## ✨ Features
+### Validation Pipeline
 
-- **Dual-Agent Loop**: Autonomous "Coder" generates solutions; a "Reviewer" verifies logic and format.
-- **Setup Wizard**: Intuitive UI for complex infrastructure configuration.
-- **Validation Engine**: Real-time port safety checks and model connectivity monitoring.
-- **Centralized Logging**: Segregated logs for system, coder, reviewer, and pipeline activities.
-- **Process Management**: Integrated control for local LLM server instances.
-- **Rich Status Bar**: Real-time visibility into system validation and server status.
+1. Launch Setup Wizard (Activity Bar → Shield icon)
+2. Run: `Gravitas: Validate Setup`
+3. Upon success, the **Gravitas Controller** unlocks
 
 ---
 
-## 🛠️ Commands
+## ✨ Core Capabilities
 
-| Command | Description |
-|---------|-------------|
-| `Gravitas: Validate Setup` | Triggers the safety validation pipeline. |
-| `Gravitas: Run Pipeline` | (Validated only) Launches the dual-agent task loop. |
-| `Gravitas: Start LLM Server` | Boots the configured local model servers. |
-| `Gravitas: Stop LLM Server` | Safely terminates model processes. |
+* Dual-agent generation + validation loop
+* Real-time validation engine (ports, models, VRAM)
+* Structured logging (system, agents, pipeline)
+* Local process lifecycle control
+* Live system status via UI
 
 ---
 
-## 🧑‍💻 Development
+## 🛠️ Command Interface
 
-### Setup
-```bash
-# Sourcing environment (NVM/Bun)
-npm install
-npm run compile
+| Command          | Description                   |
+| ---------------- | ----------------------------- |
+| Validate Setup   | Runs full validation pipeline |
+| Run Pipeline     | Starts dual-agent execution   |
+| Start LLM Server | Launches llama.cpp/Ollama     |
+| Stop LLM Server  | Gracefully stops processes    |
+
+---
+
+## 🧑‍💻 System Structure
+
+* `src/core` → configuration + state
+* `src/agents` → coder/reviewer logic
+* `src/validation` → invariant enforcement
+* `src/ui` → chat + dashboard
+* `src/process` → execution + monitoring
+
+---
+
+# Gravitas Chat System (Execution Interface)
+
+## 1. Intelligent Composer
+
+A structured, context-aware input system:
+
+* **@mentions**
+
+  * `@coder` → execution agent
+  * `@reviewer` → validation agent
+  * `@terminal` → shell execution
+
+* **#references**
+
+  * `#file`, `#git`, `#docs`
+
+* **Multimodal input**
+
+  * Vision-based analysis (UI bugs, diagrams)
+
+---
+
+## 2. Execution Surface
+
+* Step-based progress tracking
+* Interactive diffs (apply/reject)
+* Embedded terminal output
+
+---
+
+## 3. Intelligence Layer
+
+* Reasoning transparency (thought traces)
+* Confidence scoring
+* Predictive context preloading
+
+---
+
+## 4. Telemetry & Monitoring
+
+* VRAM usage tracking
+* Quantization visibility
+* Tokens/sec monitoring
+
+---
+
+## 5. Safety & Control
+
+* Autonomous write toggle
+* Checkpoint-based rollback
+* Chat branching for parallel strategies
+
+---
+
+## Comparison
+
+| Feature      | Standard Chat | Gravitas              |
+| ------------ | ------------- | --------------------- |
+| Goal         | Answer        | Execute               |
+| Context      | Prompt-only   | Full system           |
+| Output       | Text          | Interactive artifacts |
+| Verification | Manual        | Automated             |
+| Autonomy     | None          | Full pipeline         |
+
+---
+
+# Checkpointed Context Loop (CCL)
+
+## Problem
+
+LLMs have:
+
+* Fixed context window
+* Performance degradation near limit
+* Hard truncation
+
+---
+
+## Solution
+
+A **deterministic context lifecycle system**:
+
+1. Monitor context usage
+2. Extract structured state
+3. Compress context
+4. Restart session
+5. Rehydrate state
+6. Continue execution
+
+---
+
+## Context Trigger
+
+```text
+trigger_at = 70–80% of total context
 ```
 
-### Extension Structure
-- `src/core`: Configuration and state management.
-- `src/agents`: Logic for Coder and Reviewer agents.
-- `src/validation`: Safety gates and invariant checks.
-- `src/ui`: Webview providers for Chat, Setup, and Status.
-- `src/process`: Health monitoring and process safety.
+---
+
+## State Model
+
+### Task State
+
+* Objective
+* Phase
+* Pending actions
+
+### Code State
+
+* Files modified
+* Diffs
+* Symbols
+
+### Reasoning State
+
+* Decisions
+* Constraints
+* Errors
 
 ---
 
-**Developed by VayuOS**
-*Deterministic AI for Mission-Critical Codebases.*
+## Checkpoint Format
+
+```json
+{
+  "task": "Optimize llama.cpp throughput",
+  "environment": {
+    "model": "Qwen3.5-9B-Q4_K_M",
+    "hardware": "RTX 4060 Ti"
+  },
+  "progress": [
+    "Baseline measured",
+    "Threads tuned"
+  ],
+  "decisions": [
+    "Use GPU offloading"
+  ],
+  "pending": [
+    "Tune batch size"
+  ]
+}
+```
+
+---
+
+## Execution Flow
+
+```text
+Plan → Execute → Monitor
+        ↓
+Checkpoint → Compress → Save
+        ↓
+Restart → Rehydrate → Continue
+```
+
+---
+
+## Optimization Strategies
+
+* Hierarchical checkpoints
+* Delta compression
+* Symbol-priority retention
+* Persistent storage (`~/gravitas/state/`)
+* Crash recovery
+
+---
+
+## Design Constraints
+
+* Deterministic structure
+* No redundant reasoning
+* Strict token budgeting
+
+---
+
+# Full Gravitas Feature Surface
+
+## Intelligence
+
+* Dual-agent reasoning
+* Deterministic execution
+* Constraint-aware logic
+* Dependency graph awareness
+
+---
+
+## System Integration
+
+* Full filesystem access
+* Shell execution
+* Process control
+* Hardware telemetry
+
+---
+
+## Validation
+
+* Multi-stage safety gates
+* Pre/post execution checks
+* Rollback mechanisms
+* JSON validation contracts
+
+---
+
+## Interaction
+
+* Pulse pattern (Signal → Execution → Artifact → Conclusion)
+* Challenge system (defensive validation)
+
+---
+
+## Performance
+
+* Prompt caching
+* KV cache optimization
+* Context compression
+* Quantization awareness
+
+---
+
+## Developer Experience
+
+* Live logs
+* Diff-based edits
+* Error diagnostics
+* Root cause analysis
+
+---
+
+## UI/UX
+
+* Setup wizard
+* Status dashboard
+* Agent monitor
+* Artifact rendering
+
+---
+
+## Toolchain Integration
+
+* Compiler (gcc/clang)
+* Debugger (gdb/lldb)
+* System tools
+* Asset pipeline
+* Build systems
+
+---
+
+## Observability
+
+* Inference metrics
+* Resource tracking
+* Reasoning trace
+* Validation signatures
+
+---
+
+## Advanced Capabilities
+
+* Stateful memory
+* Task orchestration
+* Parallel agents
+* Context hot reload
+* Hardware-aware scheduling
+* Failure recovery
+
+---
+
+# Reality Constraint
+
+A chat interface alone cannot execute this system.
+
+Required components:
+
+* Local runtime (**llama.cpp**)
+* Gravitas VS Code extension
+* Shell + toolchain integration
+* Validation engine
+
+---
+
+# llama.cpp Required Modifications
+
+## 1. Context Metrics API
+
+```cpp
+struct llama_context_metrics {
+    int32_t n_ctx_total;
+    int32_t n_ctx_used;
+    float kv_cache_utilization;
+};
+```
+
+```cpp
+llama_context_metrics llama_get_context_metrics(llama_context * ctx);
+```
+
+---
+
+## 2. Checkpoint Interface
+
+```cpp
+typedef std::string (*llama_checkpoint_cb)(void *);
+```
+
+```cpp
+void llama_set_checkpoint_callback(...);
+```
+
+---
+
+## 3. Session Persistence
+
+```cpp
+bool llama_save_session_full(...);
+bool llama_load_session_full(...);
+```
+
+---
+
+## 4. Context Reset
+
+```cpp
+void llama_reset_context(llama_context * ctx);
+```
+
+---
+
+## 5. State Injection
+
+```cpp
+void llama_inject_system_state(...);
+```
+
+---
+
+## 6. Server Extensions
+
+* `/metrics`
+* `/checkpoint`
+* `/restart`
+* `/resume`
+
+---
+
+## 7. Context Guardrail
+
+```cpp
+if (n_ctx_used > threshold) return LLAMA_CONTEXT_NEAR_LIMIT;
+```
+
+---
+
+## 8. Token Typing
+
+```cpp
+enum llama_token_type {
+    USER,
+    SYSTEM,
+    CHECKPOINT
+};
+```
+
+---
+
+## 9. Hierarchical Caching
+
+* Base prompt
+* Checkpoint layer
+* Active context
+
+---
+
+## 10. Thread Safety
+
+```cpp
+std::mutex ctx_lifecycle_mutex;
+```
+
+---
+
+# Final Architecture
+
+```text
+Gravitas (Intelligence Layer)
+        ↓
+Checkpoint Engine
+        ↓
+llama.cpp (Execution Layer)
+        ↓
+Hardware (GPU/CPU)
+```
+
+---
+
+## Final Insight
+
+* llama.cpp → execution engine
+* Gravitas → reasoning + control layer
+
+Only together do they form a **deterministic, long-context, system-aware AI pipeline**.
+
+---
+
+**Developed by VayuOS — Deterministic AI for Mission-Critical Codebases** 

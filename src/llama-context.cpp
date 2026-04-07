@@ -3567,3 +3567,11 @@ void llama_opt_epoch(
         callback_train,
         callback_eval);
 }
+
+struct llama_context_metrics llama_get_context_metrics(struct llama_context * ctx) {
+    struct llama_context_metrics metrics = {0, 0, 0.0f};
+    if (ctx && ctx->memory) {
+        ctx->memory->get_metrics(metrics);
+    }
+    return metrics;
+}

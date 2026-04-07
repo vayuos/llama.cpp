@@ -61,13 +61,18 @@ export class AgentLoopController {
             workspaceContext = await contextCollector.retrieve(prompt, config);
             
             if (workspaceContext.trim()) {
+                this.logger.debug('system', `Workspace context retrieved: ${workspaceContext.length} chars.`);
                 systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\nYou are context-aware. Current Local Workspace State:\n${workspaceContext.trim()}`;
             } else {
+                this.logger.debug('system', 'Workspace context is empty for this prompt.');
                 systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\nStrict Rule: The current project workspace is EMPTY. Do not assume any existing architecture or system components. Act only on the prompt provided.`;
             }
         } else {
+            this.logger.debug('system', 'Skipping context retrieval for short/non-implementation prompt.');
             systemPromptEnv = 'You are a helpful assistant. The current workspace is empty. Keep greetings brief and do NOT dump any architectural summaries unless requested.';
         }
+
+        this.logger.debug('system', `System Prompt Initialized: ${systemPromptEnv.substring(0, 200)}...`);
 
         while (iteration < this.maxIterations) {
             iteration++;
@@ -84,17 +89,10 @@ export class AgentLoopController {
             tm.emitEvent(taskId, { type: 'TaskStatusEmitted', status: 'Thinking...' });
             const thoughtId = uuidv4();
             
-            tm.emitEvent(taskId, {
-                type: 'ThoughtStarted',
-                attemptNo: attempt.attemptNo,
-                phaseId: coderPhaseId,
-                thoughtId,
-                startedAt: new Date().toISOString()
-            });
-
             this.checkCancellation(taskId);
             const promptContent = currentPrompt + (currentCode ? `\n\nPrevious Code Attempt:\n${currentCode}` : '');
-            this.logger.info('system', `Gravitas Loop: Sending Coder Request (Prompt length: ${promptContent.length} chars)`);
+            this.logger.info('system', `Gravitas Loop [Iteration ${iteration}]: Sending Coder Request (Prompt length: ${promptContent.length} chars)`);
+            this.logger.debug('system', `Full Coder Prompt: ${promptContent}`);
 
             let coderResp;
             try {
@@ -112,6 +110,20 @@ export class AgentLoopController {
                 tm.failTask(taskId, `Coder LLM Error: ${e.message}`);
                 throw e;
             }
+            
+            tm.emitEvent(taskId, {
+                type: 'ThoughtEmitted',
+                content: (coderResp as any).thought || 'System: Analyzing next steps...'
+            });
+            this.logger.info('system', `AgentLoopController: Coder Thought: ${(coderResp as any).thought || '[No thought provided]'}`);
+
+            tm.emitEvent(taskId, {
+                type: 'ThoughtStarted',
+                attemptNo: attempt.attemptNo,
+                phaseId: coderPhaseId,
+                thoughtId,
+                startedAt: new Date().toISOString()
+            });
             
             const rawContent = coderResp.content;
             let thoughtContent = 'Refining implementation strategy based on workspace context.';
@@ -168,19 +180,26 @@ export class AgentLoopController {
             
             const revPhaseStart = Date.now();
             
-            this.logger.info('system', `Gravitas Loop: Sending Reviewer Request (Content length: ${currentCode.length} chars)`);
+            this.logger.info('system', `Gravitas Loop [Iteration ${iteration}]: Sending Reviewer Request (Content length: ${currentCode.length} chars)`);
+            this.logger.debug('system', `Full Reviewer Prompt: ${currentCode}`);
             const reviewerResp = await reviewerClient.generate([
                 { role: 'system', content: REVIEWER_SYSTEM_PROMPT },
                 { role: 'user', content: currentCode }
             ], reviewerOpts);
-            this.logger.info('system', `Gravitas Loop: Reviewer Response received (${reviewerResp.content.length} chars)`);
+            this.logger.info('system', `Gravitas Loop [Iteration ${iteration}]: Reviewer Response received (${reviewerResp.content.length} chars)`);
+            this.logger.debug('system', `Full Reviewer Response: ${reviewerResp.content}`);
 
             const review = ReviewParser.parse(reviewerResp.content);
 
             if (!review) {
-                this.logger.error('system', 'Reviewer failed to provide deterministic output.');
+                this.logger.error('system', `AgentLoopController [Iteration ${iteration}]: Reviewer failed to provide a valid deterministic JSON review.`);
                 tm.failTask(taskId, 'Reviewer output was non-deterministic.');
                 break;
+            }
+
+            this.logger.info('system', `AgentLoopController [Iteration ${iteration}]: Reviewer Verdict: ${review.severity.toUpperCase()}. Summary: ${review.summary}`);
+            if (review.issues.length > 0) {
+                this.logger.debug('system', `AgentLoopController [Iteration ${iteration}]: Reviewer Issues: ${JSON.stringify(review.issues)}`);
             }
 
             tm.emitEvent(taskId, {

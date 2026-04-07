@@ -504,6 +504,7 @@ struct server_task_result_metrics : server_task_result {
     uint64_t t_tokens_generation_total       = 0;
 
     uint64_t n_tokens_max = 0;
+    float kv_cache_utilization = 0.0f;
 
     uint64_t n_prompt_tokens_processed = 0;
     uint64_t t_prompt_processing       = 0;

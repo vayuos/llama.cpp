@@ -10,24 +10,29 @@ export function registerWatchers(context: vscode.ExtensionContext) {
     // Watch for VS Code configuration changes (if any)
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async e => {
         if (e.affectsConfiguration('gravitasCode')) {
+            logger.debug('system', 'watchers: VS Code configuration "gravitasCode" changed.');
+            
             if (e.affectsConfiguration('gravitasCode.runtime.logLevel')) {
                 const config = await ConfigManager.getInstance().loadConfig();
                 if (config) {
                     logger.setLevel(config.runtime.logLevel);
-                    logger.info('system', `Log level updated to: ${config.runtime.logLevel}`);
+                    logger.info('system', `watchers: Log level updated to: ${config.runtime.logLevel}`);
                 }
             }
 
-            const hasCriticalChange = 
-                e.affectsConfiguration('gravitasCode.coder.general.port') ||
-                e.affectsConfiguration('gravitasCode.coder.general.host') ||
-                e.affectsConfiguration('gravitasCode.reviewer.general.port') ||
-                e.affectsConfiguration('gravitasCode.reviewer.general.host') ||
-                e.affectsConfiguration('gravitasCode.coder.general.modelPath') ||
-                e.affectsConfiguration('gravitasCode.reviewer.general.modelPath');
+            const criticalKeys = [
+                'gravitasCode.coder.general.port',
+                'gravitasCode.coder.general.host',
+                'gravitasCode.reviewer.general.port',
+                'gravitasCode.reviewer.general.host',
+                'gravitasCode.coder.general.modelPath',
+                'gravitasCode.reviewer.general.modelPath'
+            ];
 
-            if (hasCriticalChange) {
-                logger.warn('system', 'Critical configuration change detected. Invalidating validation.');
+            const changedCritical = criticalKeys.filter(k => e.affectsConfiguration(k));
+
+            if (changedCritical.length > 0) {
+                logger.warn('system', `watchers: Critical changes detected in: ${changedCritical.join(', ')}. Invalidating validation.`);
                 state.updateState({ validated: false });
             }
         }

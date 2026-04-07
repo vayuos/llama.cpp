@@ -22,18 +22,21 @@ export class StorageManager {
      */
     public clearLogs(): { success: boolean; message: string } {
         try {
-            // Get log dir from CentralLogger or fallback
+            const logger = CentralLogger.getInstance();
             const logDir = path.join(os.homedir(), '.gravitas', 'logs'); 
-            // Better: We should use the one from config, but for now let's wipe both
             
             const wipeDir = (dir: string) => {
-                if (!fs.existsSync(dir)) return 0;
+                if (!fs.existsSync(dir)) {
+                    logger.debug('system', `StorageManager: Directory ${dir} does not exist, skipping wipe.`);
+                    return 0;
+                }
                 const files = fs.readdirSync(dir);
                 let count = 0;
                 for (const file of files) {
                     const filePath = path.join(dir, file);
                     if (fs.statSync(filePath).isFile()) {
                         fs.unlinkSync(filePath);
+                        logger.debug('system', `StorageManager: Deleted file ${filePath}`);
                         count++;
                     }
                 }
@@ -41,7 +44,6 @@ export class StorageManager {
             };
 
             const deletedLegacy = wipeDir(path.join(os.homedir(), '.gravitas', 'logs'));
-            // Also wipe global storage logs if any
             
             return {
                 success: true,
@@ -68,6 +70,8 @@ export class StorageManager {
                 reviewerStatus: 'stopped'
             });
 
+            CentralLogger.getInstance().info('system', 'StorageManager: Validation state and hardware status reset.');
+
             return {
                 success: true,
                 message: 'State reset successfully.'
@@ -93,6 +97,8 @@ export class StorageManager {
 
             // 3. Clear Task Ledgers (The "Dummy Chats")
             TaskManager.getInstance().clearAllTasks();
+
+            CentralLogger.getInstance().info('system', 'StorageManager: Deep Wipe (logs, state, tasks) completed.');
 
             return {
                 success: true,

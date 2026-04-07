@@ -528,6 +528,14 @@ extern "C" {
     LLAMA_API uint32_t llama_n_ubatch   (const struct llama_context * ctx);
     LLAMA_API uint32_t llama_n_seq_max  (const struct llama_context * ctx);
 
+    struct llama_context_metrics {
+        int32_t n_ctx_total;
+        int32_t n_used;
+        float kv_cache_utilization;
+    };
+
+    LLAMA_API struct llama_context_metrics llama_get_context_metrics(struct llama_context * ctx);
+
     DEPRECATED(LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model), "use llama_model_n_ctx_train instead");
     DEPRECATED(LLAMA_API int32_t llama_n_embd     (const struct llama_model * model), "use llama_model_n_embd instead");
     DEPRECATED(LLAMA_API int32_t llama_n_layer    (const struct llama_model * model), "use llama_model_n_layer instead");

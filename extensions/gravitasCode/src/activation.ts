@@ -24,20 +24,46 @@ import { ChatSidebarProvider } from './uiv2/chatSidebar';
 export class ActivationManager {
     // private state = new StateManager(); // Deprecated
 
-    private gravitasState = GravitasState.getInstance();
-    private processManager = UnifiedProcessManager.getInstance();
+    private gravitasState?: GravitasState;
+    private processManager?: UnifiedProcessManager;
     private context?: vscode.ExtensionContext;
     private logger?: CentralLogger;
 
     async activate(context: vscode.ExtensionContext) {
         this.context = context;
-        console.log('Gravitas Code: Initializing infrastructure control...');
-        TaskManager.initialize(context);
-        LogBridge.initialize();
+        console.log('TRACE: [Activation Start] Entering async activate() block...');
+        
+        try {
+            await this.internalActivate(context);
+        } catch (fatalErr: any) {
+            console.error('CRITICAL: [Boot Crash] Async activation failed:', fatalErr);
+        }
+    }
 
-        // 1. Core Services (Initialize First)
+    private async internalActivate(context: vscode.ExtensionContext) {
+        console.log('TRACE: [Internal Activate] Starting...');
+        
+        // --- STEP 1: LOGGING baseline ---
         const logger = CentralLogger.getInstance();
         this.logger = logger;
+        console.log('TRACE: [Step 1] CentralLogger initialized.');
+
+        // --- STEP 2: Topology check ---
+        try {
+            this.checkTopology(context.extensionPath);
+            console.log('TRACE: [Step 2] Topology check passed.');
+        } catch (e: any) {
+            vscode.window.showErrorMessage(`CRITICAL: Topology Violation. ${e.message}`, { modal: true });
+            logger.error('system', `CRITICAL TOPOLOGY VIOLATION: ${e.message}`);
+            this.gravitasState = GravitasState.getInstance();
+            this.gravitasState.updateState({ validated: false });
+            return;
+        }
+
+        // --- STEP 3: State & Config ---
+        this.gravitasState = GravitasState.getInstance();
+        this.processManager = UnifiedProcessManager.getInstance();
+        console.log('TRACE: [Step 3] Singletons(State, ProcessManager) initialized.');
 
         // --- TOPOLOGY ENFORCEMENT ---
         try {
@@ -47,7 +73,7 @@ export class ActivationManager {
             logger.error('system', `CRITICAL TOPOLOGY VIOLATION: ${e.message}`);
             // We intentionally do not throw here to allow partial activation for debugging, 
             // BUT we mark validation as impossible.
-            this.gravitasState.updateState({ validated: false });
+            this.gravitasState!.updateState({ validated: false });
             return; // STOP ACTIVATION
         }
 
@@ -63,10 +89,13 @@ export class ActivationManager {
         const markerExists = fs.existsSync(installMarkerPath);
         const isFreshInstall = !markerExists;
 
-        // Ensure Socket Directory exists to prevent ENOENT on status checks
-        const socketDir = path.join(os.homedir(), '.gravitas', 'sockets');
-        if (!fs.existsSync(socketDir)) {
-            fs.mkdirSync(socketDir, { recursive: true });
+        // Ensure required .gravitas directories and sockets exist
+        const { execSync } = require('child_process');
+        try {
+            execSync(`bash "${path.join(__dirname, '..', 'scripts', 'initialSetup.sh')}"`, { stdio: 'ignore' });
+            console.log('TRACE: [Setup] Gravitas initial directories and sockets created.');
+        } catch (e) {
+            console.error('CRITICAL: [Setup] Failed to run initial setup script:', e);
         }
 
         if (isFreshInstall) {
@@ -107,20 +136,22 @@ export class ActivationManager {
         } else {
             logger.info('system', 'Extension reloading - preserving existing data.');
         }
+        console.log('TRACE: [Step 4] Installation markers & directory check done.');
 
         // 2. State & Config
-        this.gravitasState.syncToContext();
+        this.gravitasState!.syncToContext();
         const config = await ConfigManager.getInstance().loadConfig();
 
         if (config) {
             logger.setLogDir(config.logDir || '');
             CentralLogger.getInstance().setLevel(config.runtime.logLevel);
-            this.gravitasState.updateState({ configLoaded: true, validated: true });
+            this.gravitasState!.updateState({ configLoaded: true, validated: true });
             logger.info('system', 'Configuration loaded successfully.');
         } else {
-            this.gravitasState.updateState({ configLoaded: false, validated: false });
+            this.gravitasState!.updateState({ configLoaded: false, validated: false });
             logger.warn('system', 'No configuration found.');
         }
+        console.log('TRACE: [Step 5] State synced and Config loaded.');
 
         // 3. Register Hooks & Services
         registerCleanup(context);
@@ -179,62 +210,62 @@ export class ActivationManager {
                 if (input) await runPipeline(input, taskId);
             }),
             vscode.commands.registerCommand('gravitas.runtime.start', async () => {
-                if (!this.gravitasState.state.validated) return;
+                if (!this.gravitasState!.state.validated) return;
                 const cfg = await ConfigManager.getInstance().loadConfig();
                 if (cfg) {
-                    await this.processManager.startReviewer(cfg);
-                    await this.processManager.startCoder(cfg);
+                    await this.processManager!.startReviewer(cfg);
+                    await this.processManager!.startCoder(cfg);
                     logger.info('system', 'LLM Servers started.');
                 }
             }),
             vscode.commands.registerCommand('gravitas.runtime.stop', () => {
-                this.processManager.stopAll();
+                this.processManager!.stopAll();
                 logger.info('system', 'LLM Servers stopped.');
             }),
             // Individual model controls
             vscode.commands.registerCommand('gravitas.runtime.startCoder', async () => {
-                if (!this.gravitasState.state.validated) return;
+                if (!this.gravitasState!.state.validated) return;
                 const cfg = await ConfigManager.getInstance().loadConfig();
                 if (cfg) {
-                    await this.processManager.startCoder(cfg);
+                    await this.processManager!.startCoder(cfg);
                     logger.info('system', 'Coder server started.');
                 }
             }),
             vscode.commands.registerCommand('gravitas.runtime.stopCoder', async () => {
-                const pm = this.processManager as any;
+                const pm = this.processManager! as any;
                 await pm.coder.stop();
                 logger.info('system', 'Coder server stopped.');
             }),
             vscode.commands.registerCommand('gravitas.runtime.restartCoder', async () => {
-                if (!this.gravitasState.state.validated) return;
+                if (!this.gravitasState!.state.validated) return;
                 const cfg = await ConfigManager.getInstance().loadConfig();
                 if (cfg) {
-                    const pm = this.processManager as any;
+                    const pm = this.processManager! as any;
                     await pm.coder.stop();
-                    await this.processManager.startCoder(cfg);
+                    await this.processManager!.startCoder(cfg);
                     logger.info('system', 'Coder server restarted.');
                 }
             }),
             vscode.commands.registerCommand('gravitas.runtime.startReviewer', async () => {
-                if (!this.gravitasState.state.validated) return;
+                if (!this.gravitasState!.state.validated) return;
                 const cfg = await ConfigManager.getInstance().loadConfig();
                 if (cfg) {
-                    await this.processManager.startReviewer(cfg);
+                    await this.processManager!.startReviewer(cfg);
                     logger.info('system', 'Reviewer server started.');
                 }
             }),
             vscode.commands.registerCommand('gravitas.runtime.stopReviewer', async () => {
-                const pm = this.processManager as any;
+                const pm = this.processManager! as any;
                 await pm.reviewer.stop();
                 logger.info('system', 'Reviewer server stopped.');
             }),
             vscode.commands.registerCommand('gravitas.runtime.restartReviewer', async () => {
-                if (!this.gravitasState.state.validated) return;
+                if (!this.gravitasState!.state.validated) return;
                 const cfg = await ConfigManager.getInstance().loadConfig();
                 if (cfg) {
-                    const pm = this.processManager as any;
+                    const pm = this.processManager! as any;
                     await pm.reviewer.stop();
-                    await this.processManager.startReviewer(cfg);
+                    await this.processManager!.startReviewer(cfg);
                     logger.info('system', 'Reviewer server restarted.');
                 }
             }),
@@ -271,19 +302,33 @@ export class ActivationManager {
                 vscode.commands.executeCommand('workbench.view.extension.gravitas-explorer');
             }),
         );
+        console.log('TRACE: [Step 6] Hooks & Commands registered.');
 
-        // Update status on any state change
-        // In a more complex app, we'd use an event emitter, but direct call suffices here.
-        const originalUpdate = this.gravitasState.updateState.bind(this.gravitasState);
-        this.gravitasState.updateState = (s) => {
-            originalUpdate(s);
-        };
+        // 6. Subsystem Start (DEFERRED - do this last to ensure host stability)
+        setTimeout(() => {
+            try {
+                console.log('TRACE: [Step 7] Starting TaskManager initialization...');
+                TaskManager.initialize(context);
+                console.log('TRACE: [Step 8] TaskManager initialized successfully.');
+
+                console.log('TRACE: [Step 9] Initializing LogBridge...');
+                LogBridge.initialize();
+                console.log('TRACE: [Step 10] LogBridge initialized.');
+
+                CentralLogger.getInstance().enableEvents();
+                logger.info('system', 'Gravitas Code: Infrastructure fully activated.');
+                console.log('TRACE: [Activation Complete]');
+            } catch (subErr: any) {
+                console.log('TRACE: [SUB-SYSTEM CRASH] ' + subErr.message);
+                if (this.logger) this.logger.error('system', `Sub-system activation failed: ${subErr.message}`);
+            }
+        }, 500);
     }
 
     async cleanup() {
         console.log('Gravitas Code: Cleaning up - stopping all llama servers and telemetry...');
         TelemetryService.getInstance().stopPolling();
-        await this.processManager.stopAll();
+        await this.processManager!.stopAll();
         console.log('Gravitas Code: Cleanup complete.');
     }
 

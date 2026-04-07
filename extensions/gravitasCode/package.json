@@ -26,7 +26,8 @@
         "package.json",
         "README.md",
         "setup.sh",
-        ".gravitas"
+        ".gravitas",
+        "schemas"
     ],
     "main": "./dist/extension.js",
     "dependencies": {
@@ -424,7 +425,7 @@
         "vscode:prepublish": "npm run bundle",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "bundle": "npx esbuild src/extension.ts --bundle --minify --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && cp node_modules/@vscode/webview-ui-toolkit/dist/toolkit.js media/toolkit.js",
+        "bundle": "npx esbuild src/extension.ts --bundle --minify --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && cp node_modules/@vscode/webview-ui-toolkit/dist/toolkit.js media/toolkit.js && cp -r src/schemas .",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
         "test": "node out/test/runTest.js",

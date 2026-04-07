@@ -23,9 +23,11 @@ export class TaskHistoryProvider implements vscode.TreeDataProvider<TaskTreeItem
     }
 
     async getChildren(element?: TaskTreeItem): Promise<TaskTreeItem[]> {
+        const logger = require('../core/logger').CentralLogger.getInstance();
         if (element) return [];
 
         const tasks = TaskManager.getInstance().getAllTasks();
+        logger.debug('system', `TaskHistoryProvider: Fetched ${tasks.length} tasks from TaskManager.`);
         return tasks.map(task => new TaskTreeItem(task));
     }
 }

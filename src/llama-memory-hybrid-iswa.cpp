@@ -273,3 +273,16 @@ const llama_kv_cache_iswa_context * llama_memory_hybrid_iswa_context::get_attn()
 const llama_memory_recurrent_context * llama_memory_hybrid_iswa_context::get_recr() const {
     return static_cast<const llama_memory_recurrent_context *>(ctx_recr.get());
 }
+
+void llama_memory_hybrid_iswa::get_metrics(llama_context_metrics & metrics) const {
+    llama_context_metrics metrics_attn;
+    llama_context_metrics metrics_recr;
+
+    mem_attn->get_metrics(metrics_attn);
+    mem_recr->get_metrics(metrics_recr);
+
+    metrics.n_used = metrics_attn.n_used + metrics_recr.n_used;
+    metrics.n_ctx_total = metrics_attn.n_ctx_total + metrics_recr.n_ctx_total;
+    metrics.kv_cache_utilization = (float)metrics.n_used / (float)std::max(1u, metrics.n_ctx_total);
+    metrics.n_tokens_max = metrics_attn.n_tokens_max + metrics_recr.n_tokens_max;
+}

@@ -9,14 +9,20 @@ import { resolveTilde, resolveBinaryPath } from '../utils/pathUtils';
 
 export class LlamaProcess {
     private process: ChildProcess | null = null;
-    private outputChannel: vscode.OutputChannel;
+    private outputChannel: vscode.OutputChannel | null = null;
     private logStream: fs.WriteStream | null = null;
     private errorBuffer: string[] = [];
     private telemetryStr: string = 'Initializing...';
     private telemetryInterval: NodeJS.Timeout | null = null;
 
     constructor(private name: string, private type: 'coder' | 'reviewer') {
-        this.outputChannel = vscode.window.createOutputChannel(`Gravitas: ${name}`);
+    }
+
+    private getOutputChannel(): vscode.OutputChannel {
+        if (!this.outputChannel) {
+            this.outputChannel = vscode.window.createOutputChannel(`Gravitas: ${this.name}`);
+        }
+        return this.outputChannel;
     }
 
     public async start(binaryPath: string, modelConfig: any, additionalArgs: string[] = []): Promise<boolean> {
@@ -38,7 +44,7 @@ export class LlamaProcess {
             }
             this.logStream = fs.createWriteStream(path.join(logDir, `${this.type}.log`), { flags: 'a' });
         } catch (e) {
-            this.outputChannel.appendLine(`Failed to setup file logging: ${e}`);
+            this.getOutputChannel().appendLine(`Failed to setup file logging: ${e}`);
         }
 
         const mode = modelConfig.mode || 'cpu';
@@ -71,6 +77,8 @@ export class LlamaProcess {
             '--parallel', '4', 
             '-ngl', nGpuLayers.toString(),
             '-t', threads.toString(),
+            '--log-verbose',
+            '--log-debug',
             ...additionalArgs
         ];
         if (modelConfig.threadsBatch !== undefined) {
@@ -107,23 +115,36 @@ export class LlamaProcess {
             cmd = binaryPathResolved;
         }
 
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        logger.debug('system', `Spawning llama-server for ${this.name}: ${cmd} ${args.join(' ')}`);
+
         const cudaVisibleDevices = isCpuMode ? '' : (modelConfig.cudaVisibleDevices || '0');
         const startMsg = `[${new Date().toISOString()}] Starting ${this.name} [Mode: ${mode.toUpperCase()}] with command: ${cmd} ${args.join(' ')}\n`;
-        this.outputChannel.appendLine(startMsg);
+        this.getOutputChannel().appendLine(startMsg);
         this.logStream?.write(startMsg);
 
-        this.process = spawn(cmd, args, {
-            env: { ...process.env, CUDA_VISIBLE_DEVICES: cudaVisibleDevices },
-            detached: false
-        });
+        logger.debug('system', `LlamaProcess [${this.name}]: BINARY_PATH: ${cmd}`);
+        logger.debug('system', `LlamaProcess [${this.name}]: ARGS: ${JSON.stringify(args)}`);
+        logger.debug('system', `LlamaProcess [${this.name}]: SPAWN_CMD: ${cmd} ${args.join(' ')}`);
+
+        try {
+            this.process = spawn(cmd, args, {
+                env: { ...process.env, CUDA_VISIBLE_DEVICES: cudaVisibleDevices },
+                detached: false
+            });
+            logger.info('system', `LlamaProcess [${this.name}]: Spawned with PID ${this.process.pid}`);
+        } catch (e: any) {
+            logger.error('system', `LlamaProcess [${this.name}]: Spawn failed: ${e.message}`);
+            return false;
+        }
 
         this.process.stdout?.on('data', (data) => {
-            this.outputChannel.append(data.toString());
+            this.getOutputChannel().append(data.toString());
             this.logStream?.write(data);
         });
         this.process.stderr?.on('data', (data) => {
             const str = data.toString();
-            this.outputChannel.append(str);
+            this.getOutputChannel().append(str);
             this.logStream?.write(data);
 
             // Buffer last 10 lines
@@ -136,7 +157,7 @@ export class LlamaProcess {
 
         this.process.on('close', (code) => {
             const closeMsg = `[${new Date().toISOString()}] Process ${this.name} exited with code ${code}\n`;
-            this.outputChannel.appendLine(closeMsg);
+            this.getOutputChannel().appendLine(closeMsg);
             this.logStream?.write(closeMsg);
             this.process = null;
             this.updateStatus('stopped');

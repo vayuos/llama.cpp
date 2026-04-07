@@ -5,8 +5,11 @@ export class LlamaHttpClient {
     private client: AxiosInstance;
 
     constructor(endpoint: string) {
+        const logger = require('../core/logger').CentralLogger.getInstance();
         const isSocket = endpoint.startsWith('unix://');
         
+        logger.debug('system', `LlamaHttpClient: Creating client for ${endpoint}. Protocol: ${isSocket ? 'UDS' : 'HTTP'}`);
+
         // --- ZERO-LATENCY: Persistent Connection Pool ---
         const agent = new http.Agent({ 
             keepAlive: true, 
@@ -26,6 +29,7 @@ export class LlamaHttpClient {
         if (isSocket) {
             config.socketPath = endpoint.replace('unix://', '');
             config.baseURL = 'http://localhost';
+            logger.debug('system', `LlamaHttpClient: UDS Socket Path resolved to: ${config.socketPath}`);
         } else {
             config.baseURL = endpoint;
         }
@@ -38,10 +42,13 @@ export class LlamaHttpClient {
             const response = await this.client.post(path, data);
             return response.data;
         } catch (e: any) {
+            const logger = require('../core/logger').CentralLogger.getInstance();
             if (retries > 0 && this.isRetryable(e)) {
+                logger.warn('system', `LlamaHttpClient: POST ${path} failed (${e.code}). Retrying... (${retries} left)`);
                 await new Promise(r => setTimeout(r, 500));
                 return this.post(path, data, retries - 1);
             }
+            logger.error('system', `LlamaHttpClient: POST ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
             throw e;
         }
     }
@@ -51,10 +58,13 @@ export class LlamaHttpClient {
             const response = await this.client.get(path);
             return response.data;
         } catch (e: any) {
+            const logger = require('../core/logger').CentralLogger.getInstance();
             if (retries > 0 && this.isRetryable(e)) {
+                logger.warn('system', `LlamaHttpClient: GET ${path} failed (${e.code}). Retrying... (${retries} left)`);
                 await new Promise(r => setTimeout(r, 500));
                 return this.get(path, retries - 1);
             }
+            logger.error('system', `LlamaHttpClient: GET ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
             throw e;
         }
     }

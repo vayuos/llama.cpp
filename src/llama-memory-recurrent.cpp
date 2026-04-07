@@ -1163,3 +1163,10 @@ ggml_tensor * llama_memory_recurrent_context::get_s_l(int32_t il) const {
 int32_t llama_memory_recurrent_context::s_copy(int i) const {
     return  mem->cells[i + mem->head].src0;
 }
+
+void llama_memory_recurrent::get_metrics(llama_context_metrics & metrics) const {
+    metrics.n_used = used;
+    metrics.n_ctx_total = size;
+    metrics.kv_cache_utilization = (float)used / (float)std::max(1u, size);
+    metrics.n_tokens_max = size;
+}

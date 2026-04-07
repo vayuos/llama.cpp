@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CentralLogger, LogEntry } from './logger';
+import { CentralLogger, LogEntry, LogSource } from './logger';
 import { TaskManager } from '../uiv2/taskManager';
 
 export class LogBridge {
@@ -24,9 +24,12 @@ export class LogBridge {
     }
 
     private handleLogEntry(entry: LogEntry) {
-        // Forward relevant logs to the active shell
-        // We only care about user-facing logs or critical system logs
-        // For simplicity, we pipe everything formatted properly
+        // 🛡️ Loop Prevention: Only forward user-facing logs (coder, reviewer, validation)
+        // system and ui logs should stay in the Master Log/Output Channel to avoid infinite TaskManager loops.
+        const allowedSources: LogSource[] = ['coder', 'reviewer'];
+        if (!allowedSources.includes(entry.source)) {
+            return;
+        }
 
         const timestamp = new Date(entry.timestamp).toLocaleTimeString();
         const line = `[${timestamp}] [${entry.source.toUpperCase()}] ${entry.message}\n`;

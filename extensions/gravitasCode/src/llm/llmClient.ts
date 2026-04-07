@@ -41,9 +41,12 @@ export class LLMClient {
             cache_prompt: false // 🛡️ CRITICAL: Clear KV cache for this specific task
         };
 
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        logger.debug('system', `Gravitas LLM Request: ${JSON.stringify(body, null, 2)}`);
+
         if (onChunk) {
             // Streaming mode: SSE
-            const response = await (this.http as any).client.post('/chat/completions', body, { responseType: 'stream' });
+            const response = await (this.http as any).client.post('/v1/chat/completions', body, { responseType: 'stream' });
             let fullContent = '';
             
             return new Promise((resolve, reject) => {
@@ -65,16 +68,20 @@ export class LLMClient {
                     }
                 });
                 response.data.on('end', () => {
+                    logger.debug('system', `Gravitas LLM Stream Completed. Total content length: ${fullContent.length} chars.`);
                     resolve({ content: fullContent });
                 });
-                response.data.on('error', (err: Error) => reject(err));
+                response.data.on('error', (err: Error) => {
+                    logger.error('system', `Gravitas LLM Stream Error: ${err.message}`);
+                    reject(err);
+                });
             });
         }
 
-        const data = await this.http.post('/chat/completions', body);
+        const data = await this.http.post('/v1/chat/completions', body);
+        logger.debug('system', `Gravitas LLM Response: ${JSON.stringify(data, null, 2)}`);
 
         if (!data || !data.choices || data.choices.length === 0) {
-            const logger = require('../core/logger').CentralLogger.getInstance();
             logger.error('system', `Gravitas LLM Error: Malformed response from server. Data: ${JSON.stringify(data)}`);
             throw new Error('Malformed response from LLM server (choices missing).');
         }
