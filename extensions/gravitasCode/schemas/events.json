@@ -1922,4 +1922,32 @@
             }
         },
         "additionalProperties": false
-    }}
+    },
+    "HardwareMetricsEmitted": {
+        "title": "HardwareMetricsEmitted",
+        "description": "Real-time metrics from the llama-server hardware bridge (VRAM, CUDA, slots).",
+        "type": "object",
+        "required": [
+            "eventId",
+            "taskId",
+            "timestamp",
+            "type",
+            "vramMb",
+            "totalSlots",
+            "activeSlots"
+        ],
+        "properties": {
+            "eventId": { "type": "string" },
+            "taskId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "type": { "type": "string", "const": "HardwareMetricsEmitted" },
+            "vramMb": { "type": "number" },
+            "totalSlots": { "type": "integer" },
+            "activeSlots": { "type": "integer" },
+            "tps": { "type": "number" },
+            "attemptNo": { "type": "integer" },
+            "phaseId": { "type": "string" }
+        },
+        "additionalProperties": false
+    }
+}

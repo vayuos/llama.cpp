@@ -12,6 +12,7 @@ export interface IGravitasState {
 
 export class GravitasState {
     private static instance: GravitasState;
+    private context: vscode.ExtensionContext | undefined;
     private _state: IGravitasState = {
         configLoaded: false,
         validated: false,
@@ -29,6 +30,18 @@ export class GravitasState {
         return GravitasState.instance;
     }
 
+    public initialize(context: vscode.ExtensionContext) {
+        this.context = context;
+        // Restore persistent state
+        const val = this.context.globalState.get<boolean>('gravitas.validated', false);
+        const hash = this.context.globalState.get<string | null>('gravitas.validationHash', null);
+        
+        this._state.validated = val;
+        this._state.validationHash = hash;
+        
+        this.syncToContext();
+    }
+
     public get state(): IGravitasState {
         return { ...this._state };
     }
@@ -38,6 +51,16 @@ export class GravitasState {
         const prev = { ...this._state };
         this._state = { ...this._state, ...newState };
         
+        // Persist critical flags
+        if (this.context) {
+            if (newState.validated !== undefined) {
+                this.context.globalState.update('gravitas.validated', newState.validated);
+            }
+            if (newState.validationHash !== undefined) {
+                this.context.globalState.update('gravitas.validationHash', newState.validationHash);
+            }
+        }
+
         // Detailed diff logging
         const changes = Object.keys(newState).map(k => `${k}: ${prev[k as keyof IGravitasState]} -> ${newState[k as keyof IGravitasState]}`);
         logger.debug('system', `GravitasState: Updated. Changes: [${changes.join(', ')}]`);

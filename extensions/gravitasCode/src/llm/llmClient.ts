@@ -27,7 +27,8 @@ export class LLMClient {
     async generate(
         messages: { role: 'user' | 'assistant' | 'system', content: string }[], 
         options: LLMOptions = {},
-        onChunk?: (text: string) => void
+        onChunk?: (text: string) => void,
+        signal?: AbortSignal
     ): Promise<LLMResponse> {
         const body = {
             messages: messages,
@@ -46,39 +47,55 @@ export class LLMClient {
 
         if (onChunk) {
             // Streaming mode: SSE
-            const response = await (this.http as any).client.post('/v1/chat/completions', body, { responseType: 'stream' });
+            const response = await (this.http as any).client.post('/v1/chat/completions', body, { responseType: 'stream', signal });
             let fullContent = '';
+            let lineBuffer = '';
             
             return new Promise((resolve, reject) => {
+                const onAbort = () => {
+                    response.data.destroy();
+                    reject(new Error('LLM Stream aborted via signal.'));
+                };
+                if (signal) signal.addEventListener('abort', onAbort);
+
                 response.data.on('data', (chunk: Buffer) => {
-                    const lines = chunk.toString().split('\n').filter(line => line.trim());
+                    lineBuffer += chunk.toString();
+                    const lines = lineBuffer.split('\n');
+                    lineBuffer = lines.pop() || ''; // Keep the last partial line
+
                     for (const line of lines) {
-                        const message = line.replace(/^data: /, '');
+                        const trimmedLine = line.trim();
+                        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+                        
+                        const message = trimmedLine.replace(/^data: /, '');
                         if (message === '[DONE]') break;
+                        
                         try {
                             const parsed = JSON.parse(message);
-                            const content = parsed.choices[0].delta?.content || '';
+                            const content = parsed.choices?.[0]?.delta?.content || '';
                             if (content) {
                                 fullContent += content;
                                 onChunk(content);
                             }
                         } catch (e) {
-                            // Non-json line, skip
+                            // Non-json or partial json on this line, skip or log
                         }
                     }
                 });
                 response.data.on('end', () => {
+                    if (signal) signal.removeEventListener('abort', onAbort);
                     logger.debug('system', `Gravitas LLM Stream Completed. Total content length: ${fullContent.length} chars.`);
                     resolve({ content: fullContent });
                 });
                 response.data.on('error', (err: Error) => {
+                    if (signal) signal.removeEventListener('abort', onAbort);
                     logger.error('system', `Gravitas LLM Stream Error: ${err.message}`);
                     reject(err);
                 });
             });
         }
 
-        const data = await this.http.post('/v1/chat/completions', body);
+        const data = await this.http.post('/v1/chat/completions', body, 2, signal);
         logger.debug('system', `Gravitas LLM Response: ${JSON.stringify(data, null, 2)}`);
 
         if (!data || !data.choices || data.choices.length === 0) {

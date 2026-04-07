@@ -41,6 +41,7 @@ const eventValidator_1 = require("./eventValidator");
 const reducer_1 = require("./reducer");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const os = __importStar(require("os"));
 const integrity_1 = require("./integrity");
 /**
  * Authoritative Task Store and Lifecycle Manager.
@@ -367,37 +368,56 @@ class TaskManager {
         const cpuPercent = elapsedUs > 0 ? Math.min(100, Math.round((totalUs / elapsedUs) * 100)) : 0;
         this.cpuUsageBaseline = process.cpuUsage();
         this.lastTelemetryTime = now;
+        // Try to enrich with real VRAM if Coder is running locally
+        let vramMb = 0;
+        try {
+            const socketPath = path.join(os.homedir(), '.gravitas', 'sockets', 'coder.sock');
+            if (fs.existsSync(socketPath)) {
+                // We use a sync-like check to avoid blocking the sampling 
+                // but since this is an async-friendly area, we just fire-and-forget or keep last known.
+                // For this implementation, we'll just emit what we have and let pollHardwareMetrics handle higher-fidelity data.
+            }
+        }
+        catch (e) { }
         this.emitEvent(taskId, {
             type: 'ResourceUsageSampled',
             resources: {
                 ramMb,
-                vramMb: 0,
+                vramMb,
                 cpuPercent
             }
         });
     }
     async pollHardwareMetrics(taskId) {
         try {
-            // We reuse the existing Coder client's HTTP bridge
-            const llm = require('../agents/loop').AgentLoopController.getInstance().getCoderClient();
-            const slots = await llm.http.get('/slots');
-            const metrics = await llm.http.get('/metrics');
+            const socketPath = path.join(require('os').homedir(), '.gravitas', 'sockets', 'coder.sock');
+            if (!fs.existsSync(socketPath))
+                return;
+            const { LlamaHttpClient } = require('../../llm/llamaHttpClient');
+            const client = new LlamaHttpClient(`unix://${socketPath}`);
+            const metrics = await client.get('/metrics');
+            const slots = await client.get('/slots');
             this.emitEvent(taskId, {
                 type: 'HardwareMetricsEmitted',
                 vramMb: this.extractVram(metrics),
-                activeSlots: slots.filter((s) => s.status === 'processing').length,
-                totalSlots: slots.length,
-                tps: 0 // Will be calculated in the UI from iteration timing
+                activeSlots: Array.isArray(slots) ? slots.filter((s) => s.status === 'processing').length : 0,
+                totalSlots: Array.isArray(slots) ? slots.length : 0,
+                tps: 0 // Calculated by UI
             });
         }
         catch (e) {
-            // Silence silent polling errors to avoid log spam
+            // Silence polling errors
         }
     }
     extractVram(metrics) {
-        // Simple regex to find llama_vram_used in Prometheus-style metrics
-        const match = metrics.match(/llama_vram_used_bytes\s+(\d+)/);
-        return match ? Math.round(parseInt(match[1]) / 1024 / 1024) : 0;
+        if (typeof metrics !== 'string')
+            return 0;
+        // Find llama_vram_used_bytes or similar Prometheus metric
+        const match = metrics.match(/vram_used_bytes\s+([0-9.]+)/) || metrics.match(/vram_used\s+([0-9.]+)/);
+        if (match) {
+            return Math.round(parseFloat(match[1]) / 1024 / 1024);
+        }
+        return 0;
     }
     emitStreamingChunk(taskId, chunk, stage) {
         const task = this.tasks[taskId];

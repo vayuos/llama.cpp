@@ -4,9 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; script-src 'nonce-${nonce}' ${webview.cspSource} 'unsafe-eval'; img-src ${webview.cspSource} https:;">
     <title>Gravitas Live Test Lab</title>
     <link href="taskShell.css" rel="stylesheet">
-    <script>
+    <script nonce="${nonce}">
         // Mock VS Code API
         window.acquireVsCodeApi = () => ({
             postMessage: (msg) => console.log('VSCODE_POST:', msg),
@@ -46,7 +47,7 @@
     </div>
 
     <script src="taskShell.js"></script>
-    <script>
+    <script nonce="${nonce}">
         // Start Simulation
         async function runSimulation() {
             const taskId = 'test-task-123';

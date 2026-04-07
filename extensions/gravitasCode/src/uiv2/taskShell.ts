@@ -125,10 +125,17 @@ export class TaskShellPanel {
         const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'taskShell.html');
         let html = fs.readFileSync(htmlPath, 'utf-8');
 
+        const nonce = getNonce();
+
         // Replace placeholders
         html = html.replace('${styleUri}', styleUri.toString());
         html = html.replace('${scriptUri}', scriptUri.toString());
         html = html.replace('${toolkitUri}', toolkitUri.toString());
+        html = html.replace('${nonce}', nonce);
+        html = html.replace('${webview.cspSource}', webview.cspSource);
+        
+        // Re-inject the toolkit and script with nonce
+        html = html.replace('</body>', `    <script nonce="${nonce}" type="module" src="${toolkitUri}"></script>\n    <script nonce="${nonce}" src="${scriptUri}"></script>\n</body>`);
 
         return html;
     }
@@ -141,4 +148,13 @@ export class TaskShellPanel {
             if (x) { x.dispose(); }
         }
     }
+}
+
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }

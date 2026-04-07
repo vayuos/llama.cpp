@@ -103,6 +103,11 @@ export function applyEvent(task: Task, event: any): Task {
             task.status = mapTerminationToState(event.terminationType);
             break;
 
+        case 'AbortTriggered':
+            task.status = TaskState.ABORTED;
+            task.summary = 'Aborted by User';
+            break;
+
         case 'FinalSummaryEmitted':
             task.summary = event.outcome === 'SUCCESS' ? 'Success' : 'Failed';
             break;

@@ -62,6 +62,7 @@ export class ActivationManager {
 
         // --- STEP 3: State & Config ---
         this.gravitasState = GravitasState.getInstance();
+        this.gravitasState.initialize(context);
         this.processManager = UnifiedProcessManager.getInstance();
         console.log('TRACE: [Step 3] Singletons(State, ProcessManager) initialized.');
 
@@ -317,6 +318,10 @@ export class ActivationManager {
 
                 CentralLogger.getInstance().enableEvents();
                 logger.info('system', 'Gravitas Code: Infrastructure fully activated.');
+                
+                // --- NEW: Onboarding / Environment Readiness ---
+                this.ensureEnvironmentReady();
+                
                 console.log('TRACE: [Activation Complete]');
             } catch (subErr: any) {
                 console.log('TRACE: [SUB-SYSTEM CRASH] ' + subErr.message);
@@ -330,6 +335,27 @@ export class ActivationManager {
         TelemetryService.getInstance().stopPolling();
         await this.processManager!.stopAll();
         console.log('Gravitas Code: Cleanup complete.');
+    }
+
+    private async ensureEnvironmentReady() {
+        const socketDir = path.join(os.homedir(), '.gravitas', 'sockets');
+        
+        if (!fs.existsSync(socketDir)) {
+            const action = 'Initialize Now';
+            const msg = 'Gravitas Code: Agent socket directory is missing. Setup environment?';
+            const choice = await vscode.window.showInformationMessage(msg, action);
+            
+            if (choice === action) {
+                const terminal = vscode.window.createTerminal('Gravitas Setup');
+                // Use the URI to get the actual FS path of the extension
+                const extension = vscode.extensions.getExtension('gravitas.gravitas-code');
+                if (extension) {
+                    const scriptPath = path.join(extension.extensionPath, 'scripts', 'initialSetup.sh');
+                    terminal.sendText(`bash "${scriptPath}"`);
+                    terminal.show();
+                }
+            }
+        }
     }
 
     private checkTopology(extensionPath: string) {

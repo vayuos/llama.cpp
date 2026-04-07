@@ -4,14 +4,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} https:;">
     <title>Gravitas Task Shell</title>
     <link href="${styleUri}" rel="stylesheet">
-    <script type="module" src="${toolkitUri}"></script>
 </head>
 
 <body>
     <!-- 1. Task Feed: Legacy and Active Tasks -->
     <div id="taskFeed" class="task-feed">
+        <!-- Welcome Screen -->
+        <div id="welcomeScreen" class="welcome-screen">
+            <div class="welcome-logo">⚡</div>
+            <h2>Welcome to Gravitas Code</h2>
+            <p>Deterministic Dual-Agent Intelligence (VayuForge Protocol)</p>
+            <div class="welcome-features">
+                <div class="feature-tag">✔ 100-Iteration Infinite Autonomy</div>
+                <div class="feature-tag">✔ Real-time KV Cache & VRAM HUD</div>
+                <div class="feature-tag">✔ UDS-Optimized Hardware Bridge</div>
+            </div>
+            <p class="welcome-hint">Type a prompt below to begin your first autonomous session.</p>
+        </div>
         <!-- Task Shells appended here -->
     </div>
 
@@ -19,8 +31,8 @@
     <div class="task-footer">
         <div class="input-container">
             <span class="input-icon">⚡</span>
-            <input type="text" id="commandInput" class="command-input" placeholder="Ask Gravitas anything..."
-                autocomplete="off" spellcheck="false">
+            <textarea id="commandInput" class="command-input" placeholder="Ask Gravitas anything..."
+                autocomplete="off" spellcheck="false" rows="1"></textarea>
         </div>
     </div>
 

@@ -8,14 +8,28 @@ import { TaskId } from '../uiv2/types';
 import { DiffNormalizer } from '../diff/diffNormalizer';
 import { ContextCollector } from '../context/contextCollector';
 import { v4 as uuidv4 } from 'uuid';
+import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as vscode from 'vscode';
 
 /**
  * The Unified Agentic Engine for Gravitas.
  * Orchestrates Coder and Reviewer agents via TaskManager telemetry.
  */
 export class AgentLoopController {
+    private static instance: AgentLoopController;
     private logger = CentralLogger.getInstance();
-    private maxIterations = 3;
+    private maxIterations = 100; // 🛡️ Infinite-capable cap for autonomous reasoning.
+
+    private constructor() {}
+
+    public static getInstance(): AgentLoopController {
+        if (!AgentLoopController.instance) {
+            AgentLoopController.instance = new AgentLoopController();
+        }
+        return AgentLoopController.instance;
+    }
 
     /**
      * Executes the autonomous implement-and-review loop.
@@ -26,12 +40,12 @@ export class AgentLoopController {
 
         const tm = TaskManager.getInstance();
         
-        const coderSockPath = require('path').join(require('os').homedir(), '.gravitas', 'sockets', 'coder.sock');
-        let defaultCoderUrl = require('fs').existsSync(coderSockPath) ? `unix://${coderSockPath}/v1` : `http://${config.coder.host || '127.0.0.1'}:${config.coder.port}/v1`;
+        const coderSockPath = path.join(os.homedir(), '.gravitas', 'sockets', 'coder.sock');
+        let defaultCoderUrl = fs.existsSync(coderSockPath) ? `unix://${coderSockPath}/v1` : `http://${config.coder.host || '127.0.0.1'}:${config.coder.port}/v1`;
         const coderClient = new LLMClient(config.coder.baseUrl || defaultCoderUrl);
         
-        const revSockPath = require('path').join(require('os').homedir(), '.gravitas', 'sockets', 'reviewer.sock');
-        let defaultRevUrl = require('fs').existsSync(revSockPath) ? `unix://${revSockPath}/v1` : `http://${config.reviewer.host || '127.0.0.1'}:${config.reviewer.port}/v1`;
+        const revSockPath = path.join(os.homedir(), '.gravitas', 'sockets', 'reviewer.sock');
+        let defaultRevUrl = fs.existsSync(revSockPath) ? `unix://${revSockPath}/v1` : `http://${config.reviewer.host || '127.0.0.1'}:${config.reviewer.port}/v1`;
         const reviewerClient = new LLMClient(config.reviewer.baseUrl || defaultRevUrl);
 
         const coderOpts: LLMOptions = {
@@ -56,16 +70,16 @@ export class AgentLoopController {
         let workspaceContext = '';
         let systemPromptEnv = CODER_SYSTEM_PROMPT;
 
-        if (prompt.length > 20 || /implement|fix|refactor|add|create/i.test(prompt)) {
+        if (prompt.length > 10 || /implement|fix|refactor|add|create|show|explain/i.test(prompt)) {
             const contextCollector = new ContextCollector();
             workspaceContext = await contextCollector.retrieve(prompt, config);
             
             if (workspaceContext.trim()) {
-                this.logger.debug('system', `Workspace context retrieved: ${workspaceContext.length} chars.`);
-                systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\nYou are context-aware. Current Local Workspace State:\n${workspaceContext.trim()}`;
+                this.logger.debug('system', `Hybrid Workspace context retrieved: ${workspaceContext.length} chars.`);
+                systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\n--- CURRENT WORKSPACE CONTEXT ---\n${workspaceContext.trim()}\n--- END CONTEXT ---\n\nInstructions: Use the above context to guide your implementation. If the context includes file contents, prioritize them. If it only includes a folder map, use it to locate relevant files.`;
             } else {
-                this.logger.debug('system', 'Workspace context is empty for this prompt.');
-                systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\nStrict Rule: The current project workspace is EMPTY. Do not assume any existing architecture or system components. Act only on the prompt provided.`;
+                this.logger.debug('system', 'Workspace context is still empty after local fallback.');
+                systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\nNote: The current workspace appears to be empty or inaccessible. Proceed with high caution and ask for clarification if file paths are unknown.`;
             }
         } else {
             this.logger.debug('system', 'Skipping context retrieval for short/non-implementation prompt.');
@@ -74,7 +88,16 @@ export class AgentLoopController {
 
         this.logger.debug('system', `System Prompt Initialized: ${systemPromptEnv.substring(0, 200)}...`);
 
-        while (iteration < this.maxIterations) {
+        const abortController = new AbortController();
+        const onTaskUpdate = tm.onDidTaskUpdate((updatedTask) => {
+            if (updatedTask.id === taskId && updatedTask.status === 'ABORTED') {
+                this.logger.info('system', `AgentLoop: Task ${taskId} Aborted by user. Triggering AbortSignal.`);
+                abortController.abort();
+            }
+        });
+
+        try {
+            while (iteration < this.maxIterations) {
             iteration++;
             this.checkCancellation(taskId);
             this.logger.info('system', `Loop Iteration ${iteration}: Starting Implementation...`);
@@ -101,9 +124,7 @@ export class AgentLoopController {
                     { role: 'user', content: promptContent }
                 ], coderOpts, (chunk) => {
                     tm.emitStreamingChunk(taskId, chunk, 'implementation');
-                    // Intermittent hardware check (every few chunks)
-                    if (Math.random() > 0.9) tm.pollHardwareMetrics(taskId);
-                });
+                }, abortController.signal);
                 this.logger.info('system', `Gravitas Loop: Coder Response received (${coderResp.content.length} chars)`);
             } catch (e: any) {
                 this.logger.error('system', `Gravitas Loop: Coder LLM Call Failed! Error: ${e.message}`);
@@ -126,17 +147,68 @@ export class AgentLoopController {
             });
             
             const rawContent = coderResp.content;
-            let thoughtContent = 'Refining implementation strategy based on workspace context.';
             let finalOutput = rawContent;
+            let thoughtContent = 'Refining implementation strategy based on workspace context.';
 
-            // Extract <thought> if present
+            // 1.1 Process Tool Actions (High-Fidelity Autonomy)
+            const toolMatch = rawContent.match(/\[TOOL:\s*(\w+)\((.*?)\)\]/);
+            if (toolMatch) {
+                const toolName = toolMatch[1];
+                const toolArgs = toolMatch[2];
+                this.logger.info('system', `AgentLoop: Coder requested tool: ${toolName}(${toolArgs})`);
+
+                tm.emitEvent(taskId, { type: 'TaskStatusEmitted', status: `🔧 Executing ${toolName}...` });
+                tm.emitEvent(taskId, { 
+                    type: 'ToolCallEmitted', 
+                    tool: toolName, 
+                    args: toolArgs 
+                });
+                let toolResult = '';
+                try {
+                    if (toolName === 'list_dir') {
+                        const d = toolArgs.match(/path=["'](.*?)["']/);
+                        toolResult = fs.readdirSync(d ? d[1] : '.').join('\n');
+                    } else if (toolName === 'view_file') {
+                        const f = toolArgs.match(/path=["'](.*?)["']/);
+                        toolResult = fs.readFileSync(f ? f[1] : '', 'utf8');
+                    } else if (toolName === 'grep_search') {
+                        const q = toolArgs.match(/query=["'](.*?)["']/);
+                        const query = q ? q[1] : '';
+                        if (!query) throw new Error('Search query is empty.');
+                        
+                        this.logger.info('system', `AgentLoop: Executing rg search for "${query}"`);
+                        // Use rg (ripgrep) with 50 matches limit for performance/token safety
+                        const { execSync } = require('child_process');
+                        try {
+                            const stdout = execSync(`rg --max-count 50 --fixed-strings --line-number --column "${query}" .`, { 
+                                encoding: 'utf8', 
+                                timeout: 5000,
+                                maxBuffer: 1024 * 1024 
+                            });
+                            toolResult = stdout || 'No matches found.';
+                        } catch (e: any) {
+                            // execSync throws on non-zero exit (common for 0 matches in rg)
+                            toolResult = e.stdout || 'No matches found or search error.';
+                        }
+                    }
+                } catch (e: any) {
+                    toolResult = `Error executing tool: ${e.message}`;
+                }
+
+                currentPrompt = `Tool Result (${toolName}):\n${toolResult}\n\nBased on this, proceed with [PATCH] or another [TOOL].`;
+                tm.recordPhaseMetrics(taskId, coderPhaseId, Date.now() - phaseStart);
+                continue; // 🚀 RECURSIVE REASONING LOOP
+            }
+
+            // 1.2 Extract <thought> if present
             const thoughtMatch = rawContent.match(/<thought>([\s\S]*?)<\/thought>/i);
             if (thoughtMatch) {
                 thoughtContent = thoughtMatch[1].trim();
                 finalOutput = rawContent.replace(/<thought>[\s\S]*?<\/thought>/i, '').trim();
             }
 
-            const normalizedCode = DiffNormalizer.normalize(finalOutput);
+            const patchMatch = finalOutput.match(/\[PATCH\]\s*([\s\S]*)/);
+            const normalizedCode = DiffNormalizer.normalize(patchMatch ? patchMatch[1] : finalOutput);
             currentCode = normalizedCode;
 
             tm.emitEvent(taskId, {
@@ -185,7 +257,9 @@ export class AgentLoopController {
             const reviewerResp = await reviewerClient.generate([
                 { role: 'system', content: REVIEWER_SYSTEM_PROMPT },
                 { role: 'user', content: currentCode }
-            ], reviewerOpts);
+            ], reviewerOpts, (chunk) => {
+                tm.emitStreamingChunk(taskId, chunk, 'review');
+            }, abortController.signal);
             this.logger.info('system', `Gravitas Loop [Iteration ${iteration}]: Reviewer Response received (${reviewerResp.content.length} chars)`);
             this.logger.debug('system', `Full Reviewer Response: ${reviewerResp.content}`);
 
@@ -208,6 +282,7 @@ export class AgentLoopController {
                 phaseId: reviewerPhaseId,
                 emittedAt: new Date().toISOString(),
                 verdict: review.severity === 'critical' ? 'FAIL' : 'PASS',
+                summary: review.summary,
                 issues: review.issues.map(i => ({
                     type: 'correctness',
                     file: 'impl.ts',
@@ -228,12 +303,25 @@ export class AgentLoopController {
 
             // 3. Feedback Loop
             this.logger.info('system', `AgentLoopController: Review FAILED. Moving to iteration ${iteration + 1} with feedback.`);
+            
+            // 🛡️ User Awareness: Alert if loop is going high
+            if (iteration > 10) {
+                tm.emitEvent(taskId, { 
+                    type: 'TaskStatusEmitted', 
+                    status: `Autonomy Warning: Reasoning for ${iteration} iterations... (Consider manual intervention?)` 
+                });
+            }
+
             currentPrompt = `${prompt}\n\n[ITERATION ${iteration} FEEDBACK]\nThe previous implementation failed review with the following summary: ${review.summary}\n\nPlease address these specific issues:\n- ${review.recommendedChanges.join('\n- ')}\n\nIMPORTANT: Provide the COMPLETE updated implementation.`;
             
-            if (iteration === this.maxIterations) {
-                this.logger.error('system', 'AgentLoopController: Maximum iterations reached without passing review.');
-                tm.failTask(taskId, 'Maximum iterations reached without successful review.');
+            if (iteration >= this.maxIterations) {
+                this.logger.error('system', `AgentLoopController: Maximum iterations (${this.maxIterations}) reached without passing review.`);
+                tm.failTask(taskId, `Maximum autonomous iterations (${this.maxIterations}) reached.`);
             }
+        }
+
+        } finally {
+            onTaskUpdate.dispose();
         }
 
         return currentCode;

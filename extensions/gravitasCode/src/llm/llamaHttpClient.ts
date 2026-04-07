@@ -27,9 +27,22 @@ export class LlamaHttpClient {
         };
 
         if (isSocket) {
-            config.socketPath = endpoint.replace('unix://', '');
-            config.baseURL = 'http://localhost';
-            logger.debug('system', `LlamaHttpClient: UDS Socket Path resolved to: ${config.socketPath}`);
+            // endpoint format: unix:///path/to/server.sock/v1
+            const rawPath = endpoint.replace('unix://', '');
+            const sockIndex = rawPath.indexOf('.sock');
+            
+            if (sockIndex !== -1) {
+                const socketPath = rawPath.substring(0, sockIndex + 5); // include '.sock'
+                const apiPrefix = rawPath.substring(sockIndex + 5); // e.g. '/v1'
+                
+                config.socketPath = socketPath;
+                config.baseURL = `http://localhost${apiPrefix}`;
+                logger.debug('system', `LlamaHttpClient: UDS Mode - Socket: ${socketPath}, Prefix: ${apiPrefix}`);
+            } else {
+                config.socketPath = rawPath;
+                config.baseURL = 'http://localhost';
+                logger.debug('system', `LlamaHttpClient: UDS Mode - Raw Socket: ${rawPath}`);
+            }
         } else {
             config.baseURL = endpoint;
         }
@@ -37,16 +50,21 @@ export class LlamaHttpClient {
         this.client = axios.create(config);
     }
 
-    async post(path: string, data: any, retries = 2): Promise<any> {
+    async post(path: string, data: any, retries = 2, signal?: AbortSignal): Promise<any> {
         try {
-            const response = await this.client.post(path, data);
+            const response = await this.client.post(path, data, { signal });
             return response.data;
         } catch (e: any) {
+            if (axios.isCancel(e) || e.name === 'AbortError') {
+                const logger = require('../core/logger').CentralLogger.getInstance();
+                logger.debug('system', `LlamaHttpClient: POST ${path} aborted via signal.`);
+                throw e;
+            }
             const logger = require('../core/logger').CentralLogger.getInstance();
             if (retries > 0 && this.isRetryable(e)) {
                 logger.warn('system', `LlamaHttpClient: POST ${path} failed (${e.code}). Retrying... (${retries} left)`);
                 await new Promise(r => setTimeout(r, 500));
-                return this.post(path, data, retries - 1);
+                return this.post(path, data, retries - 1, signal);
             }
             logger.error('system', `LlamaHttpClient: POST ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
             throw e;

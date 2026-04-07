@@ -31,12 +31,14 @@ code --uninstall-extension VayuOS.gravitas-code
 
 ### Environment Setup
 
+The extension will automatically prompt you to initialize the environment upon first activation if required directories are missing. You can also run the setup manually:
+
 ```bash
-cd gravitas-code
-sudo ./setup.sh
+cd extensions/gravitasCode
+bash scripts/initialSetup.sh
 ```
 
-This script installs dependencies, configures Bun, and ensures proper permissions.
+This script verifies and installs dependencies (Bun/NPM), ensures `.gravitas/sockets` exists with correct permissions, and verifies the availability of the `llama-server` binary.
 
 ---
 
@@ -50,11 +52,11 @@ This script installs dependencies, configures Bun, and ensures proper permission
 
 ## ✨ Core Capabilities
 
-* Dual-agent generation + validation loop
-* Real-time validation engine (ports, models, VRAM)
-* Structured logging (system, agents, pipeline)
-* Local process lifecycle control
-* Live system status via UI
+*   **♾️ Infinite Reasoning Loop**: Dual-agent autonomous reasoning with a 100-iteration cap and Pass/Fail consensus.
+*   **📡 Unified Telemetry Bridging**: Real-time HUD in the chat sidebar showing VRAM, TPS, and KV Cache (UDS-Bridge).
+*   **🛡️ Robust Security (CSP)**: Hardened webviews with nonce-based Content Security Policies.
+*   **⚡ Automated Onboarding**: Proactive environment readiness checks and one-click setup via `initialSetup.sh`.
+*   **📂 Process Lifecycle Control**: Automated spawning/killing of `llama-server` and telemetry processes.
 
 ---
 
@@ -64,8 +66,17 @@ This script installs dependencies, configures Bun, and ensures proper permission
 | ---------------- | ----------------------------- |
 | Validate Setup   | Runs full validation pipeline |
 | Run Pipeline     | Starts dual-agent execution   |
-| Start LLM Server | Launches llama.cpp/Ollama     |
-| Stop LLM Server  | Gracefully stops processes    |
+| New Task         | Spawns a fresh agent task     |
+| Clear All History| Deletes all task ledgers      |
+
+---
+
+## 🛰️ Dashboard (HUD)
+
+The extension provides a premium **Engineering HUD** in the Chat Sidebar header:
+- **VRAM**: Real-time memory allocation per agent.
+- **TPS**: Token-per-second throughput metrics.
+- **KV Cache**: Active slot utilization ratio.
 
 ---
 

@@ -24,23 +24,29 @@ class LLMClient {
             // Streaming mode: SSE
             const response = await this.http.client.post('/v1/chat/completions', body, { responseType: 'stream' });
             let fullContent = '';
+            let lineBuffer = '';
             return new Promise((resolve, reject) => {
                 response.data.on('data', (chunk) => {
-                    const lines = chunk.toString().split('\n').filter(line => line.trim());
+                    lineBuffer += chunk.toString();
+                    const lines = lineBuffer.split('\n');
+                    lineBuffer = lines.pop() || ''; // Keep the last partial line
                     for (const line of lines) {
-                        const message = line.replace(/^data: /, '');
+                        const trimmedLine = line.trim();
+                        if (!trimmedLine || !trimmedLine.startsWith('data: '))
+                            continue;
+                        const message = trimmedLine.replace(/^data: /, '');
                         if (message === '[DONE]')
                             break;
                         try {
                             const parsed = JSON.parse(message);
-                            const content = parsed.choices[0].delta?.content || '';
+                            const content = parsed.choices?.[0]?.delta?.content || '';
                             if (content) {
                                 fullContent += content;
                                 onChunk(content);
                             }
                         }
                         catch (e) {
-                            // Non-json line, skip
+                            // Non-json or partial json on this line, skip or log
                         }
                     }
                 });

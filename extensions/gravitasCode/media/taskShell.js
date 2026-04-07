@@ -15,6 +15,7 @@ class ChatController {
             this.vscode = acquireVsCodeApi();
             this.taskFeed = document.getElementById('taskFeed');
             this.commandInput = document.getElementById('commandInput');
+            this.welcomeScreen = document.getElementById('welcomeScreen');
             this.submitBtn = document.getElementById('submitBtn');
             this.debugOverlay = document.getElementById('debugOverlay');
             this.coderTelemetry = document.getElementById('coderTelemetry');
@@ -144,8 +145,13 @@ class ChatController {
     }
 
     hideWelcome() {
-        // Obsolete: No welcome screen
-        return;
+        if (this.welcomeScreen) {
+            this.welcomeScreen.style.display = 'none';
+        }
+    }
+
+    focusInput() {
+        this.commandInput.focus();
     }
 
     resetUI() {
@@ -191,6 +197,21 @@ class ChatController {
 
         this.updateTaskUI(task); // Apply final status
         this.autoScroll();
+    }
+
+    resetUI() {
+        this.taskFeed.innerHTML = '';
+        if (this.welcomeScreen) {
+            this.taskFeed.appendChild(this.welcomeScreen);
+            this.welcomeScreen.style.display = 'flex';
+        }
+        this.activeTaskId = null;
+    }
+
+    hideWelcome() {
+        if (this.welcomeScreen) {
+            this.welcomeScreen.style.display = 'none';
+        }
     }
 
     handleLiveEvent(taskId, event) {
@@ -278,18 +299,20 @@ class ChatController {
             case 'ThoughtCompleted':
                 this.addEventLog(body, `✅ ${event.content}`, 'success-log');
                 break;
+            case 'ToolCallEmitted':
+                const toolColor = '#61AFEF'; // Soft blue for tools
+                this.addEventLog(body, `🔧 Tool: ${event.tool}(${event.args})`, 'tool-log', toolColor);
+                break;
             case 'CoderResultEmitted':
                 this.addCodeLog(body, event.content, event.file);
                 break;
             case 'ReviewerResultEmitted':
-                const color = event.verdict === 'PASS' ? 'var(--accent-emerald)' : 'var(--vscode-errorForeground)';
-                this.addEventLog(body, `🔎 Review ${event.verdict}`, 'review-log', color);
+                const revColor = event.verdict === 'PASS' ? 'var(--accent-emerald)' : 'var(--vscode-errorForeground)';
+                const summary = event.summary ? `: ${event.summary}` : '';
+                this.addEventLog(body, `🔎 Review ${event.verdict}${summary}`, 'review-log', revColor);
                 break;
             case 'StreamingChunkEmitted':
                 this.handleStreamingChunk(taskId, event.chunk, event.stage);
-                break;
-            case 'HardwareMetricsEmitted':
-                this.updateHardwareUI(taskId, event);
                 break;
         }
     }
@@ -310,11 +333,14 @@ class ChatController {
             dash.classList.remove('online', 'offline');
             dash.classList.add(data.status);
         }
-        if (vram) vram.textContent = data.vram;
+        if (vram) {
+            vram.textContent = data.vram;
+            if (data.driver) vram.title = `${data.driver} Hardware (${data.mode})`;
+        }
         if (tps) tps.textContent = data.tps;
         if (kv) kv.textContent = data.slots;
         if (load) {
-            load.textContent = data.load.toUpperCase();
+            load.textContent = `${data.load.toUpperCase()} (${data.mode || 'LOCAL'})`;
             load.style.background = data.load === 'Idle' ? 'rgba(255,255,255,0.05)' : 'rgba(0, 229, 255, 0.2)';
             load.style.color = data.load === 'Idle' ? 'rgba(255,255,255,0.3)' : 'var(--accent-primary)';
         }

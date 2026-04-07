@@ -90,6 +90,10 @@ function applyEvent(task, event) {
         case 'TaskTerminated':
             task.status = mapTerminationToState(event.terminationType);
             break;
+        case 'AbortTriggered':
+            task.status = types_1.TaskState.ABORTED;
+            task.summary = 'Aborted by User';
+            break;
         case 'FinalSummaryEmitted':
             task.summary = event.outcome === 'SUCCESS' ? 'Success' : 'Failed';
             break;

@@ -14,6 +14,8 @@ export interface TelemetryData {
     slots: string;
     latency: string;
     load: string;
+    driver?: string;
+    mode?: string;
 }
 
 export class TelemetryService {
@@ -22,6 +24,7 @@ export class TelemetryService {
     private state: Map<string, TelemetryData> = new Map();
     private _onDidUpdate = new vscode.EventEmitter<void>();
     public readonly onDidUpdate = this._onDidUpdate.event;
+    private detectedDriver: 'nvidia' | 'amd' | 'generic' | null = null;
 
     private constructor() {}
 
@@ -34,7 +37,7 @@ export class TelemetryService {
 
     public startPolling() {
         if (this.pollInterval) return;
-        this.pollInterval = setInterval(() => this.pollAll(), 5000);
+        this.pollInterval = setInterval(() => this.pollAll(), 1000);
         this.pollAll();
     }
 
@@ -59,19 +62,24 @@ export class TelemetryService {
 
     private async pollAll() {
         const logger = require('../core/logger').CentralLogger.getInstance();
-        logger.debug('system', 'TelemetryService: Starting global polling cycle...');
+        logger.debug('system', 'TelemetryService: Starting global parallel polling cycle...');
         const config = await ConfigManager.getInstance().loadConfig();
         if (!config) return;
 
-        await this.pollAgent('coder', config.coder, config);
-        await this.pollAgent('reviewer', config.reviewer, config);
+        // Concurrent polling for performance
+        await Promise.allSettled([
+            this.pollAgent('coder', config.coder, config),
+            this.pollAgent('reviewer', config.reviewer, config)
+        ]);
+
         this._onDidUpdate.fire();
-        logger.debug('system', 'TelemetryService: Global polling cycle completed.');
+        logger.debug('system', 'TelemetryService: Global parallel polling cycle completed.');
     }
 
     private async pollAgent(type: 'coder' | 'reviewer', modelConfig: any, fullConfig: any) {
         const isRemote = fullConfig.connection.mode === 'remote';
         const start = Date.now();
+        const logger = require('../core/logger').CentralLogger.getInstance();
         
         try {
             const client = new LlamaHttpClient(modelConfig.baseUrl);
@@ -90,22 +98,21 @@ export class TelemetryService {
             try {
                 metrics = await client.get('/metrics');
             } catch (e) {
-                // If metrics fails but health worked, we are still "online" but with no data
                 metrics = '';
             }
             
             const latency = `${Date.now() - start}ms`;
             
-            // Parse TPS
+            // Parse TPS (predicted_tokens_seconds)
             const genTpsMatch = metrics.match(/predicted_tokens_seconds\s+([0-9.]+)/);
             const promptTpsMatch = metrics.match(/prompt_tokens_seconds\s+([0-9.]+)/);
             
-            const genTps = genTpsMatch ? parseFloat(genTpsMatch[1]) : 0;
-            const promptTps = promptTpsMatch ? parseFloat(promptTpsMatch[1]) : 0;
+            const genTps = genTpsMatch ? parseFloat(genTpsMatch[1]) : 0.0;
+            const promptTps = promptTpsMatch ? parseFloat(promptTpsMatch[1]) : 0.0;
  
-            // Parse Slots
+            // Parse KV Cache (kv_cache_usage_ratio)
             const slotsMatch = metrics.match(/kv_cache_usage_ratio\s+([0-9.]+)/);
-            const slots = slotsMatch ? `${Math.round(parseFloat(slotsMatch[1])*100)}%` : '0%';
+            const slotsPct = slotsMatch ? Math.round(parseFloat(slotsMatch[1]) * 100) : 0;
  
             // Parse Load/Activity
             let load = 'Idle';
@@ -125,16 +132,20 @@ export class TelemetryService {
                 vram = await this.getLocalVram(modelConfig);
             }
  
+            const monitor = this.detectMonitor();
             this.state.set(type, {
                 status: status,
                 vram,
                 tps: genTps > 0 ? `${genTps.toFixed(1)}` : '0.0',
                 promptTps: promptTps > 0 ? `${promptTps.toFixed(1)}` : '0.0',
-                slots,
+                slots: `${slotsPct}%`,
                 latency,
-                load
+                load,
+                driver: monitor.toUpperCase(),
+                mode: isRemote ? 'REMOTE' : 'LOCAL'
             });
-        } catch (e) {
+        } catch (e: any) {
+            logger.debug('system', `TelemetryService: Failed to poll ${type}. Offline. (Err: ${e.message})`);
             this.state.set(type, {
                 status: 'offline',
                 vram: '0%',
@@ -147,29 +158,65 @@ export class TelemetryService {
         }
     }
 
+    private detectMonitor(): 'nvidia' | 'amd' | 'generic' {
+        if (this.detectedDriver) return this.detectedDriver;
+        
+        try {
+            if (fs.existsSync('/usr/bin/nvidia-smi')) {
+                this.detectedDriver = 'nvidia';
+            } else if (fs.existsSync('/usr/bin/rocm-smi')) {
+                this.detectedDriver = 'amd';
+            } else {
+                this.detectedDriver = 'generic';
+            }
+        } catch (e) {
+            this.detectedDriver = 'generic';
+        }
+        return this.detectedDriver;
+    }
+
     private getLocalVram(config: any): Promise<string> {
         return new Promise((resolve) => {
             const logger = require('../core/logger').CentralLogger.getInstance();
             if (config.mode === 'cpu') return resolve('CPU');
             
-            const cmd = 'nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader';
-            logger.debug('system', `TelemetryService: Executing hardware check: ${cmd}`);
+            const monitor = this.detectMonitor();
+            let cmd = '';
+            
+            if (monitor === 'nvidia') {
+                cmd = 'nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader';
+            } else if (monitor === 'amd') {
+                cmd = 'rocm-smi --showmeminfo vram --json';
+            } else {
+                return resolve('GPU');
+            }
+
+            logger.debug('system', `TelemetryService: Polling HW (${monitor}): ${cmd}`);
             
             exec(cmd, (err, stdout) => {
                 if (err || !stdout) {
-                    logger.warn('system', `TelemetryService: nvidia-smi failed: ${err?.message}`);
+                    logger.warn('system', `TelemetryService: HW monitor failed: ${err?.message}`);
                     return resolve('GPU');
                 }
-                const parts = stdout.split(',').map(s => s.trim());
-                if (parts.length >= 2) {
-                    const used = parseInt(parts[0]);
-                    const total = parseInt(parts[1]);
-                    const pct = Math.round((used/total)*100);
-                    logger.debug('system', `TelemetryService: VRAM Check Result: ${used}/${total} MiB (${pct}%)`);
-                    resolve(`${pct}%`);
-                } else {
-                    resolve('GPU');
-                }
+                
+                try {
+                    if (monitor === 'nvidia') {
+                        const parts = stdout.split(',').map(s => s.trim());
+                        if (parts.length >= 2) {
+                            const pct = Math.round((parseInt(parts[0]) / parseInt(parts[1])) * 100);
+                            return resolve(`${pct}%`);
+                        }
+                    } else if (monitor === 'amd') {
+                        // Rough AMD JSON parse logic
+                        const data = JSON.parse(stdout);
+                        const vram = data['GPU[0]']?.['VRAM Total Memory (B)'];
+                        const used = data['GPU[0]']?.['VRAM Total Used (B)'];
+                        if (vram && used) {
+                            return resolve(`${Math.round((used/vram)*100)}%`);
+                        }
+                    }
+                } catch (e) {}
+                resolve('GPU');
             });
         });
     }

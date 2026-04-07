@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravitas Validation</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${webview.cspSource}; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} https:;">
+    <title>Gravitas System Validation</title>
     <style>
         body {
             background-color: #0d1117;
@@ -85,7 +86,7 @@
     <div id="status" class="status-bar status-validating">Validating System Integrity...</div>
     <div id="logs" class="log-container"></div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         const logsDiv = document.getElementById('logs');
         const statusDiv = document.getElementById('status');

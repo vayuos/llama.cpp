@@ -5,6 +5,7 @@ import { EventValidator } from './eventValidator';
 import { reduceTask, applyEvent } from './reducer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { verifyContentIntegrity, IntegrityResult } from './integrity';
 
 /**
@@ -383,35 +384,10 @@ export class TaskManager {
             type: 'ResourceUsageSampled',
             resources: {
                 ramMb,
-                vramMb: 0, 
+                vramMb: 0, // TelemetryService handles real VRAM
                 cpuPercent
             }
         });
-    }
-
-    public async pollHardwareMetrics(taskId: TaskId) {
-        try {
-            // We reuse the existing Coder client's HTTP bridge
-            const llm = require('../agents/loop').AgentLoopController.getInstance().getCoderClient();
-            const slots = await (llm as any).http.get('/slots');
-            const metrics = await (llm as any).http.get('/metrics');
-            
-            this.emitEvent(taskId, {
-                type: 'HardwareMetricsEmitted',
-                vramMb: this.extractVram(metrics),
-                activeSlots: slots.filter((s: any) => s.status === 'processing').length,
-                totalSlots: slots.length,
-                tps: 0 // Will be calculated in the UI from iteration timing
-            });
-        } catch (e) {
-            // Silence silent polling errors to avoid log spam
-        }
-    }
-
-    private extractVram(metrics: string): number {
-        // Simple regex to find llama_vram_used in Prometheus-style metrics
-        const match = metrics.match(/llama_vram_used_bytes\s+(\d+)/);
-        return match ? Math.round(parseInt(match[1]) / 1024 / 1024) : 0;
     }
 
     public emitStreamingChunk(taskId: TaskId, chunk: string, stage: 'thought' | 'implementation' | 'review') {
