@@ -52,7 +52,7 @@ export class TelemetryService {
         return this.state.get(type) || {
             status: 'offline',
             vram: '0%',
-            tps: '0 strategy',
+            tps: '0.0',
             promptTps: '0',
             slots: '0%',
             latency: '---',

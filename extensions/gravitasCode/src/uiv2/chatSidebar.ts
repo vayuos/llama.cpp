@@ -52,6 +52,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
         _context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
+        CentralLogger.getInstance().info('system', 'TRACE: [ChatSidebarProvider] resolveWebviewView called.');
         this._view = webviewView;
         this._isReady = false;
         // DO NOT CLEAR _messageBuffer here - preserve commands like 'reset'
@@ -122,6 +123,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
             CentralLogger.getInstance().debug('system', `ChatSidebarProvider: Received message from frontend - type: ${message.type}`);
             switch (message.type) {
                 case 'ready': {
+                    CentralLogger.getInstance().info('system', "TRACE: [ChatSidebarProvider] Handshake 'ready' received from frontend.");
                     CentralLogger.getInstance().info('system', 'Gravitas Chat: Handshake received from frontend.');
                     this._isReady = true;
                     if (this._watchdogTimer) clearTimeout(this._watchdogTimer);
@@ -159,6 +161,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
+        CentralLogger.getInstance().info('system', 'TRACE: [ChatSidebarProvider] _getHtmlForWebview() generating HTML.');
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'taskShell.js'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'taskShell.css'));
         const toolkitUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'toolkit.js'));

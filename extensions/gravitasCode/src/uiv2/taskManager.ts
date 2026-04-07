@@ -66,16 +66,23 @@ export class TaskManager {
 
     private loadTasks() {
         const baseDir = this.getStoragePath();
-        if (!fs.existsSync(baseDir)) return;
+        console.log(`TRACE: [TaskManager] Checking storage path: ${baseDir}`);
+        if (!fs.existsSync(baseDir)) {
+            console.log('TRACE: [TaskManager] Storage path does not exist. Skipping recovery.');
+            return;
+        }
 
         const taskDirs = fs.readdirSync(baseDir, { withFileTypes: true })
             .filter(dirent => dirent.isDirectory())
             .map(dirent => dirent.name);
+        
+        console.log(`TRACE: [TaskManager] Found ${taskDirs.length} potential task directories.`);
 
         for (const taskId of taskDirs) {
             try {
                 const eventsPath = this.getTaskEventsPath(taskId);
                 if (fs.existsSync(eventsPath)) {
+                    console.log(`TRACE: [TaskManager] Restoring task ${taskId}...`);
                     const events = fs.readFileSync(eventsPath, 'utf8')
                         .split('\n')
                         .filter(line => line.trim())
@@ -83,13 +90,14 @@ export class TaskManager {
 
                     if (events.length > 0) {
                         this.tasks[taskId] = this.rebuildTaskFromEvents(taskId, events);
-                        console.log(`[TaskManager] Recovered task ${taskId} with ${events.length} events.`);
+                        console.log(`TRACE: [TaskManager] Task ${taskId} recovered with ${events.length} events.`);
                     }
                 }
             } catch (err) {
-                console.error(`[TaskManager] Failed to restore task ${taskId}:`, err);
+                console.error(`TRACE: [TaskManager] Failed to restore task ${taskId}:`, err);
             }
         }
+        console.log('TRACE: [TaskManager] Task recovery sequence completed.');
     }
 
     private rebuildTaskFromEvents(taskId: string, events: TaskEvent[]): Task {
