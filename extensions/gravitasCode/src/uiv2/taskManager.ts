@@ -26,10 +26,23 @@ export class TaskManager {
     public readonly onDidEmitEvent = this._onDidEmitEvent.event;
 
     private constructor(context: vscode.ExtensionContext) {
+        this.syncLog('TRACE: [TaskManager] Entering constructor...');
         this.context = context;
+        this.syncLog('TRACE: [TaskManager] Creating EventValidator.getInstance()...');
         this.eventValidator = EventValidator.getInstance();
+        this.syncLog('TRACE: [TaskManager] Ensuring Base Directory...');
         this.ensureBaseDir();
+        this.syncLog('TRACE: [TaskManager] Loading Tasks from disk...');
         this.loadTasks();
+        this.syncLog('TRACE: [TaskManager] Constructor finished.');
+    }
+    
+    private syncLog(msg: string) {
+        try {
+            const fs = require('fs'), os = require('os'), path = require('path');
+            const file = path.join(os.homedir(), '.gravitas', 'logs', 'boot_trace.log');
+            fs.appendFileSync(file, `[${new Date().toISOString()}] ${msg}\n`, 'utf8');
+        } catch(e) {}
     }
 
     private ensureBaseDir() {
@@ -66,32 +79,50 @@ export class TaskManager {
 
     private loadTasks() {
         const baseDir = this.getStoragePath();
-        console.log(`TRACE: [TaskManager] Checking storage path: ${baseDir}`);
+        this.syncLog(`TRACE: [TaskManager.loadTasks] Checking storage path: ${baseDir}`);
         if (!fs.existsSync(baseDir)) {
-            console.log('TRACE: [TaskManager] Storage path does not exist. Skipping recovery.');
+            this.syncLog('TRACE: [TaskManager.loadTasks] Storage path does not exist. Skipping recovery.');
             return;
         }
+
+        this.syncLog(`TRACE: [TaskManager.loadTasks] Starting fs.readdirSync...`);
 
         const taskDirs = fs.readdirSync(baseDir, { withFileTypes: true })
             .filter(dirent => dirent.isDirectory())
             .map(dirent => dirent.name);
         
-        console.log(`TRACE: [TaskManager] Found ${taskDirs.length} potential task directories.`);
+        this.syncLog(`TRACE: [TaskManager.loadTasks] Found ${taskDirs.length} potential task directories.`);
 
         for (const taskId of taskDirs) {
             try {
                 const eventsPath = this.getTaskEventsPath(taskId);
+                this.syncLog(`TRACE: [TaskManager.loadTasks] Loop index - eventsPath: ${eventsPath}`);
                 if (fs.existsSync(eventsPath)) {
-                    console.log(`TRACE: [TaskManager] Restoring task ${taskId}...`);
-                    const events = fs.readFileSync(eventsPath, 'utf8')
+                    const stats = fs.statSync(eventsPath);
+                    if (stats.size > 20 * 1024 * 1024) { // 20 MB safety limit
+                        this.syncLog(`CRITICAL: Task ${taskId} events.jsonl is bloated (${stats.size} bytes). Skipping to prevent V8 crash.`);
+                        try {
+                            // Rename to prevent persistent crash loops on subsequent boots
+                            fs.renameSync(eventsPath, eventsPath + '.corrupted');
+                        } catch(e) {}
+                        continue;
+                    }
+
+                    this.syncLog(`TRACE: [TaskManager.loadTasks] Reading JSON file...`);
+                    const fileContent = fs.readFileSync(eventsPath, 'utf8');
+                    this.syncLog(`TRACE: [TaskManager.loadTasks] Parse JSON (Length: ${fileContent.length})`);
+                    const events = fileContent
                         .split('\n')
                         .filter(line => line.trim())
                         .map(line => JSON.parse(line) as TaskEvent);
 
                     if (events.length > 0) {
+                        this.syncLog(`TRACE: [TaskManager.loadTasks] Calling rebuildTaskFromEvents`);
                         this.tasks[taskId] = this.rebuildTaskFromEvents(taskId, events);
-                        console.log(`TRACE: [TaskManager] Task ${taskId} recovered with ${events.length} events.`);
+                        this.syncLog(`TRACE: [TaskManager.loadTasks] Task ${taskId} recovered with ${events.length} events.`);
                     }
+                } else {
+                    this.syncLog(`TRACE: [TaskManager.loadTasks] No events file: ${eventsPath}`);
                 }
             } catch (err) {
                 console.error(`TRACE: [TaskManager] Failed to restore task ${taskId}:`, err);

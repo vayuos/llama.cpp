@@ -21,6 +21,17 @@ import { TaskManager } from './uiv2/taskManager';
 import { TaskShellPanel } from './uiv2/taskShell';
 import { ChatSidebarProvider } from './uiv2/chatSidebar';
 
+const BOOT_LOG_FILE = path.join(os.homedir(), '.gravitas', 'logs', 'boot_trace.log');
+function syncLog(msg: string) {
+    try {
+        const dir = path.dirname(BOOT_LOG_FILE);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const line = `[${new Date().toISOString()}] ${msg}\n`;
+        fs.appendFileSync(BOOT_LOG_FILE, line, 'utf8');
+        process.stdout.write(line); // Ensure it flushes slightly better than console.log
+    } catch(e) {}
+}
+
 export class ActivationManager {
     // private state = new StateManager(); // Deprecated
 
@@ -41,22 +52,25 @@ export class ActivationManager {
     }
 
     private async internalActivate(context: vscode.ExtensionContext) {
-        console.log('TRACE: [Internal Activate] Starting...');
+        syncLog('TRACE: [Internal Activate] Starting...');
         
         // --- EMERGENCY: Defer activation to break synchronous crash loop ---
         setTimeout(async () => {
-            console.log('TRACE: [Emergency Defer] Starting deferred activation...');
+            syncLog('TRACE: [Emergency Defer] Starting deferred activation...');
             try {
                 // --- STEP 1: LOGGING baseline ---
+                syncLog('TRACE: [Step 1] Loading logger...');
                 const logger = CentralLogger.getInstance();
                 this.logger = logger;
-                console.log('TRACE: [Step 1] CentralLogger initialized.');
+                syncLog('TRACE: [Step 1] CentralLogger initialized.');
 
                 // --- STEP 2: Topology check ---
                 try {
+                    syncLog('TRACE: [Step 2] Executing Topology check...');
                     this.checkTopology(context.extensionPath);
-                    console.log('TRACE: [Step 2] Topology check passed.');
+                    syncLog('TRACE: [Step 2] Topology check passed.');
                 } catch (e: any) {
+                    syncLog(`CRITICAL: Topology Violation. ${e.message}`);
                     vscode.window.showErrorMessage(`CRITICAL: Topology Violation. ${e.message}`, { modal: true });
                     logger.error('system', `CRITICAL TOPOLOGY VIOLATION: ${e.message}`);
                     this.gravitasState = GravitasState.getInstance();
@@ -65,22 +79,24 @@ export class ActivationManager {
                 }
 
                 // --- STEP 3: State & Config ---
+                syncLog('TRACE: [Step 3] Initializing GravitasState...');
                 this.gravitasState = GravitasState.getInstance();
                 this.gravitasState.initialize(context);
+                syncLog('TRACE: [Step 3] Initializing ProcessManager...');
                 this.processManager = UnifiedProcessManager.getInstance();
-                console.log('TRACE: [Step 3] Singletons(State, ProcessManager) initialized.');
+                syncLog('TRACE: [Step 3] Singletons(State, ProcessManager) initialized.');
 
                 // --- STEP 3.1: TaskManager & LogBridge ---
                 try {
-                    console.log('TRACE: [Step 3.2] Starting TaskManager initialization...');
+                    syncLog('TRACE: [Step 3.2] Starting TaskManager initialization...');
                     TaskManager.initialize(context);
-                    console.log('TRACE: [Step 3.3] TaskManager initialized successfully.');
+                    syncLog('TRACE: [Step 3.3] TaskManager initialized successfully.');
 
-                    console.log('TRACE: [Step 3.4] Initializing LogBridge...');
+                    syncLog('TRACE: [Step 3.4] Initializing LogBridge...');
                     LogBridge.initialize();
-                    console.log('TRACE: [Step 3.5] LogBridge initialized.');
+                    syncLog('TRACE: [Step 3.5] LogBridge initialized.');
                 } catch (e: any) {
-                    console.error('TRACE: [Step 3.6] CRITICAL SERVICE FAILURE: ' + e.message);
+                    syncLog('TRACE: [Step 3.6] CRITICAL SERVICE FAILURE: ' + e.message);
                     if (this.logger) this.logger.error('system', `Core service activation failed: ${e.message}`);
                 }
 
@@ -146,11 +162,13 @@ export class ActivationManager {
                 } else {
                     logger.info('system', 'Extension reloading - preserving existing data.');
                 }
-                console.log('TRACE: [Step 4] Installation markers & directory check done.');
+                syncLog('TRACE: [Step 4] Installation markers & directory check done. Calling State Sync...');
 
                 // 2. State & Config
                 this.gravitasState!.syncToContext();
+                syncLog('TRACE: [Step 4.1] Load config...');
                 const config = await ConfigManager.getInstance().loadConfig();
+                syncLog('TRACE: [Step 4.2] Load config complete.');
 
                 if (config) {
                     logger.setLogDir(config.logDir || '');
@@ -161,22 +179,27 @@ export class ActivationManager {
                     this.gravitasState!.updateState({ configLoaded: false, validated: false });
                     logger.warn('system', 'No configuration found.');
                 }
-                console.log('TRACE: [Step 5] State synced and Config loaded.');
+                syncLog('TRACE: [Step 5] State synced and Config loaded.');
 
                 // 3. Register Hooks & Services
+                syncLog('TRACE: [Step 5.1] Registering Hooks & Services (Cleanup)...');
                 registerCleanup(context);
+                syncLog('TRACE: [Step 5.2] Registering Watchers...');
                 registerWatchers(context);
                 TelemetryService.getInstance().startPolling();
 
                 // 4. UI Providers
+                syncLog('TRACE: [Step 5.3] Registering UI Providers (Current Disabled Status)...');
                 const chatSidebarProvider = new ChatSidebarProvider(context.extensionUri);
                 const taskHistoryProvider = new TaskHistoryProvider();
                 const runtimeProvider = new RuntimeTreeProvider();
-
+                
                 context.subscriptions.push(
-                    vscode.window.registerWebviewViewProvider(ChatSidebarProvider.viewType, chatSidebarProvider),
-                    vscode.window.registerTreeDataProvider('gravitas.taskHistory', taskHistoryProvider),
-                    vscode.window.registerTreeDataProvider('gravitas.runtime', runtimeProvider)
+                    vscode.window.registerWebviewViewProvider('gravitas-chat', chatSidebarProvider, {
+                        webviewOptions: { retainContextWhenHidden: true }
+                    }),
+                    vscode.window.registerTreeDataProvider('gravitas-tasks', taskHistoryProvider),
+                    vscode.window.registerTreeDataProvider('gravitas-runtime', runtimeProvider)
                 );
 
                 // 5. Commands
@@ -197,19 +220,19 @@ export class ActivationManager {
                         }
                     }),
                     vscode.commands.registerCommand('gravitas.task.openInShell', (taskId: string) => {
-                        chatSidebarProvider.showTask(taskId);
+                        // chatSidebarProvider.showTask(taskId);
                     }),
                     vscode.commands.registerCommand('gravitas.task.spawn', async (prompt?: string) => {
                         const tm = TaskManager.getInstance();
                         
                         if (prompt) {
                             const task = tm.createTask(prompt, 'user');
-                            chatSidebarProvider.showTask(task.id);
+                            // chatSidebarProvider.showTask(task.id);
                             await vscode.commands.executeCommand('gravitas.pipeline.run', prompt, task.id);
                         } else {
                             // Unified 'New Chat' Flow: No popup, just sidebar focus
-                            chatSidebarProvider.reset(); 
-                            chatSidebarProvider.focus();
+                            // chatSidebarProvider.reset(); 
+                            // chatSidebarProvider.focus();
                         }
                     }),
                     vscode.commands.registerCommand('gravitas.pipeline.run', async (prompt?: string, taskId?: string) => {
@@ -307,28 +330,29 @@ export class ActivationManager {
                         }
                     }),
                     vscode.commands.registerCommand('gravitas.views.focus', () => {
-                        chatSidebarProvider.focus();
+                        // chatSidebarProvider.focus();
                         // Ensure the view is visible in the sidebar
                         vscode.commands.executeCommand('workbench.view.extension.gravitas-explorer');
                     }),
                 );
-                console.log('TRACE: [Step 6] Hooks & Commands registered.');
+                syncLog('TRACE: [Step 6] Hooks & Commands registered.');
 
                 // 6. Subsystem Start (DEFERRED - do this last to ensure host stability)
                 try {
+                    syncLog('TRACE: [Step 7] Final Subsystem Event Enabler...');
                     CentralLogger.getInstance().enableEvents();
                     logger.info('system', 'Gravitas Code: Infrastructure fully activated.');
                     
-                    console.log('TRACE: [Activation Complete]');
+                    syncLog('TRACE: [Activation Complete]');
                 } catch (subErr: any) {
-                    console.log('TRACE: [SUB-SYSTEM CRASH] ' + subErr.message);
+                    syncLog('TRACE: [SUB-SYSTEM CRASH] ' + subErr.message);
                     if (this.logger) this.logger.error('system', `Sub-system activation failed: ${subErr.message}`);
                 }
             } catch (fatalErr: any) {
-                console.error('CRITICAL: [Emergency Defer] Panic in deferred activation:', fatalErr);
+                syncLog('CRITICAL: [Emergency Defer] Panic in deferred activation: ' + fatalErr.stack);
             }
         }, 500); 
-        console.log('TRACE: [Internal Activate] Returning immediately (Deferred Start).');
+        syncLog('TRACE: [Internal Activate] Returning immediately (Deferred Start).');
     }
 
     async cleanup() {
