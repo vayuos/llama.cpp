@@ -63,13 +63,18 @@ class ChatSidebarProvider {
             this.postOrBuffer({ type: 'updateTask', task });
         });
         telemetry_1.TelemetryService.getInstance().onDidUpdate(() => {
-            const coder = telemetry_1.TelemetryService.getInstance().getTelemetry('coder');
-            const reviewer = telemetry_1.TelemetryService.getInstance().getTelemetry('reviewer');
-            this.postOrBuffer({ type: 'telemetry', coder, reviewer });
+            const ts = telemetry_1.TelemetryService.getInstance();
+            this.postOrBuffer({
+                type: 'telemetry',
+                coder: ts.getTelemetry('coder'),
+                reviewer: ts.getTelemetry('reviewer'),
+                rag: ts.getTelemetry('rag')
+            });
         });
         this._isSubscribed = true;
     }
     resolveWebviewView(webviewView, _context, _token) {
+        logger_1.CentralLogger.getInstance().info('system', 'TRACE: [ChatSidebarProvider] resolveWebviewView called.');
         this._view = webviewView;
         this._isReady = false;
         // DO NOT CLEAR _messageBuffer here - preserve commands like 'reset'
@@ -131,6 +136,7 @@ class ChatSidebarProvider {
             logger_1.CentralLogger.getInstance().debug('system', `ChatSidebarProvider: Received message from frontend - type: ${message.type}`);
             switch (message.type) {
                 case 'ready': {
+                    logger_1.CentralLogger.getInstance().info('system', "TRACE: [ChatSidebarProvider] Handshake 'ready' received from frontend.");
                     logger_1.CentralLogger.getInstance().info('system', 'Gravitas Chat: Handshake received from frontend.');
                     this._isReady = true;
                     if (this._watchdogTimer)
@@ -166,6 +172,7 @@ class ChatSidebarProvider {
         });
     }
     _getHtmlForWebview(webview) {
+        logger_1.CentralLogger.getInstance().info('system', 'TRACE: [ChatSidebarProvider] _getHtmlForWebview() generating HTML.');
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'taskShell.js'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'taskShell.css'));
         const toolkitUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'toolkit.js'));
@@ -204,6 +211,10 @@ class ChatSidebarProvider {
                 <div class="metric-item"><span class="label">VRAM</span><span id="reviewerVram" class="value">0%</span></div>
                 <div class="metric-item highlight"><span class="label">GEN</span><span id="reviewerTps" class="value">0.0</span></div>
                 <div class="metric-item"><span class="label">KV</span><span id="reviewerKv" class="value">0%</span></div>
+            </div>
+            <div class="section-footer">
+                <div id="ragStatus" class="status-dot"></div>
+                <span class="footer-label">RAG.BRAIN</span>
             </div>
         </div>
     </div>

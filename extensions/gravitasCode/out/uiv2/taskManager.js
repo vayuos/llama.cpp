@@ -40,8 +40,8 @@ const types_1 = require("./types");
 const eventValidator_1 = require("./eventValidator");
 const reducer_1 = require("./reducer");
 const fs = __importStar(require("fs"));
+const fs_1 = require("fs");
 const path = __importStar(require("path"));
-const os = __importStar(require("os"));
 const integrity_1 = require("./integrity");
 /**
  * Authoritative Task Store and Lifecycle Manager.
@@ -56,10 +56,22 @@ class TaskManager {
         this.lastTelemetryTime = Date.now();
         this.onDidTaskUpdate = this._onDidTaskUpdate.event;
         this.onDidEmitEvent = this._onDidEmitEvent.event;
+        this.syncLog('TRACE: [TaskManager] Entering constructor...');
         this.context = context;
+        this.syncLog('TRACE: [TaskManager] Creating EventValidator.getInstance()...');
         this.eventValidator = eventValidator_1.EventValidator.getInstance();
+        this.syncLog('TRACE: [TaskManager] Ensuring Base Directory...');
         this.ensureBaseDir();
-        this.loadTasks();
+        // this.loadTasks(); // DE-BLOCKED: Removed from constructor
+        this.syncLog('TRACE: [TaskManager] Constructor finished.');
+    }
+    syncLog(msg) {
+        try {
+            const fs = require('fs'), os = require('os'), path = require('path');
+            const file = path.join(os.homedir(), '.gravitas', 'logs', 'boot_trace.log');
+            fs.appendFileSync(file, `[${new Date().toISOString()}] ${msg}\n`, 'utf8');
+        }
+        catch (e) { }
     }
     ensureBaseDir() {
         const baseDir = this.getStoragePath();
@@ -88,30 +100,61 @@ class TaskManager {
         }
         return TaskManager.instance;
     }
-    loadTasks() {
+    async loadTasks() {
         const baseDir = this.getStoragePath();
-        if (!fs.existsSync(baseDir))
+        this.syncLog(`TRACE: [TaskManager.loadTasks] Checking storage path: ${baseDir}`);
+        // Use fs.existsSync for the initial check as it's fast and doesn't throw
+        if (!fs.existsSync(baseDir)) {
+            this.syncLog('TRACE: [TaskManager.loadTasks] Storage path does not exist. Skipping recovery.');
             return;
-        const taskDirs = fs.readdirSync(baseDir, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
-            .map(dirent => dirent.name);
-        for (const taskId of taskDirs) {
-            try {
-                const eventsPath = this.getTaskEventsPath(taskId);
-                if (fs.existsSync(eventsPath)) {
-                    const events = fs.readFileSync(eventsPath, 'utf8')
+        }
+        this.syncLog(`TRACE: [TaskManager.loadTasks] Starting directory listing...`);
+        try {
+            const dirents = await fs_1.promises.readdir(baseDir, { withFileTypes: true });
+            const taskDirs = dirents
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+            this.syncLog(`TRACE: [TaskManager.loadTasks] Found ${taskDirs.length} potential task directories.`);
+            for (const taskId of taskDirs) {
+                try {
+                    const eventsPath = this.getTaskEventsPath(taskId);
+                    // Check if file exists asynchronously
+                    try {
+                        await fs_1.promises.access(eventsPath);
+                    }
+                    catch {
+                        continue;
+                    }
+                    const stats = await fs_1.promises.stat(eventsPath);
+                    if (stats.size > 20 * 1024 * 1024) { // 20 MB safety limit
+                        this.syncLog(`CRITICAL: Task ${taskId} events.jsonl is bloated (${stats.size} bytes). Skipping.`);
+                        try {
+                            await fs_1.promises.rename(eventsPath, eventsPath + '.corrupted');
+                        }
+                        catch (e) { }
+                        continue;
+                    }
+                    const fileContent = await fs_1.promises.readFile(eventsPath, 'utf8');
+                    const events = fileContent
                         .split('\n')
                         .filter(line => line.trim())
                         .map(line => JSON.parse(line));
                     if (events.length > 0) {
-                        this.tasks[taskId] = this.rebuildTaskFromEvents(taskId, events);
-                        console.log(`[TaskManager] Recovered task ${taskId} with ${events.length} events.`);
+                        const task = this.rebuildTaskFromEvents(taskId, events);
+                        this.tasks[taskId] = task;
+                        this._fireUpdate(task); // UI LIVENESS: Populate history view as we load
+                        // Yield to event loop to keep UI responsive during large recovery
+                        await new Promise(resolve => setImmediate(resolve));
                     }
                 }
+                catch (err) {
+                    console.error(`TRACE: [TaskManager] Failed to restore task ${taskId}:`, err);
+                }
             }
-            catch (err) {
-                console.error(`[TaskManager] Failed to restore task ${taskId}:`, err);
-            }
+            this.syncLog(`TRACE: [TaskManager.loadTasks] Background recovery completed for ${Object.keys(this.tasks).length} tasks.`);
+        }
+        catch (err) {
+            this.syncLog(`CRITICAL: [TaskManager.loadTasks] Failed to read base storage directory: ${err.message}`);
         }
     }
     rebuildTaskFromEvents(taskId, events) {
@@ -368,56 +411,14 @@ class TaskManager {
         const cpuPercent = elapsedUs > 0 ? Math.min(100, Math.round((totalUs / elapsedUs) * 100)) : 0;
         this.cpuUsageBaseline = process.cpuUsage();
         this.lastTelemetryTime = now;
-        // Try to enrich with real VRAM if Coder is running locally
-        let vramMb = 0;
-        try {
-            const socketPath = path.join(os.homedir(), '.gravitas', 'sockets', 'coder.sock');
-            if (fs.existsSync(socketPath)) {
-                // We use a sync-like check to avoid blocking the sampling 
-                // but since this is an async-friendly area, we just fire-and-forget or keep last known.
-                // For this implementation, we'll just emit what we have and let pollHardwareMetrics handle higher-fidelity data.
-            }
-        }
-        catch (e) { }
         this.emitEvent(taskId, {
             type: 'ResourceUsageSampled',
             resources: {
                 ramMb,
-                vramMb,
+                vramMb: 0, // TelemetryService handles real VRAM
                 cpuPercent
             }
         });
-    }
-    async pollHardwareMetrics(taskId) {
-        try {
-            const socketPath = path.join(require('os').homedir(), '.gravitas', 'sockets', 'coder.sock');
-            if (!fs.existsSync(socketPath))
-                return;
-            const { LlamaHttpClient } = require('../../llm/llamaHttpClient');
-            const client = new LlamaHttpClient(`unix://${socketPath}`);
-            const metrics = await client.get('/metrics');
-            const slots = await client.get('/slots');
-            this.emitEvent(taskId, {
-                type: 'HardwareMetricsEmitted',
-                vramMb: this.extractVram(metrics),
-                activeSlots: Array.isArray(slots) ? slots.filter((s) => s.status === 'processing').length : 0,
-                totalSlots: Array.isArray(slots) ? slots.length : 0,
-                tps: 0 // Calculated by UI
-            });
-        }
-        catch (e) {
-            // Silence polling errors
-        }
-    }
-    extractVram(metrics) {
-        if (typeof metrics !== 'string')
-            return 0;
-        // Find llama_vram_used_bytes or similar Prometheus metric
-        const match = metrics.match(/vram_used_bytes\s+([0-9.]+)/) || metrics.match(/vram_used\s+([0-9.]+)/);
-        if (match) {
-            return Math.round(parseFloat(match[1]) / 1024 / 1024);
-        }
-        return 0;
     }
     emitStreamingChunk(taskId, chunk, stage) {
         const task = this.tasks[taskId];

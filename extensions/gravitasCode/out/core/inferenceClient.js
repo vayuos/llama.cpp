@@ -1,22 +1,18 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InferenceClient = void 0;
-const axios_1 = __importDefault(require("axios"));
 const logger_1 = require("./logger");
+const llamaHttpClient_1 = require("../llm/llamaHttpClient");
 class InferenceClient {
     constructor() {
         this.logger = logger_1.CentralLogger.getInstance();
     }
     async *streamCompletion(baseUrl, options) {
         try {
-            const response = await axios_1.default.post(`${baseUrl}/completion`, {
+            const client = new llamaHttpClient_1.LlamaHttpClient(baseUrl);
+            const response = await client.post('/completion', {
                 ...options,
                 stream: true
-            }, {
-                responseType: 'stream'
             });
             const stream = response.data;
             for await (const chunk of stream) {
@@ -46,11 +42,12 @@ class InferenceClient {
     }
     async getCompletion(baseUrl, options) {
         try {
-            const response = await axios_1.default.post(`${baseUrl}/completion`, {
+            const client = new llamaHttpClient_1.LlamaHttpClient(baseUrl);
+            const data = await client.post('/completion', {
                 ...options,
                 stream: false
             });
-            return response.data.content;
+            return data.content;
         }
         catch (error) {
             this.logger.error('system', `Completion failed: ${error.message}`);

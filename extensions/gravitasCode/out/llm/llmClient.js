@@ -6,7 +6,7 @@ class LLMClient {
     constructor(endpoint) {
         this.http = new llamaHttpClient_1.LlamaHttpClient(endpoint);
     }
-    async generate(messages, options = {}, onChunk) {
+    async generate(messages, options = {}, onChunk, signal) {
         const body = {
             messages: messages,
             stream: !!onChunk,
@@ -22,10 +22,16 @@ class LLMClient {
         logger.debug('system', `Gravitas LLM Request: ${JSON.stringify(body, null, 2)}`);
         if (onChunk) {
             // Streaming mode: SSE
-            const response = await this.http.client.post('/v1/chat/completions', body, { responseType: 'stream' });
+            const response = await this.http.client.post('/v1/chat/completions', body, { responseType: 'stream', signal });
             let fullContent = '';
             let lineBuffer = '';
             return new Promise((resolve, reject) => {
+                const onAbort = () => {
+                    response.data.destroy();
+                    reject(new Error('LLM Stream aborted via signal.'));
+                };
+                if (signal)
+                    signal.addEventListener('abort', onAbort);
                 response.data.on('data', (chunk) => {
                     lineBuffer += chunk.toString();
                     const lines = lineBuffer.split('\n');
@@ -51,16 +57,20 @@ class LLMClient {
                     }
                 });
                 response.data.on('end', () => {
+                    if (signal)
+                        signal.removeEventListener('abort', onAbort);
                     logger.debug('system', `Gravitas LLM Stream Completed. Total content length: ${fullContent.length} chars.`);
                     resolve({ content: fullContent });
                 });
                 response.data.on('error', (err) => {
+                    if (signal)
+                        signal.removeEventListener('abort', onAbort);
                     logger.error('system', `Gravitas LLM Stream Error: ${err.message}`);
                     reject(err);
                 });
             });
         }
-        const data = await this.http.post('/v1/chat/completions', body);
+        const data = await this.http.post('/v1/chat/completions', body, 2, signal);
         logger.debug('system', `Gravitas LLM Response: ${JSON.stringify(data, null, 2)}`);
         if (!data || !data.choices || data.choices.length === 0) {
             logger.error('system', `Gravitas LLM Error: Malformed response from server. Data: ${JSON.stringify(data)}`);

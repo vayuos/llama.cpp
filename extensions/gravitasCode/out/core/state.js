@@ -51,6 +51,15 @@ class GravitasState {
         }
         return GravitasState.instance;
     }
+    initialize(context) {
+        this.context = context;
+        // Restore persistent state
+        const val = this.context.globalState.get('gravitas.validated', false);
+        const hash = this.context.globalState.get('gravitas.validationHash', null);
+        this._state.validated = val;
+        this._state.validationHash = hash;
+        this.syncToContext();
+    }
     get state() {
         return { ...this._state };
     }
@@ -58,6 +67,15 @@ class GravitasState {
         const logger = require('./logger').CentralLogger.getInstance();
         const prev = { ...this._state };
         this._state = { ...this._state, ...newState };
+        // Persist critical flags
+        if (this.context) {
+            if (newState.validated !== undefined) {
+                this.context.globalState.update('gravitas.validated', newState.validated);
+            }
+            if (newState.validationHash !== undefined) {
+                this.context.globalState.update('gravitas.validationHash', newState.validationHash);
+            }
+        }
         // Detailed diff logging
         const changes = Object.keys(newState).map(k => `${k}: ${prev[k]} -> ${newState[k]}`);
         logger.debug('system', `GravitasState: Updated. Changes: [${changes.join(', ')}]`);

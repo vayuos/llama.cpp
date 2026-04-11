@@ -9,9 +9,9 @@ exports.ReviewIssueSchema = zod_1.z.object({
         if (typeof val !== 'string')
             return 'minor';
         const s = val.toLowerCase();
-        if (s.includes('crit'))
+        if (s.includes('crit') || s.includes('fatal'))
             return 'critical';
-        if (s.includes('maj') || s.includes('error'))
+        if (s.includes('maj') || s.includes('error') || s.includes('fail'))
             return 'major';
         return 'minor';
     }, zod_1.z.enum(['critical', 'major', 'minor'])),
@@ -22,10 +22,12 @@ exports.DeterministicReviewSchema = zod_1.z.object({
         if (typeof val !== 'string')
             return 'minor';
         const s = val.toLowerCase();
-        if (s.includes('crit'))
+        if (s.includes('crit') || s.includes('fatal'))
             return 'critical';
-        if (s.includes('maj') || s.includes('err'))
+        if (s.includes('maj') || s.includes('error') || s.includes('fail'))
             return 'major';
+        if (s.includes('pass') || s.includes('lgtm') || s.includes('ok'))
+            return 'minor';
         return 'minor';
     }, zod_1.z.enum(['critical', 'major', 'minor'])),
     issues: zod_1.z.array(exports.ReviewIssueSchema).default([]),
@@ -37,24 +39,66 @@ class ReviewParser {
         const logger = require('../core/logger').CentralLogger.getInstance();
         logger.debug('system', `ReviewParser: Parsing raw content (${content.length} chars)`);
         try {
-            // Attempt to find JSON block if the model wrapped it in markdown
-            const jsonMatch = content.match(/(\{[\s\S]*\})/);
-            const rawJson = jsonMatch ? jsonMatch[1] : content;
+            const rawJson = this.extractJson(content);
+            if (!rawJson)
+                throw new Error('No valid JSON block found in content.');
             logger.debug('system', `ReviewParser: Isolated JSON part (${rawJson.length} chars)`);
             const data = JSON.parse(rawJson);
             // Apply schema with lenient preprocessing
-            const result = exports.DeterministicReviewSchema.parse(data);
-            logger.debug('system', `ReviewParser: Successfully parsed review with severity: ${result.severity}`);
-            return result;
+            return exports.DeterministicReviewSchema.parse(data);
         }
         catch (e) {
             logger.warn('system', `ReviewParser: Failed to parse or validate review. Error: ${e.message}`);
             // Fallback for extremely malformed content that still has some info
-            if (content.toLowerCase().includes('success') || content.toLowerCase().includes('pass')) {
+            if (content.toLowerCase().includes('success') || content.toLowerCase().includes('pass') || content.toLowerCase().includes('lgtm')) {
                 return { severity: 'minor', issues: [], recommendedChanges: [], summary: 'Review parsed as PASS via heuristic fallback.' };
             }
             return null;
         }
+    }
+    static extractJson(content) {
+        // 1. Try Markdown block first for cleaner isolation
+        const markdownMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+        if (markdownMatch)
+            return markdownMatch[1];
+        // 2. String-Aware Balanced-Brace Extraction
+        let openBraces = 0;
+        let startIndex = -1;
+        let inString = false;
+        let escaped = false;
+        for (let i = 0; i < content.length; i++) {
+            const char = content[i];
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                }
+                else if (char === '\\') {
+                    escaped = true;
+                }
+                else if (char === '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (char === '"') {
+                inString = true;
+                continue;
+            }
+            if (char === '{') {
+                if (startIndex === -1)
+                    startIndex = i;
+                openBraces++;
+            }
+            else if (char === '}') {
+                if (startIndex !== -1) {
+                    openBraces--;
+                    if (openBraces === 0) {
+                        return content.substring(startIndex, i + 1);
+                    }
+                }
+            }
+        }
+        return null;
     }
 }
 exports.ReviewParser = ReviewParser;

@@ -18,27 +18,35 @@ You can request information by outputting a tool command:
 - \`[TOOL: list_dir(path)]\`: List files in a directory.
 - \`[TOOL: view_file(path)]\`: Read the content of a file.
 - \`[TOOL: grep_search(query)]\`: Search for a pattern across the codebase.
-- \`[TOOL: codebase_stats()]\`: Generate a JSON summary of file counts and lines of code.
 
-**Example Turn:**
-<thought>
-I need to check how the storage path is resolved before updating the config. I'll start by listing the core directory.
-</thought>
-[TOOL: list_dir(path="/home/viren/runs/full-server/gravitas-code/src/core")]
+**IMPORTANT**: If you output a Tool Action, wait for a response. Do not propose a [PATCH] until you have sufficient context.`;
+exports.REVIEWER_SYSTEM_PROMPT = `You are the **Gravitas Reviewer** (VayuForge Deterministic Protocol).
+Evaluate the proposed [PATCH] for correctness, security, architecture, and performance.
 
-Final Output:
-<thought>
-The storage path is correctly resolved. I'm now applying the fix to config.ts.
-</thought>
-[PATCH]
---- a/src/core/config.ts
-+++ b/src/core/config.ts
-... content ...
-`;
-exports.REVIEWER_SYSTEM_PROMPT = `You are the Gravitas Reviewer.
-Evaluate the proposed patch for correctness, security, architecture, and performance.
-Output ONLY valid JSON matching the provided schema.`;
+### REVIEW SCHEMA
+You MUST output valid JSON only, matching this structure:
+{
+  "severity": "critical" | "major" | "minor",
+  "summary": "High-level review outcome",
+  "issues": [
+    {
+      "description": "Exactly what is wrong",
+      "line": 12,
+      "severity": "critical" | "major" | "minor",
+      "suggestion": "How to fix it"
+    }
+  ],
+  "recommendedChanges": ["Detailed change strings"]
+}
+
+### SEVERITY GUIDELINES
+- **critical**: Security vulnerabilities, logic errors, breaking changes. (Fails the loop).
+- **major**: Poor architecture, missing error handling. (Passes but warns).
+- **minor**: Readability, style, minor optimizations. (Passes instantly).
+
+### OUTPUT
+Output ONLY the JSON object. No preamble. No markdown.`;
 function formatReviewerPrompt(patch) {
-    return `[PROPOSED PATCH]\n${patch}\n\n[INSTRUCTION]\nReview this patch and output JSON only.`;
+    return `[PROPOSED PATCH]\n${patch}\n\n[INSTRUCTION]\nReview the above patch against VayuForge standards. Output JSON ONLY.`;
 }
 //# sourceMappingURL=systemRules.js.map

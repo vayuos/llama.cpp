@@ -186,14 +186,17 @@ class ConfigManager {
         }
         catch (e) {
             logger.error('system', `Failed to load configuration: ${e.message}`);
-            // Return a minimal fallback config to allow UI to register
+            // Return a minimal but COMPLETE fallback config to allow UI to register
+            const defaultMode = 'local';
+            const defaultCoderUrl = process.platform === 'linux' ? `unix://${path.join(require('os').homedir(), '.gravitas', 'sockets', 'coder.sock')}` : 'http://127.0.0.1:8040';
+            const defaultReviewerUrl = process.platform === 'linux' ? `unix://${path.join(require('os').homedir(), '.gravitas', 'sockets', 'reviewer.sock')}` : 'http://127.0.0.1:18080';
             return {
                 workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '',
                 logDir: '',
-                connection: { mode: 'local', system3Ip: '127.0.0.1' },
+                connection: { mode: defaultMode, system3Ip: '127.0.0.1' },
                 runtime: { autoTestOnStart: false, showLogs: true, logLevel: 'debug', killSignal: 'SIGTERM' },
-                coder: { enabled: true, host: '127.0.0.1', port: 8040 },
-                reviewer: { enabled: true, host: '127.0.0.1', port: 18080 },
+                coder: { enabled: true, host: '127.0.0.1', port: 8040, baseUrl: defaultCoderUrl, contextSize: 102400, temperature: 0.2, repeatPenalty: 1.1, strictMode: true },
+                reviewer: { enabled: true, host: '127.0.0.1', port: 18080, baseUrl: defaultReviewerUrl, contextSize: 102400, temperature: 0.0, repeatPenalty: 1.0, strictMode: true },
                 vayuforge: { ragEndpoint: 'http://127.0.0.1:18081/retrieve' }
             };
         }

@@ -51,7 +51,7 @@ async function runPipeline(prompt, existingTaskId) {
     try {
         // 2. Delegate to Unified Agentic Engine
         logger.debug('system', `runPipeline: Initializing AgentLoopController for task ${taskId}`);
-        const controller = new loop_1.AgentLoopController();
+        const controller = loop_1.AgentLoopController.getInstance();
         // 3. Start the loop directly. 
         // Operational status ('Thinking...', 'Reviewing...') is managed by the sidebar events.
         await controller.run(task.id, prompt);
