@@ -39,6 +39,7 @@ export class ActivationManager {
     private processManager?: UnifiedProcessManager;
     private context?: vscode.ExtensionContext;
     private logger?: CentralLogger;
+    private chatSidebarProvider?: ChatSidebarProvider;
 
     async activate(context: vscode.ExtensionContext) {
         this.context = context;
@@ -51,6 +52,22 @@ export class ActivationManager {
         }
     }
 
+    private async safeComponentInit(name: string, action: () => Promise<void> | void) {
+        syncLog(`COMPONENT [${name}]: Initializing...`);
+        try {
+            await action();
+            syncLog(`COMPONENT [${name}]: Initialized successfully.`);
+        } catch (e: any) {
+            const errorMsg = `COMPONENT [${name}]: NOT WORKING. Reason: ${e.message}`;
+            syncLog(errorMsg);
+            if (this.logger) {
+                this.logger.error('system', errorMsg);
+            } else {
+                console.error(errorMsg);
+            }
+        }
+    }
+
     private async internalActivate(context: vscode.ExtensionContext) {
         syncLog('TRACE: [Internal Activate] Starting...');
         
@@ -58,61 +75,56 @@ export class ActivationManager {
         setTimeout(async () => {
             syncLog('TRACE: [Emergency Defer] Starting deferred activation...');
             try {
-                // --- STEP 1: LOGGING baseline ---
-                syncLog('TRACE: [Step 1] Loading logger...');
-                const logger = CentralLogger.getInstance();
-                this.logger = logger;
-                syncLog('TRACE: [Step 1] CentralLogger initialized.');
+                // --- STEP 1: Core Lifecycle (Singletons FIRST) ---
+                await this.safeComponentInit('CentralLogger', () => {
+                    this.logger = CentralLogger.getInstance();
+                });
 
-                // --- STEP 2: Topology check ---
-                try {
-                    syncLog('TRACE: [Step 2] Executing Topology check...');
-                    this.checkTopology(context.extensionPath);
-                    syncLog('TRACE: [Step 2] Topology check passed.');
-                } catch (e: any) {
-                    syncLog(`CRITICAL: Topology Violation. ${e.message}`);
-                    vscode.window.showErrorMessage(`CRITICAL: Topology Violation. ${e.message}`, { modal: true });
-                    logger.error('system', `CRITICAL TOPOLOGY VIOLATION: ${e.message}`);
+                await this.safeComponentInit('GravitasState', () => {
+                    syncLog('TRACE: [Step 3.1] Initializing State...');
                     this.gravitasState = GravitasState.getInstance();
-                    this.gravitasState.updateState({ validated: false });
-                    return;
-                }
+                    this.gravitasState.initialize(context);
+                });
 
-                // --- STEP 3: State & Config ---
-                syncLog('TRACE: [Step 3] Initializing GravitasState...');
-                this.gravitasState = GravitasState.getInstance();
-                this.gravitasState.initialize(context);
-                syncLog('TRACE: [Step 3] Initializing ProcessManager...');
-                this.processManager = UnifiedProcessManager.getInstance();
-                syncLog('TRACE: [Step 3] Singletons(State, ProcessManager) initialized.');
+                await this.safeComponentInit('TaskManager', () => {
+                    syncLog('TRACE: [Step 3.2] Initializing TaskManager...');
+                    const tm = TaskManager.initialize(context);
+                    tm.loadTasks().catch(err => {
+                        syncLog(`BACKGROUND ERROR: [TaskManager] Recovery failed: ${err.message}`);
+                    });
+                });
 
-                // --- STEP 3.1: TaskManager & LogBridge ---
-                try {
-                    syncLog('TRACE: [Step 3.2] Starting TaskManager initialization...');
-                    TaskManager.initialize(context);
-                    syncLog('TRACE: [Step 3.3] TaskManager initialized successfully.');
+                // --- STEP 2: UI Providers (REGISTER AFTER Singletons are ready) ---
+                await this.safeComponentInit('UIProviders', () => {
+                    syncLog('TRACE: [Step 3.3] Creating UI Providers...');
+                    this.chatSidebarProvider = new ChatSidebarProvider(context.extensionUri);
+                    const taskHistoryProvider = new TaskHistoryProvider();
+                    const runtimeProvider = new RuntimeTreeProvider();
+                    
+                    syncLog('TRACE: [Step 3.4] Registering Providers with VS Code...');
+                    context.subscriptions.push(
+                        vscode.window.registerWebviewViewProvider('gravitas.chat', this.chatSidebarProvider, {
+                            webviewOptions: { retainContextWhenHidden: true }
+                        }),
+                        vscode.window.registerTreeDataProvider('gravitas.taskHistory', taskHistoryProvider),
+                        vscode.window.registerTreeDataProvider('gravitas.runtime', runtimeProvider)
+                    );
+                });
 
-                    syncLog('TRACE: [Step 3.4] Initializing LogBridge...');
+                await this.safeComponentInit('LogBridge', () => {
                     LogBridge.initialize();
-                    syncLog('TRACE: [Step 3.5] LogBridge initialized.');
-                } catch (e: any) {
-                    syncLog('TRACE: [Step 3.6] CRITICAL SERVICE FAILURE: ' + e.message);
-                    if (this.logger) this.logger.error('system', `Core service activation failed: ${e.message}`);
-                }
+                });
 
-                // --- TOPOLOGY ENFORCEMENT ---
-                try {
+                // --- STEP 4: Topology & Infrastructure ---
+                await this.safeComponentInit('TopologyCheck', () => {
                     this.checkTopology(context.extensionPath);
-                } catch (e: any) {
-                    vscode.window.showErrorMessage(`CRITICAL: Topology Violation. ${e.message}`, { modal: true });
-                    logger.error('system', `CRITICAL TOPOLOGY VIOLATION: ${e.message}`);
-                    // We intentionally do not throw here to allow partial activation for debugging, 
-                    // BUT we mark validation as impossible.
-                    this.gravitasState!.updateState({ validated: false });
-                    return; // STOP ACTIVATION
-                }
+                });
 
-                // Check if this is a fresh install/reinstall using a persistent marker file
+                await this.safeComponentInit('ProcessManager', () => {
+                    this.processManager = UnifiedProcessManager.getInstance();
+                });
+
+                // Check install marker... (existing logic remains)
                 // Storage is in globalStorageUri which persists across extension reinstalls/updates
                 const installMarkerPath = path.join(context.globalStorageUri.fsPath, '.installed');
                 
@@ -125,14 +137,14 @@ export class ActivationManager {
                 const isFreshInstall = !markerExists;
 
                 if (isFreshInstall) {
-                    logger.info('system', 'Fresh install detected - cleaning up any existing data...');
+                    if (this.logger) this.logger.info('system', 'Fresh install detected - cleaning up any existing data...');
 
                     // Clean up everything
                     const storageManager = StorageManager.getInstance();
                     const cleanupResult = storageManager.clearAll();
 
                     if (!cleanupResult.success) {
-                        logger.error('system', `Cleanup failed: ${cleanupResult.message}`);
+                        if (this.logger) this.logger.error('system', `Cleanup failed: ${cleanupResult.message}`);
                     }
 
                     // Clear settings
@@ -155,200 +167,202 @@ export class ActivationManager {
                     // Create marker file
                     try {
                         fs.writeFileSync(installMarkerPath, new Date().toISOString());
-                        logger.info('system', 'First install cleanup complete. Extension ready.');
+                        if (this.logger) this.logger.info('system', 'First install cleanup complete. Extension ready.');
                     } catch (e: any) {
-                        logger.error('system', `Failed to create install marker: ${e.message}`);
+                        if (this.logger) this.logger.error('system', `Failed to create install marker: ${e.message}`);
                     }
                 } else {
-                    logger.info('system', 'Extension reloading - preserving existing data.');
+                    if (this.logger) this.logger.info('system', 'Extension reloading - preserving existing data.');
                 }
                 syncLog('TRACE: [Step 4] Installation markers & directory check done. Calling State Sync...');
 
                 // 2. State & Config
-                this.gravitasState!.syncToContext();
-                syncLog('TRACE: [Step 4.1] Load config...');
-                const config = await ConfigManager.getInstance().loadConfig();
-                syncLog('TRACE: [Step 4.2] Load config complete.');
+                await this.safeComponentInit('ConfigLoader', async () => {
+                    if (this.gravitasState) this.gravitasState.syncToContext();
+                    const config = await ConfigManager.getInstance().loadConfig();
 
-                if (config) {
-                    logger.setLogDir(config.logDir || '');
-                    CentralLogger.getInstance().setLevel(config.runtime.logLevel);
-                    this.gravitasState!.updateState({ configLoaded: true, validated: true });
-                    logger.info('system', 'Configuration loaded successfully.');
-                } else {
-                    this.gravitasState!.updateState({ configLoaded: false, validated: false });
-                    logger.warn('system', 'No configuration found.');
-                }
+                    if (config && this.logger) {
+                        this.logger.setLogDir(config.logDir || '');
+                        CentralLogger.getInstance().setLevel(config.runtime.logLevel);
+                        this.gravitasState?.updateState({ configLoaded: true, validated: true });
+                        this.logger.info('system', 'Configuration loaded successfully.');
+                    } else if (this.logger) {
+                        this.gravitasState?.updateState({ configLoaded: false, validated: false });
+                        this.logger.warn('system', 'No configuration found or logger missing.');
+                    }
+                });
                 syncLog('TRACE: [Step 5] State synced and Config loaded.');
 
                 // 3. Register Hooks & Services
-                syncLog('TRACE: [Step 5.1] Registering Hooks & Services (Cleanup)...');
-                registerCleanup(context);
-                syncLog('TRACE: [Step 5.2] Registering Watchers...');
-                registerWatchers(context);
-                TelemetryService.getInstance().startPolling();
+                await this.safeComponentInit('HooksAndWatchers', () => {
+                    registerCleanup(context);
+                    registerWatchers(context);
+                    TelemetryService.getInstance().startPolling();
+                });
 
-                // 4. UI Providers
-                syncLog('TRACE: [Step 5.3] Registering UI Providers (Current Disabled Status)...');
-                const chatSidebarProvider = new ChatSidebarProvider(context.extensionUri);
-                const taskHistoryProvider = new TaskHistoryProvider();
-                const runtimeProvider = new RuntimeTreeProvider();
-                
-                context.subscriptions.push(
-                    vscode.window.registerWebviewViewProvider('gravitas-chat', chatSidebarProvider, {
-                        webviewOptions: { retainContextWhenHidden: true }
-                    }),
-                    vscode.window.registerTreeDataProvider('gravitas-tasks', taskHistoryProvider),
-                    vscode.window.registerTreeDataProvider('gravitas-runtime', runtimeProvider)
-                );
+                // UI Registration already handled in Step 2
 
                 // 5. Commands
-                context.subscriptions.push(
-                    vscode.commands.registerCommand('gravitas.task.delete', (item: any) => {
-                        if (item && item.task) {
-                            TaskManager.getInstance().deleteTask(item.task.id);
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.task.clearAll', async () => {
-                        const confirm = await vscode.window.showWarningMessage(
-                            'Are you sure you want to clear ALL task history? This will delete all event ledgers from disk.',
-                            { modal: true },
-                            'Delete All'
-                        );
-                        if (confirm === 'Delete All') {
-                            TaskManager.getInstance().clearAllTasks();
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.task.openInShell', (taskId: string) => {
-                        // chatSidebarProvider.showTask(taskId);
-                    }),
-                    vscode.commands.registerCommand('gravitas.task.spawn', async (prompt?: string) => {
-                        const tm = TaskManager.getInstance();
-                        
-                        if (prompt) {
-                            const task = tm.createTask(prompt, 'user');
-                            // chatSidebarProvider.showTask(task.id);
-                            await vscode.commands.executeCommand('gravitas.pipeline.run', prompt, task.id);
-                        } else {
-                            // Unified 'New Chat' Flow: No popup, just sidebar focus
-                            // chatSidebarProvider.reset(); 
-                            // chatSidebarProvider.focus();
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.pipeline.run', async (prompt?: string, taskId?: string) => {
-                        const input = prompt || await vscode.window.showInputBox({ 
-                            prompt: 'Dual-Agent Execution Loop',
-                            placeHolder: 'e.g. Implement a new logger'
-                        });
-                        if (input) await runPipeline(input, taskId);
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.start', async () => {
-                        if (!this.gravitasState!.state.validated) return;
-                        const cfg = await ConfigManager.getInstance().loadConfig();
-                        if (cfg) {
-                            await this.processManager!.startReviewer(cfg);
-                            await this.processManager!.startCoder(cfg);
-                            logger.info('system', 'LLM Servers started.');
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.stop', () => {
-                        this.processManager!.stopAll();
-                        logger.info('system', 'LLM Servers stopped.');
-                    }),
-                    // Individual model controls
-                    vscode.commands.registerCommand('gravitas.runtime.startCoder', async () => {
-                        if (!this.gravitasState!.state.validated) return;
-                        const cfg = await ConfigManager.getInstance().loadConfig();
-                        if (cfg) {
-                            await this.processManager!.startCoder(cfg);
-                            logger.info('system', 'Coder server started.');
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.stopCoder', async () => {
-                        const pm = this.processManager! as any;
-                        await pm.coder.stop();
-                        logger.info('system', 'Coder server stopped.');
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.restartCoder', async () => {
-                        if (!this.gravitasState!.state.validated) return;
-                        const cfg = await ConfigManager.getInstance().loadConfig();
-                        if (cfg) {
+                await this.safeComponentInit('CommandRegistration', () => {
+                    context.subscriptions.push(
+                        vscode.commands.registerCommand('gravitas.task.delete', (item: any) => {
+                            if (item && item.task) {
+                                TaskManager.getInstance().deleteTask(item.task.id);
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.task.clearAll', async () => {
+                            const confirm = await vscode.window.showWarningMessage(
+                                'Are you sure you want to clear ALL task history? This will delete all event ledgers from disk.',
+                                { modal: true },
+                                'Delete All'
+                            );
+                            if (confirm === 'Delete All') {
+                                TaskManager.getInstance().clearAllTasks();
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.task.openInShell', (taskId: string) => {
+                            if (this.chatSidebarProvider) {
+                                this.chatSidebarProvider.showTask(taskId);
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.task.spawn', async (prompt?: string) => {
+                            const tm = TaskManager.getInstance();
+                            
+                            if (prompt) {
+                                const task = tm.createTask(prompt, 'user');
+                                if (this.chatSidebarProvider) {
+                                    this.chatSidebarProvider.showTask(task.id);
+                                }
+                                await vscode.commands.executeCommand('gravitas.pipeline.run', prompt, task.id);
+                            } else {
+                                // Unified 'New Chat' Flow: No popup, just sidebar focus
+                                if (this.chatSidebarProvider) {
+                                    this.chatSidebarProvider.reset(); 
+                                    this.chatSidebarProvider.focus();
+                                }
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.pipeline.run', async (prompt?: string, taskId?: string) => {
+                            const input = prompt || await vscode.window.showInputBox({ 
+                                prompt: 'Dual-Agent Execution Loop',
+                                placeHolder: 'e.g. Implement a new logger'
+                            });
+                            if (input) await runPipeline(input, taskId);
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.start', async () => {
+                            if (!this.gravitasState!.state.validated) return;
+                            const cfg = await ConfigManager.getInstance().loadConfig();
+                            if (cfg && this.logger) {
+                                await this.processManager!.startReviewer(cfg);
+                                await this.processManager!.startCoder(cfg);
+                                this.logger.info('system', 'LLM Servers started.');
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.stop', () => {
+                            this.processManager!.stopAll();
+                            if (this.logger) this.logger.info('system', 'LLM Servers stopped.');
+                        }),
+                        // Individual model controls
+                        vscode.commands.registerCommand('gravitas.runtime.startCoder', async () => {
+                            if (!this.gravitasState!.state.validated) return;
+                            const cfg = await ConfigManager.getInstance().loadConfig();
+                            if (cfg && this.logger) {
+                                await this.processManager!.startCoder(cfg);
+                                this.logger.info('system', 'Coder server started.');
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.stopCoder', async () => {
                             const pm = this.processManager! as any;
                             await pm.coder.stop();
-                            await this.processManager!.startCoder(cfg);
-                            logger.info('system', 'Coder server restarted.');
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.startReviewer', async () => {
-                        if (!this.gravitasState!.state.validated) return;
-                        const cfg = await ConfigManager.getInstance().loadConfig();
-                        if (cfg) {
-                            await this.processManager!.startReviewer(cfg);
-                            logger.info('system', 'Reviewer server started.');
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.stopReviewer', async () => {
-                        const pm = this.processManager! as any;
-                        await pm.reviewer.stop();
-                        logger.info('system', 'Reviewer server stopped.');
-                    }),
-                    vscode.commands.registerCommand('gravitas.runtime.restartReviewer', async () => {
-                        if (!this.gravitasState!.state.validated) return;
-                        const cfg = await ConfigManager.getInstance().loadConfig();
-                        if (cfg) {
+                            if (this.logger) this.logger.info('system', 'Coder server stopped.');
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.restartCoder', async () => {
+                            if (!this.gravitasState!.state.validated) return;
+                            const cfg = await ConfigManager.getInstance().loadConfig();
+                            if (cfg) {
+                                const pm = this.processManager! as any;
+                                await pm.coder.stop();
+                                await this.processManager!.startCoder(cfg);
+                                if (this.logger) this.logger.info('system', 'Coder server restarted.');
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.startReviewer', async () => {
+                            if (!this.gravitasState!.state.validated) return;
+                            const cfg = await ConfigManager.getInstance().loadConfig();
+                            if (cfg && this.logger) {
+                                await this.processManager!.startReviewer(cfg);
+                                this.logger.info('system', 'Reviewer server started.');
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.stopReviewer', async () => {
                             const pm = this.processManager! as any;
                             await pm.reviewer.stop();
-                            await this.processManager!.startReviewer(cfg);
-                            logger.info('system', 'Reviewer server restarted.');
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.storage.clear', async () => {
-                        const choice = await vscode.window.showWarningMessage(
-                            'Clear Gravitas Storage?',
-                            { modal: true },
-                            'Clear Logs Only',
-                            'Clear Everything (Logs + Reset Validation)'
-                        );
-
-                        if (!choice) return;
-
-                        const storageManager = StorageManager.getInstance();
-                        let result;
-
-                        if (choice === 'Clear Logs Only') {
-                            result = storageManager.clearLogs();
-                        } else {
-                            result = storageManager.clearAll();
-                        }
-
-                        if (result.success) {
-                            vscode.window.showInformationMessage(result.message);
-                            logger.info('system', 'Storage cleared by user.');
-                        } else {
-                            vscode.window.showErrorMessage(result.message);
-                            logger.error('system', result.message);
-                        }
-                    }),
-                    vscode.commands.registerCommand('gravitas.views.focus', () => {
-                        // chatSidebarProvider.focus();
-                        // Ensure the view is visible in the sidebar
-                        vscode.commands.executeCommand('workbench.view.extension.gravitas-explorer');
-                    }),
-                );
+                            if (this.logger) this.logger.info('system', 'Reviewer server stopped.');
+                        }),
+                        vscode.commands.registerCommand('gravitas.runtime.restartReviewer', async () => {
+                            if (!this.gravitasState!.state.validated) return;
+                            const cfg = await ConfigManager.getInstance().loadConfig();
+                            if (cfg) {
+                                const pm = this.processManager! as any;
+                                await pm.reviewer.stop();
+                                await this.processManager!.startReviewer(cfg);
+                                if (this.logger) this.logger.info('system', 'Reviewer server restarted.');
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.storage.clear', async () => {
+                            const choice = await vscode.window.showWarningMessage(
+                                'Clear Gravitas Storage?',
+                                { modal: true },
+                                'Clear Logs Only',
+                                'Clear Everything (Logs + Reset Validation)'
+                            );
+    
+                            if (!choice) return;
+    
+                            const storageManager = StorageManager.getInstance();
+                            let result;
+    
+                            if (choice === 'Clear Logs Only') {
+                                result = storageManager.clearLogs();
+                            } else {
+                                result = storageManager.clearAll();
+                            }
+    
+                            if (result.success) {
+                                vscode.window.showInformationMessage(result.message);
+                                if (this.logger) this.logger.info('system', 'Storage cleared by user.');
+                            } else {
+                                vscode.window.showErrorMessage(result.message);
+                                if (this.logger) this.logger.error('system', result.message);
+                            }
+                        }),
+                        vscode.commands.registerCommand('gravitas.views.focus', () => {
+                            if (this.chatSidebarProvider) {
+                                this.chatSidebarProvider.focus();
+                            }
+                            // Ensure the view is visible in the sidebar
+                            vscode.commands.executeCommand('workbench.view.extension.gravitas-explorer');
+                        }),
+                    );
+                });
                 syncLog('TRACE: [Step 6] Hooks & Commands registered.');
 
                 // 6. Subsystem Start (DEFERRED - do this last to ensure host stability)
-                try {
-                    syncLog('TRACE: [Step 7] Final Subsystem Event Enabler...');
+                await this.safeComponentInit('EventEnabler', () => {
                     CentralLogger.getInstance().enableEvents();
-                    logger.info('system', 'Gravitas Code: Infrastructure fully activated.');
-                    
-                    syncLog('TRACE: [Activation Complete]');
-                } catch (subErr: any) {
-                    syncLog('TRACE: [SUB-SYSTEM CRASH] ' + subErr.message);
-                    if (this.logger) this.logger.error('system', `Sub-system activation failed: ${subErr.message}`);
-                }
-            } catch (fatalErr: any) {
+                    if (this.logger) this.logger.info('system', 'Gravitas Code: Infrastructure fully activated.');
+                });
+
+                // 7. Auto-Start Servers (Optional)
+                await this.safeComponentInit('AutoStart', async () => {
+                    const cfg = vscode.workspace.getConfiguration('gravitasCode');
+                    const autoStart = cfg.get<boolean>('runtime.autoStartServers', false);
+                    if (autoStart) {
+                        syncLog('TRACE: [AutoStart] Triggering automatic server startup...');
+                        await vscode.commands.executeCommand('gravitas.runtime.start');
+                    }
+                });
+           } catch (fatalErr: any) {
                 syncLog('CRITICAL: [Emergency Defer] Panic in deferred activation: ' + fatalErr.stack);
             }
         }, 500); 

@@ -41,7 +41,7 @@ export class UnifiedProcessManager {
     }
 
     private getBinaryPath(config: GravitasConfig, modelConfig: any): string {
-        const monorepoBin = '/home/viren/llama/llama.cpp/build_cuda_mmq_moe/bin/llama-server';
+        const monorepoBin = '/home/viren/llama/llama.cpp/build_mmq_moe/bin/llama-server';
         
         // Priority 1: Specifically configured path in settings
         if (modelConfig.binPath?.trim()) return modelConfig.binPath.trim();

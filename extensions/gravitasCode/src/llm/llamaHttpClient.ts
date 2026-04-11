@@ -18,7 +18,7 @@ export class LlamaHttpClient {
         });
 
         const config: any = {
-            timeout: 300000, 
+            timeout: 30000, 
             httpAgent: agent,
             headers: { 
                 'Content-Type': 'application/json',
@@ -27,6 +27,9 @@ export class LlamaHttpClient {
         };
 
         if (isSocket) {
+            // Remove httpAgent for UDS to avoid connection conflicts in axios
+            delete config.httpAgent;
+            
             // endpoint format: unix:///path/to/server.sock/v1
             const rawPath = endpoint.replace('unix://', '');
             const sockIndex = rawPath.indexOf('.sock');
@@ -50,10 +53,15 @@ export class LlamaHttpClient {
         this.client = axios.create(config);
     }
 
-    async post(path: string, data: any, retries = 2, signal?: AbortSignal): Promise<any> {
+    async post(path: string, data: any, retries = 2, signal?: AbortSignal, timeout?: number): Promise<any> {
         try {
-            const response = await this.client.post(path, data, { signal });
-            return response.data;
+            const isStream = data.stream === true;
+            const response = await this.client.post(path, data, { 
+                signal, 
+                timeout,
+                responseType: isStream ? 'stream' : 'json'
+            });
+            return isStream ? response : response.data;
         } catch (e: any) {
             if (axios.isCancel(e) || e.name === 'AbortError') {
                 const logger = require('../core/logger').CentralLogger.getInstance();
@@ -66,14 +74,18 @@ export class LlamaHttpClient {
                 await new Promise(r => setTimeout(r, 500));
                 return this.post(path, data, retries - 1, signal);
             }
-            logger.error('system', `LlamaHttpClient: POST ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
+            if (e.response?.status === 404) {
+                logger.debug('system', `LlamaHttpClient: POST ${path} returned 404 (Expected/Optional).`);
+            } else {
+                logger.error('system', `LlamaHttpClient: POST ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
+            }
             throw e;
         }
     }
 
-    async get(path: string, retries = 2): Promise<any> {
+    async get(path: string, retries = 2, timeout?: number): Promise<any> {
         try {
-            const response = await this.client.get(path);
+            const response = await this.client.get(path, { timeout });
             return response.data;
         } catch (e: any) {
             const logger = require('../core/logger').CentralLogger.getInstance();
@@ -82,7 +94,11 @@ export class LlamaHttpClient {
                 await new Promise(r => setTimeout(r, 500));
                 return this.get(path, retries - 1);
             }
-            logger.error('system', `LlamaHttpClient: GET ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
+            if (e.response?.status === 404) {
+                logger.debug('system', `LlamaHttpClient: GET ${path} returned 404 (Expected/Optional).`);
+            } else {
+                logger.error('system', `LlamaHttpClient: GET ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
+            }
             throw e;
         }
     }

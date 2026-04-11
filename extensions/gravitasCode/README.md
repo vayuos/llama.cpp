@@ -1,4 +1,6 @@
-# Gravitas Code: Deterministic AI Intelligence
+ 
+ \][=
+ .....-+# Gravitas Code: Deterministic AI Intelligence
 
 **Gravitas Code** is a production-grade VS Code extension engineered for high-integrity systems development. It operates on a **Deterministic Dual-Agent Architecture** (Coder + Reviewer), ensuring that every AI-generated modification is validated against strict system invariants before integration.
 
@@ -180,6 +182,8 @@ A **deterministic context lifecycle system**:
 6. Continue execution
 
 ---
+
+..
 
 ## Context Trigger
 

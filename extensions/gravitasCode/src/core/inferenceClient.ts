@@ -1,6 +1,6 @@
-import axios from 'axios';
 import { ModelConfigSchema, GravitasConfig } from './config';
 import { CentralLogger } from './logger';
+import { LlamaHttpClient } from '../llm/llamaHttpClient';
 
 export interface CompletionOptions {
     prompt: string;
@@ -18,11 +18,10 @@ export class InferenceClient {
 
     async *streamCompletion(baseUrl: string, options: CompletionOptions): AsyncGenerator<string> {
         try {
-            const response = await axios.post(`${baseUrl}/completion`, {
+            const client = new LlamaHttpClient(baseUrl);
+            const response = await client.post('/completion', {
                 ...options,
                 stream: true
-            }, {
-                responseType: 'stream'
             });
 
             const stream = response.data;
@@ -53,14 +52,16 @@ export class InferenceClient {
 
     async getCompletion(baseUrl: string, options: CompletionOptions): Promise<string> {
         try {
-            const response = await axios.post(`${baseUrl}/completion`, {
+            const client = new LlamaHttpClient(baseUrl);
+            const data = await client.post('/completion', {
                 ...options,
                 stream: false
             });
-            return response.data.content;
+            return data.content;
         } catch (error: any) {
             this.logger.error('system', `Completion failed: ${error.message}`);
             throw error;
         }
     }
+
 }

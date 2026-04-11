@@ -95,7 +95,7 @@ class ChatController {
                     this.focusInput();
                     break;
                 case 'telemetry':
-                    this.updateGlobalTelemetry(message.coder, message.reviewer);
+                    this.updateGlobalTelemetry(message.coder, message.reviewer, message.rag);
                     break;
             }
         });
@@ -239,7 +239,7 @@ class ChatController {
                 </div>
             </div>
             <div class="user-bubble">${task.command}</div>
-            <div class="task-body" id="body-${task.id}">
+           <div class="task-body" id="body-${task.id}">
                 <div class="operational-status" id="status-${task.id}">Initializing...</div>
             </div>
         `;

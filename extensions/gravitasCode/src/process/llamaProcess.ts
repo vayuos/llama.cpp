@@ -58,10 +58,14 @@ export class LlamaProcess {
             fs.mkdirSync(socketDir, { recursive: true });
         }
         
-        // Remove existing socket if it exists to prevent bind errors
+        // Remove existing socket if it exists and looks dead
         const socketPath = path.join(socketDir, `${this.type}.sock`);
         if (fs.existsSync(socketPath)) {
-            try { fs.unlinkSync(socketPath); } catch(e) {}
+            try {
+                // Peek at the socket - if it's alive, we might not want to kill it
+                // but for now, we only unlink if we are starting a NEW local process
+                fs.unlinkSync(socketPath); 
+            } catch(e) {}
         }
 
         // Hardware Auto-Detection
@@ -222,12 +226,14 @@ export class LlamaProcess {
             const mode = config.mode || 'cpu';
             
             if (mode !== 'cpu') {
-                try {
-                    const { execSync } = require('child_process');
-                    const smi = execSync('nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits', { encoding: 'utf8', timeout: 1000 });
+                const { exec } = require('child_process');
+                exec('nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits', { timeout: 1000 }, (err: any, stdout: string) => {
+                    if (err || !stdout || !stdout.trim()) {
+                        return; // VRAM stays as previous or N/A
+                    }
                     
-                    if (smi && smi.trim()) {
-                        const lines = smi.trim().split('\n');
+                    try {
+                        const lines = stdout.trim().split('\n');
                         let deviceId = 0;
                         if (config.cudaVisibleDevices && config.cudaVisibleDevices.toString().trim() !== '') {
                             deviceId = parseInt(config.cudaVisibleDevices.split(',')[0]);
@@ -236,12 +242,15 @@ export class LlamaProcess {
                         if (lines[deviceId]) {
                             const [used, total] = lines[deviceId].split(',').map((s: string) => s.trim());
                             const pct = Math.round((parseInt(used)/parseInt(total))*100);
-                            vramStr = `VRAM: ${pct}% (${used}MB)`;
+                            const vramStr = `VRAM: ${pct}% (${used}MB)`;
+                            // Update telemetryStr with the new VRAM value
+                            this.telemetryStr = this.telemetryStr ? this.telemetryStr.replace(/VRAM: [^|]+/, vramStr) : vramStr;
+                            if (!this.telemetryStr.includes(vramStr)) {
+                                this.telemetryStr = `${vramStr} | ${this.telemetryStr}`.trim();
+                            }
                         }
-                    }
-                } catch (smiErr) {
-                    vramStr = 'VRAM: N/A';
-                }
+                    } catch (e) {}
+                });
             }
 
             // 2. Performance Metrics via Unix Domain Socket

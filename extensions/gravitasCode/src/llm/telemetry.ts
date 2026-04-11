@@ -88,7 +88,7 @@ export class TelemetryService {
             // --- RESILIENCE: Try health first ---
             let status: 'online' | 'offline' = 'offline';
             try {
-                const health = await client.get('/health');
+                const health = await client.get('/health', 0, 2000); // 0 retries, 2s timeout
                 if (health && health.status === 'ok') status = 'online';
             } catch (e) {
                 // If health fails, it's truly offline
@@ -97,22 +97,22 @@ export class TelemetryService {
 
             let metrics: string = '';
             try {
-                metrics = await client.get('/metrics');
+                metrics = await client.get('/metrics', 0, 2000); // 0 retries, 2s timeout
             } catch (e) {
                 metrics = '';
             }
             
             const latency = `${Date.now() - start}ms`;
             
-            // Parse TPS (predicted_tokens_seconds)
-            const genTpsMatch = metrics.match(/predicted_tokens_seconds\s+([0-9.]+)/);
-            const promptTpsMatch = metrics.match(/prompt_tokens_seconds\s+([0-9.]+)/);
+            // Parse TPS (predicted_tokens_seconds) - handle various prefixes like llamacpp: or llama_
+            const genTpsMatch = metrics.match(/(?:(?:llamacpp:|llama_)predicted_tokens_seconds|predicted_tokens_seconds)\s+([0-9.]+)/);
+            const promptTpsMatch = metrics.match(/(?:(?:llamacpp:|llama_)prompt_tokens_seconds|prompt_tokens_seconds)\s+([0-9.]+)/);
             
             const genTps = genTpsMatch ? parseFloat(genTpsMatch[1]) : 0.0;
             const promptTps = promptTpsMatch ? parseFloat(promptTpsMatch[1]) : 0.0;
  
             // Parse KV Cache (kv_cache_usage_ratio)
-            const slotsMatch = metrics.match(/kv_cache_usage_ratio\s+([0-9.]+)/);
+            const slotsMatch = metrics.match(/(?:(?:llamacpp:|llama_)kv_cache_usage_ratio|kv_cache_usage_ratio)\s+([0-9.]+)/);
             const slotsPct = slotsMatch ? Math.round(parseFloat(slotsMatch[1]) * 100) : 0;
  
             // Parse Load/Activity
@@ -124,7 +124,7 @@ export class TelemetryService {
             let vram = '0%';
             if (isRemote) {
                 try {
-                    const hw = await client.get('/v1/hardware');
+                    const hw = await client.get('/v1/hardware', 0, 2000); // 0 retries, 2s timeout
                     if (hw && hw.vram) {
                         vram = `${Math.round(hw.vram.used / hw.vram.total * 100)}%`;
                     }

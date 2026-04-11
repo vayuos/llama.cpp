@@ -4,6 +4,7 @@ import { Task, TaskId, TaskState, TaskAttempt, TaskStore, TaskEvent } from './ty
 import { EventValidator } from './eventValidator';
 import { reduceTask, applyEvent } from './reducer';
 import * as fs from 'fs';
+import { promises as fsp } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { verifyContentIntegrity, IntegrityResult } from './integrity';
@@ -32,8 +33,7 @@ export class TaskManager {
         this.eventValidator = EventValidator.getInstance();
         this.syncLog('TRACE: [TaskManager] Ensuring Base Directory...');
         this.ensureBaseDir();
-        this.syncLog('TRACE: [TaskManager] Loading Tasks from disk...');
-        this.loadTasks();
+        // this.loadTasks(); // DE-BLOCKED: Removed from constructor
         this.syncLog('TRACE: [TaskManager] Constructor finished.');
     }
     
@@ -77,58 +77,68 @@ export class TaskManager {
         return TaskManager.instance;
     }
 
-    private loadTasks() {
+    public async loadTasks() {
         const baseDir = this.getStoragePath();
         this.syncLog(`TRACE: [TaskManager.loadTasks] Checking storage path: ${baseDir}`);
+        
+        // Use fs.existsSync for the initial check as it's fast and doesn't throw
         if (!fs.existsSync(baseDir)) {
             this.syncLog('TRACE: [TaskManager.loadTasks] Storage path does not exist. Skipping recovery.');
             return;
         }
 
-        this.syncLog(`TRACE: [TaskManager.loadTasks] Starting fs.readdirSync...`);
+        this.syncLog(`TRACE: [TaskManager.loadTasks] Starting directory listing...`);
 
-        const taskDirs = fs.readdirSync(baseDir, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
-            .map(dirent => dirent.name);
-        
-        this.syncLog(`TRACE: [TaskManager.loadTasks] Found ${taskDirs.length} potential task directories.`);
+        try {
+            const dirents = await fsp.readdir(baseDir, { withFileTypes: true });
+            const taskDirs = dirents
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+            
+            this.syncLog(`TRACE: [TaskManager.loadTasks] Found ${taskDirs.length} potential task directories.`);
 
-        for (const taskId of taskDirs) {
-            try {
-                const eventsPath = this.getTaskEventsPath(taskId);
-                this.syncLog(`TRACE: [TaskManager.loadTasks] Loop index - eventsPath: ${eventsPath}`);
-                if (fs.existsSync(eventsPath)) {
-                    const stats = fs.statSync(eventsPath);
+            for (const taskId of taskDirs) {
+                try {
+                    const eventsPath = this.getTaskEventsPath(taskId);
+                    
+                    // Check if file exists asynchronously
+                    try {
+                        await fsp.access(eventsPath);
+                    } catch {
+                        continue;
+                    }
+
+                    const stats = await fsp.stat(eventsPath);
                     if (stats.size > 20 * 1024 * 1024) { // 20 MB safety limit
-                        this.syncLog(`CRITICAL: Task ${taskId} events.jsonl is bloated (${stats.size} bytes). Skipping to prevent V8 crash.`);
+                        this.syncLog(`CRITICAL: Task ${taskId} events.jsonl is bloated (${stats.size} bytes). Skipping.`);
                         try {
-                            // Rename to prevent persistent crash loops on subsequent boots
-                            fs.renameSync(eventsPath, eventsPath + '.corrupted');
+                            await fsp.rename(eventsPath, eventsPath + '.corrupted');
                         } catch(e) {}
                         continue;
                     }
 
-                    this.syncLog(`TRACE: [TaskManager.loadTasks] Reading JSON file...`);
-                    const fileContent = fs.readFileSync(eventsPath, 'utf8');
-                    this.syncLog(`TRACE: [TaskManager.loadTasks] Parse JSON (Length: ${fileContent.length})`);
+                    const fileContent = await fsp.readFile(eventsPath, 'utf8');
                     const events = fileContent
                         .split('\n')
                         .filter(line => line.trim())
                         .map(line => JSON.parse(line) as TaskEvent);
 
                     if (events.length > 0) {
-                        this.syncLog(`TRACE: [TaskManager.loadTasks] Calling rebuildTaskFromEvents`);
-                        this.tasks[taskId] = this.rebuildTaskFromEvents(taskId, events);
-                        this.syncLog(`TRACE: [TaskManager.loadTasks] Task ${taskId} recovered with ${events.length} events.`);
+                        const task = this.rebuildTaskFromEvents(taskId, events);
+                        this.tasks[taskId] = task;
+                        this._fireUpdate(task); // UI LIVENESS: Populate history view as we load
+                        
+                        // Yield to event loop to keep UI responsive during large recovery
+                        await new Promise(resolve => setImmediate(resolve));
                     }
-                } else {
-                    this.syncLog(`TRACE: [TaskManager.loadTasks] No events file: ${eventsPath}`);
+                } catch (err) {
+                    console.error(`TRACE: [TaskManager] Failed to restore task ${taskId}:`, err);
                 }
-            } catch (err) {
-                console.error(`TRACE: [TaskManager] Failed to restore task ${taskId}:`, err);
             }
+            this.syncLog(`TRACE: [TaskManager.loadTasks] Background recovery completed for ${Object.keys(this.tasks).length} tasks.`);
+        } catch (err: any) {
+            this.syncLog(`CRITICAL: [TaskManager.loadTasks] Failed to read base storage directory: ${err.message}`);
         }
-        console.log('TRACE: [TaskManager] Task recovery sequence completed.');
     }
 
     private rebuildTaskFromEvents(taskId: string, events: TaskEvent[]): Task {
