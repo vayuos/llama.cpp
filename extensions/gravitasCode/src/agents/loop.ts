@@ -167,7 +167,13 @@ export class AgentLoopController {
                     if (toolName === 'list_dir') {
                         const d = toolArgs.match(/path\s*=\s*(?:"([^"]*)"|'([^']*)')/);
                         const dirPath = d ? (d[1] || d[2]) : '.';
-                        toolResult = fs.readdirSync(path.resolve(dirPath)).join('\n');
+                        const files = fs.readdirSync(path.resolve(dirPath));
+                        const MAX_FILES = 1000;
+                        if (files.length > MAX_FILES) {
+                            toolResult = files.slice(0, MAX_FILES).join('\n') + `\n\n... and ${files.length - MAX_FILES} more files.`;
+                        } else {
+                            toolResult = files.join('\n');
+                        }
                     } else if (toolName === 'view_file') {
                         const f = toolArgs.match(/path\s*=\s*(?:"([^"]*)"|'([^']*)')/);
                         const filePath = f ? (f[1] || f[2]) : '';
@@ -235,6 +241,13 @@ export class AgentLoopController {
                     }
                 } catch (e: any) {
                     toolResult = `Error executing tool: ${e.message}`;
+                }
+
+                // 🛡️ Reliability: Truncate massive results to prevent prompt-bloat/hang-up
+                const MAX_TOOL_OUTPUT = 32000;
+                if (toolResult.length > MAX_TOOL_OUTPUT) {
+                    this.logger.warn('system', `AgentLoop: Truncating large tool result (${toolResult.length} chars)`);
+                    toolResult = toolResult.substring(0, MAX_TOOL_OUTPUT) + `\n\n... (Result truncated from ${toolResult.length} chars)`;
                 }
 
                 currentPrompt = `Tool Result (${toolName}):\n${toolResult}\n\nBased on this, proceed with [PATCH] or another [TOOL].`;

@@ -18,7 +18,7 @@ export class LlamaHttpClient {
         });
 
         const config: any = {
-            timeout: 30000, 
+            timeout: 120000, 
             httpAgent: agent,
             headers: { 
                 'Content-Type': 'application/json',
@@ -105,6 +105,12 @@ export class LlamaHttpClient {
 
     private isRetryable(e: any): boolean {
         const code = e.code;
-        return code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT';
+        const message = e.message?.toLowerCase() || '';
+        return (
+            code === 'ECONNREFUSED' || 
+            code === 'ECONNRESET' || 
+            code === 'ETIMEDOUT' || 
+            message.includes('socket hang up')
+        );
     }
 }
