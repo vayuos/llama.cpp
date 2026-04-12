@@ -17,7 +17,9 @@ export const ModelConfigSchema = z.object({
     repeatPenalty: z.number().default(1.1),
     modelName: z.string().optional(),
     strictMode: z.boolean().default(true),
-    modelPath: z.string().optional()
+    modelPath: z.string().optional(),
+    mode: z.string().optional(),
+    nGpuLayers: z.number().optional()
 });
 
 export const ConnectionConfigSchema = z.object({
@@ -126,15 +128,15 @@ export class ConfigManager {
                 }
             }
 
+            const userBaseUrl = config.get<string>(`${section}.general.baseUrl`);
             let defaultBaseUrl = `http://${host}:${port}`;
             
-            // Override with UDS for local Linux
-            if (connection.mode === 'local' && process.platform === 'linux') {
+            // Override with UDS for local Linux ONLY if no explicit baseUrl is provided
+            if (connection.mode === 'local' && process.platform === 'linux' && (!userBaseUrl || userBaseUrl.trim() === "")) {
                 const socketPath = path.join(require('os').homedir(), '.gravitas', 'sockets', `${section}.sock`);
                 defaultBaseUrl = `unix://${socketPath}`;
             }
 
-            const userBaseUrl = config.get<string>(`${section}.general.baseUrl`);
             let finalBaseUrl = userBaseUrl && userBaseUrl.trim() !== "" ? userBaseUrl : defaultBaseUrl;
 
             // --- NORMALIZE: Ensure no /v1 suffix for health/metrics compatibility ---
@@ -146,7 +148,13 @@ export class ConfigManager {
                 baseUrl: finalBaseUrl,
                 host: host,
                 port: port,
-                modelPath: config.get<string>(`${section}.general.modelPath`) || '',
+                modelPath: (() => {
+                    const mp = config.get<string>(`${section}.general.modelPath`) || '';
+                    logger.debug('system', `ConfigManager: [${section}] modelPath retrieved: "${mp}"`);
+                    return mp;
+                })(),
+                mode: config.get<string>(`${section}.hardware.mode`),
+                nGpuLayers: config.get<number>(`${section}.hardware.nGpuLayers`),
                 contextSize: config.get<number>(`${section}.hardware.contextSize`) || 102400,
                 temperature: config.get<number>(`${section}.sampling.temperature`) ?? 0.2,
                 topP: config.get<number>(`${section}.sampling.topP`),

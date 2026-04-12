@@ -74,8 +74,8 @@ export class LlamaHttpClient {
                 await new Promise(r => setTimeout(r, 500));
                 return this.post(path, data, retries - 1, signal);
             }
-            if (e.response?.status === 404) {
-                logger.debug('system', `LlamaHttpClient: POST ${path} returned 404 (Expected/Optional).`);
+            if (e.response?.status === 404 || e.response?.status === 501 || e.response?.status === 500) {
+                logger.debug('system', `LlamaHttpClient: POST ${path} returned ${e.response.status} (Optional feature missing).`);
             } else {
                 logger.error('system', `LlamaHttpClient: POST ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
             }
@@ -94,8 +94,8 @@ export class LlamaHttpClient {
                 await new Promise(r => setTimeout(r, 500));
                 return this.get(path, retries - 1);
             }
-            if (e.response?.status === 404) {
-                logger.debug('system', `LlamaHttpClient: GET ${path} returned 404 (Expected/Optional).`);
+            if (e.response?.status === 404 || e.response?.status === 501 || e.response?.status === 500) {
+                logger.debug('system', `LlamaHttpClient: GET ${path} returned ${e.response.status} (Optional feature missing).`);
             } else {
                 logger.error('system', `LlamaHttpClient: GET ${path} FATAL ERROR: ${e.message} (Code: ${e.code})`);
             }

@@ -171,13 +171,51 @@ export class AgentLoopController {
                     } else if (toolName === 'view_file') {
                         const f = toolArgs.match(/path=["'](.*?)["']/);
                         toolResult = fs.readFileSync(f ? f[1] : '', 'utf8');
+                    } else if (toolName === 'write_file') {
+                        const p = toolArgs.match(/path=["'](.*?)["']/);
+                        const c = toolArgs.match(/content=["']([\s\S]*)["']/);
+                        if (p && c) {
+                            const filePath = path.resolve(p[1]);
+                            if (!filePath.startsWith(os.homedir())) throw new Error('Security: Cannot write outside home directory.');
+                            fs.writeFileSync(filePath, c[1], 'utf8');
+                            toolResult = `Successfully wrote to ${p[1]}`;
+                        } else {
+                            throw new Error('Invalid args for write_file. Expected path="..." and content="..."');
+                        }
+                    } else if (toolName === 'delete_file') {
+                        const p = toolArgs.match(/path=["'](.*?)["']/);
+                        if (p) {
+                            const filePath = path.resolve(p[1]);
+                            if (!filePath.startsWith(os.homedir())) throw new Error('Security: Cannot delete outside home directory.');
+                            if (!fs.existsSync(filePath)) throw new Error(`File not found: ${p[1]}`);
+                            fs.unlinkSync(filePath);
+                            toolResult = `Successfully deleted ${p[1]}`;
+                        } else {
+                            throw new Error('Invalid args for delete_file. Expected path="..."');
+                        }
+                    } else if (toolName === 'run_command') {
+                        const c = toolArgs.match(/command=["'](.*?)["']/);
+                        if (c) {
+                            const { execSync } = require('child_process');
+                            try {
+                                const stdout = execSync(c[1], { 
+                                    encoding: 'utf8', 
+                                    timeout: 30000,
+                                    maxBuffer: 1024 * 1024 
+                                });
+                                toolResult = stdout || 'Command executed successfully.';
+                            } catch (e: any) {
+                                toolResult = `Command failed: ${e.message}`;
+                            }
+                        } else {
+                            throw new Error('Invalid args for run_command. Expected command="..."');
+                        }
                     } else if (toolName === 'grep_search') {
                         const q = toolArgs.match(/query=["'](.*?)["']/);
                         const query = q ? q[1] : '';
                         if (!query) throw new Error('Search query is empty.');
                         
                         this.logger.info('system', `AgentLoop: Executing rg search for "${query}"`);
-                        // Use rg (ripgrep) with 50 matches limit for performance/token safety
                         const { execSync } = require('child_process');
                         try {
                             const stdout = execSync(`rg --max-count 50 --fixed-strings --line-number --column "${query}" .`, { 
@@ -187,7 +225,6 @@ export class AgentLoopController {
                             });
                             toolResult = stdout || 'No matches found.';
                         } catch (e: any) {
-                            // execSync throws on non-zero exit (common for 0 matches in rg)
                             toolResult = e.stdout || 'No matches found or search error.';
                         }
                     }
@@ -230,24 +267,13 @@ export class AgentLoopController {
                 durationMs: Date.now() - phaseStart
             });
 
-            // 🧪 Short-Circuit: Skip Reviewer if this is just a greeting/question (no implementation)
-            const codeMarkers = ['```', 'function', 'class', 'const ', 'def ', 'import ', 'export '];
-            const hasImplementation = codeMarkers.some(m => currentCode.includes(m)) || /<implementation>|impl\.ts/i.test(currentCode);
-            
-            if (!hasImplementation) {
-                this.logger.info('system', 'Conversational response detected. Skipping review phase.');
-                tm.emitEvent(taskId, { type: 'TaskStatusEmitted', status: 'Success' });
-                tm.completeTask(taskId, 'Task completed via conversational response.');
-                break; // DONE
-            }
-
             tm.recordPhaseMetrics(taskId, coderPhaseId, Date.now() - phaseStart);
 
-            // 2. Reviewer Checks Code
+            // 2. Reviewer (Master Architect) Checks Code
             this.checkCancellation(taskId);
-            tm.emitEvent(taskId, { type: 'TaskStatusEmitted', status: 'Reviewing code...' });
+            tm.emitEvent(taskId, { type: 'TaskStatusEmitted', status: 'Master Architect Reviewing...' });
             this.logger.info('system', `Loop Iteration ${iteration}: Reviewing...`);
-            const reviewerPhaseId = tm.startPhase(taskId, 'reviewer', `Iteration ${iteration}: Code Review`);
+            const reviewerPhaseId = tm.startPhase(taskId, 'reviewer', `Iteration ${iteration}: Master Architect Review`);
             tm.bindAgent(taskId, reviewerPhaseId, 'reviewer-v2-stochastic', config.reviewer.modelName || 'default-reviewer');
             
             const revPhaseStart = Date.now();
@@ -267,7 +293,7 @@ export class AgentLoopController {
 
             if (!review) {
                 this.logger.error('system', `AgentLoopController [Iteration ${iteration}]: Reviewer failed to provide a valid deterministic JSON review.`);
-                tm.failTask(taskId, 'Reviewer output was non-deterministic.');
+                tm.failTask(taskId, 'Master Architect output was non-deterministic.');
                 break;
             }
 
@@ -286,7 +312,7 @@ export class AgentLoopController {
                 issues: review.issues.map(i => ({
                     type: 'correctness',
                     file: 'impl.ts',
-                    line: i.line,
+                    line: i.line ?? 0,
                     message: i.description,
                     severity: i.severity === 'critical' ? 'error' : 'warning'
                 }))
@@ -294,15 +320,18 @@ export class AgentLoopController {
 
             tm.recordPhaseMetrics(taskId, reviewerPhaseId, Date.now() - revPhaseStart);
 
-            if (review.severity === 'minor' && review.issues.length === 0) {
-                this.logger.info('system', 'Auto-validation successful. Code meets quality bar.');
+            if (review.severity !== 'critical') {
+                this.logger.info('system', 'Master Architect approved the implementation.');
                 tm.emitEvent(taskId, { type: 'TaskStatusEmitted', status: 'Success' });
-                tm.completeTask(taskId, `Implementation finalized after ${iteration} iterations.`);
+                
+                // The Master (Reviewer) speaks to the user.
+                const finalResponse = review.finalUserResponse || review.summary || `Implementation finalized after ${iteration} iterations.`;
+                tm.completeTask(taskId, finalResponse);
                 break;
             }
 
-            // 3. Feedback Loop
-            this.logger.info('system', `AgentLoopController: Review FAILED. Moving to iteration ${iteration + 1} with feedback.`);
+            // 3. Feedback Loop (Slave Fixes it)
+            this.logger.info('system', `AgentLoopController: Master Architect REJECTED logic. Slave moving to iteration ${iteration + 1} with feedback.`);
             
             // 🛡️ User Awareness: Alert if loop is going high
             if (iteration > 10) {
@@ -312,10 +341,10 @@ export class AgentLoopController {
                 });
             }
 
-            currentPrompt = `${prompt}\n\n[ITERATION ${iteration} FEEDBACK]\nThe previous implementation failed review with the following summary: ${review.summary}\n\nPlease address these specific issues:\n- ${review.recommendedChanges.join('\n- ')}\n\nIMPORTANT: Provide the COMPLETE updated implementation.`;
+            currentPrompt = `${prompt}\n\n[MASTER ARCHITECT FEEDBACK]\nThe previous proposal was rejected with the following summary: ${review.summary}\n\nPlease address these specific instructions from the Master Architect:\n- ${review.recommendedChanges.join('\n- ')}\n\nIMPORTANT: Provide the COMPLETE updated implementation suggestion.`;
             
             if (iteration >= this.maxIterations) {
-                this.logger.error('system', `AgentLoopController: Maximum iterations (${this.maxIterations}) reached without passing review.`);
+                this.logger.error('system', `AgentLoopController: Maximum iterations (${this.maxIterations}) reached without Master approval.`);
                 tm.failTask(taskId, `Maximum autonomous iterations (${this.maxIterations}) reached.`);
             }
         }

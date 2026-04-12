@@ -82,7 +82,6 @@ export class LlamaProcess {
             '-ngl', nGpuLayers.toString(),
             '-t', threads.toString(),
             '--log-verbose',
-            '--log-debug',
             ...additionalArgs
         ];
         if (modelConfig.threadsBatch !== undefined) {

@@ -1949,5 +1949,54 @@
             "phaseId": { "type": "string" }
         },
         "additionalProperties": false
+    },
+    "TaskStatusEmitted": {
+        "title": "TaskStatusEmitted",
+        "description": "Status update string for the UI.",
+        "type": "object",
+        "required": ["eventId", "taskId", "timestamp", "type", "status"],
+        "properties": {
+            "eventId": { "type": "string" },
+            "taskId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "type": { "type": "string", "const": "TaskStatusEmitted" },
+            "status": { "type": "string" },
+            "attemptNo": { "type": "integer" },
+            "phaseId": { "type": "string" }
+        },
+        "additionalProperties": false
+    },
+    "ThoughtEmitted": {
+        "title": "ThoughtEmitted",
+        "description": "Inner reasoning from an agent.",
+        "type": "object",
+        "required": ["eventId", "taskId", "timestamp", "type", "content"],
+        "properties": {
+            "eventId": { "type": "string" },
+            "taskId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "type": { "type": "string", "const": "ThoughtEmitted" },
+            "content": { "type": "string" },
+            "attemptNo": { "type": "integer" },
+            "phaseId": { "type": "string" }
+        },
+        "additionalProperties": false
+    },
+    "ToolCallEmitted": {
+        "title": "ToolCallEmitted",
+        "description": "Agent requesting a tool execution.",
+        "type": "object",
+        "required": ["eventId", "taskId", "timestamp", "type", "tool", "args"],
+        "properties": {
+            "eventId": { "type": "string" },
+            "taskId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "type": { "type": "string", "const": "ToolCallEmitted" },
+            "tool": { "type": "string" },
+            "args": { "type": "string" },
+            "attemptNo": { "type": "integer" },
+            "phaseId": { "type": "string" }
+        },
+        "additionalProperties": false
     }
 }

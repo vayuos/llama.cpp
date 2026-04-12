@@ -24,7 +24,8 @@ export const DeterministicReviewSchema = z.object({
     }, z.enum(['critical', 'major', 'minor'])),
     issues: z.array(ReviewIssueSchema).default([]),
     recommendedChanges: z.array(z.string()).default([]),
-    summary: z.string().default('No summary provided')
+    summary: z.string().default('No summary provided'),
+    finalUserResponse: z.string().optional()
 });
 
 export type DeterministicReview = z.infer<typeof DeterministicReviewSchema>;
