@@ -39,8 +39,7 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
             this.postOrBuffer({ 
                 type: 'telemetry', 
                 coder: ts.getTelemetry('coder'), 
-                reviewer: ts.getTelemetry('reviewer'),
-                rag: ts.getTelemetry('rag')
+                reviewer: ts.getTelemetry('reviewer')
             });
         });
         
@@ -203,9 +202,6 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
                 <div class="metric-item highlight"><span class="label">GEN</span><span id="reviewerTps" class="value">0.0</span></div>
                 <div class="metric-item"><span class="label">KV</span><span id="reviewerKv" class="value">0%</span></div>
             </div>
-            <div class="section-footer">
-                <div id="ragStatus" class="status-dot"></div>
-                <span class="footer-label">RAG.BRAIN</span>
             </div>
         </div>
     </div>
