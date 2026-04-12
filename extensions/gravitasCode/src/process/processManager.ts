@@ -49,14 +49,12 @@ export class UnifiedProcessManager {
         // Priority 2: Global extension setting
         if ((config as any).llamaBinPath) return (config as any).llamaBinPath;
 
-        // Priority 3: Check if llama-server is in the current directory or build folder relative to extension
-        const localBuild = path.join(__dirname, '..', '..', '..', 'build', 'bin', 'llama-server');
-        if (fs.existsSync(localBuild)) return localBuild;
+        // Priority 3: Strictly enforce use of the native monorepo build per "use it only" directive
+        if (fs.existsSync(monorepoBin)) {
+            return monorepoBin;
+        }
 
-        // Priority 4: Hardcoded VyuOS/VyuForge monorepo path
-        if (fs.existsSync(monorepoBin)) return monorepoBin;
-
-        // Priority 5: System PATH
+        // Fallback (only if monorepoBin is missing): System PATH
         return 'llama-server';
     }
 

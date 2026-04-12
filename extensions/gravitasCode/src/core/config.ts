@@ -19,7 +19,9 @@ export const ModelConfigSchema = z.object({
     strictMode: z.boolean().default(true),
     modelPath: z.string().optional(),
     mode: z.string().optional(),
-    nGpuLayers: z.number().optional()
+    nGpuLayers: z.number().optional(),
+    flashAttn: z.boolean().default(true),
+    cachePrompt: z.boolean().default(true)
 });
 
 export const ConnectionConfigSchema = z.object({
@@ -161,7 +163,9 @@ export class ConfigManager {
                 topK: config.get<number>(`${section}.sampling.topK`),
                 repeatPenalty: config.get<number>(`${section}.sampling.repeatPenalty`) ?? 1.1,
                 modelName: config.get<string>(`${section}.general.modelName`),
-                strictMode: config.get<boolean>(`${section}.general.strictMode`) ?? true
+                strictMode: config.get<boolean>(`${section}.general.strictMode`) ?? true,
+                flashAttn: config.get<boolean>(`${section}.hardware.flashAttn`) ?? true,
+                cachePrompt: config.get<boolean>(`${section}.hardware.cachePrompt`) ?? true
             };
         };
 

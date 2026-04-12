@@ -285,6 +285,18 @@
                         "description": "Context size (KV cache) for the Coder model.",
                         "order": 10
                     },
+                    "gravitasCode.coder.hardware.flashAttn": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable Flash Attention for the Coder model (if supported by hardware).",
+                        "order": 11
+                    },
+                    "gravitasCode.coder.hardware.cachePrompt": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable Prompt Caching for the Coder model.",
+                        "order": 12
+                    },
                     "gravitasCode.coder.sampling.temperature": {
                         "type": "number",
                         "default": 0.2,
@@ -355,6 +367,18 @@
                         "default": 8192,
                         "description": "Context size (KV cache) for the Reviewer model.",
                         "order": 10
+                    },
+                    "gravitasCode.reviewer.hardware.flashAttn": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable Flash Attention for the Reviewer model.",
+                        "order": 11
+                    },
+                    "gravitasCode.reviewer.hardware.cachePrompt": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable Prompt Caching for the Reviewer model.",
+                        "order": 12
                     },
                     "gravitasCode.reviewer.sampling.temperature": {
                         "type": "number",

@@ -82,8 +82,17 @@ export class LlamaProcess {
             '-ngl', nGpuLayers.toString(),
             '-t', threads.toString(),
             '--log-verbose',
-            ...additionalArgs
+            '--cont-batching'
         ];
+
+        if (modelConfig.flashAttn) {
+            binaryArgs.push('--flash-attn');
+        }
+        if (modelConfig.cachePrompt) {
+            binaryArgs.push('--cache-prompt');
+        }
+
+        binaryArgs.push(...additionalArgs);
         if (modelConfig.threadsBatch !== undefined) {
             binaryArgs.push('-tb', modelConfig.threadsBatch.toString());
         }
