@@ -70,7 +70,7 @@ export class AgentLoopController {
         let workspaceContext = '';
         let systemPromptEnv = CODER_SYSTEM_PROMPT;
 
-        if (prompt.length > 10 || /implement|fix|refactor|add|create|show|explain/i.test(prompt)) {
+        if (prompt.length > 10 || /implement|fix|refactor|add|create|show|explain|clean|delete|remove|run|execute/i.test(prompt)) {
             const contextCollector = new ContextCollector();
             workspaceContext = await contextCollector.retrieve(prompt, config);
             
@@ -81,10 +81,9 @@ export class AgentLoopController {
                 this.logger.debug('system', 'Workspace context is still empty after local fallback.');
                 systemPromptEnv = `${CODER_SYSTEM_PROMPT}\n\nNote: The current workspace appears to be empty or inaccessible. Proceed with high caution and ask for clarification if file paths are unknown.`;
             }
-        } else {
-            this.logger.debug('system', 'Skipping context retrieval for short/non-implementation prompt.');
-            systemPromptEnv = 'You are a helpful assistant. The current workspace is empty. Keep greetings brief and do NOT dump any architectural summaries unless requested.';
         }
+        // REMOVED: Generic assistant fallback that stripped agent authority.
+
 
         this.logger.debug('system', `System Prompt Initialized: ${systemPromptEnv.substring(0, 200)}...`);
 
@@ -166,39 +165,45 @@ export class AgentLoopController {
                 let toolResult = '';
                 try {
                     if (toolName === 'list_dir') {
-                        const d = toolArgs.match(/path=["'](.*?)["']/);
-                        toolResult = fs.readdirSync(d ? d[1] : '.').join('\n');
+                        const d = toolArgs.match(/path\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+                        const dirPath = d ? (d[1] || d[2]) : '.';
+                        toolResult = fs.readdirSync(path.resolve(dirPath)).join('\n');
                     } else if (toolName === 'view_file') {
-                        const f = toolArgs.match(/path=["'](.*?)["']/);
-                        toolResult = fs.readFileSync(f ? f[1] : '', 'utf8');
+                        const f = toolArgs.match(/path\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+                        const filePath = f ? (f[1] || f[2]) : '';
+                        toolResult = fs.readFileSync(path.resolve(filePath), 'utf8');
                     } else if (toolName === 'write_file') {
-                        const p = toolArgs.match(/path=["'](.*?)["']/);
-                        const c = toolArgs.match(/content=["']([\s\S]*)["']/);
+                        const p = toolArgs.match(/path\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+                        const c = toolArgs.match(/content\s*=\s*(?:"([\s\S]*?)"|'([\s\S]*?)')/);
                         if (p && c) {
-                            const filePath = path.resolve(p[1]);
+                            const targetPath = p[1] || p[2];
+                            const content = c[1] || c[2];
+                            const filePath = path.resolve(targetPath);
                             if (!filePath.startsWith(os.homedir())) throw new Error('Security: Cannot write outside home directory.');
-                            fs.writeFileSync(filePath, c[1], 'utf8');
-                            toolResult = `Successfully wrote to ${p[1]}`;
+                            fs.writeFileSync(filePath, content, 'utf8');
+                            toolResult = `Successfully wrote to ${targetPath}`;
                         } else {
                             throw new Error('Invalid args for write_file. Expected path="..." and content="..."');
                         }
                     } else if (toolName === 'delete_file') {
-                        const p = toolArgs.match(/path=["'](.*?)["']/);
+                        const p = toolArgs.match(/path\s*=\s*(?:"([^"]*)"|'([^']*)')/);
                         if (p) {
-                            const filePath = path.resolve(p[1]);
+                            const targetPath = p[1] || p[2];
+                            const filePath = path.resolve(targetPath);
                             if (!filePath.startsWith(os.homedir())) throw new Error('Security: Cannot delete outside home directory.');
-                            if (!fs.existsSync(filePath)) throw new Error(`File not found: ${p[1]}`);
+                            if (!fs.existsSync(filePath)) throw new Error(`File not found: ${targetPath}`);
                             fs.unlinkSync(filePath);
-                            toolResult = `Successfully deleted ${p[1]}`;
+                            toolResult = `Successfully deleted ${targetPath}`;
                         } else {
                             throw new Error('Invalid args for delete_file. Expected path="..."');
                         }
                     } else if (toolName === 'run_command') {
-                        const c = toolArgs.match(/command=["'](.*?)["']/);
+                        const c = toolArgs.match(/command\s*=\s*(?:"([^"]*)"|'([^']*)')/);
                         if (c) {
+                            const command = c[1] || c[2];
                             const { execSync } = require('child_process');
                             try {
-                                const stdout = execSync(c[1], { 
+                                const stdout = execSync(command, { 
                                     encoding: 'utf8', 
                                     timeout: 30000,
                                     maxBuffer: 1024 * 1024 
@@ -211,8 +216,8 @@ export class AgentLoopController {
                             throw new Error('Invalid args for run_command. Expected command="..."');
                         }
                     } else if (toolName === 'grep_search') {
-                        const q = toolArgs.match(/query=["'](.*?)["']/);
-                        const query = q ? q[1] : '';
+                        const q = toolArgs.match(/query\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+                        const query = q ? (q[1] || q[2]) : '';
                         if (!query) throw new Error('Search query is empty.');
                         
                         this.logger.info('system', `AgentLoop: Executing rg search for "${query}"`);
