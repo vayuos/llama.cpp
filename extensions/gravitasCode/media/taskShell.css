@@ -114,8 +114,31 @@ body {
     letter-spacing: 0.05em;
     color: var(--accent-primary);
 }
+ 
+#copy-chat-btn, #delete-chat-btn {
+    opacity: 0.4;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --vscode-button-active-background: transparent;
+    --vscode-button-hover-background: rgba(255, 255, 255, 0.05);
+}
 
-/* The Body of Agent Feedback */
+#copy-chat-btn:hover {
+    opacity: 1;
+    color: var(--accent-emerald) !important;
+}
+
+#delete-chat-btn:hover {
+    opacity: 1;
+    color: #ff5252 !important;
+}
+
+.header-right {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+ 
+ /* The Body of Agent Feedback */
 .task-body {
     background: var(--bubble-agent);
     border: 1px solid var(--glass-border);

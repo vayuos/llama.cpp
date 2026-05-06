@@ -86,10 +86,7 @@ export class LlamaProcess {
         ];
 
         if (modelConfig.flashAttn) {
-            binaryArgs.push('--flash-attn');
-        }
-        if (modelConfig.cachePrompt) {
-            binaryArgs.push('--cache-prompt');
+            binaryArgs.push('--flash-attn', 'on');
         }
 
         binaryArgs.push(...additionalArgs);

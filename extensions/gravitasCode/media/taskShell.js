@@ -178,12 +178,22 @@ class ChatController {
         // Cache current controls
         this.currentStatusEl = shell.querySelector('#task-status');
         this.currentStopBtn = shell.querySelector('#stop-task-btn');
+        this.currentCopyBtn = shell.querySelector('#copy-chat-btn');
+        this.currentDeleteBtn = shell.querySelector('#delete-chat-btn');
         
         if (this.currentStopBtn) {
             this.currentStopBtn.addEventListener('click', () => {
                 this.vscode.postMessage({ type: 'abortTask', taskId: task.id });
                 this.currentStopBtn.classList.add('hidden');
             });
+        }
+
+        if (this.currentCopyBtn) {
+            this.currentCopyBtn.addEventListener('click', () => this.copyChatToClipboard(task.id));
+        }
+
+        if (this.currentDeleteBtn) {
+            this.currentDeleteBtn.addEventListener('click', () => this.deleteChat(task.id));
         }
 
         // Render all existing events
@@ -234,6 +244,12 @@ class ChatController {
                         <vscode-button appearance="icon" id="stop-task-btn" title="Stop Task" class="hidden">
                             <span class="codicon codicon-stop"></span>
                         </vscode-button>
+                        <vscode-button appearance="icon" id="copy-chat-btn" title="Copy Chat transcript">
+                            <span class="codicon codicon-copy"></span>
+                        </vscode-button>
+                        <vscode-button appearance="icon" id="delete-chat-btn" title="Delete Chat permanently">
+                            <span class="codicon codicon-trash"></span>
+                        </vscode-button>
                         <div class="task-status-chip" id="task-status">Ready</div>
                     </div>
                 </div>
@@ -251,6 +267,14 @@ class ChatController {
     }
 
     updateTaskUI(task) {
+        const shell = this.getTaskShell(task.id);
+        if (task.status === 'DELETED' || task._isDeleted) {
+            if (shell) shell.remove();
+            return;
+        }
+
+        if (task.id === 'deleted') return; // Legacy safety
+
         const badge = document.getElementById(`badge-${task.id}`);
         const status = document.getElementById(`status-${task.id}`);
         if (badge) badge.innerText = task.status;
@@ -453,6 +477,63 @@ class ChatController {
             })
             .replace(/\n\n/g, '<br>')
             .replace(/\n/g, ' '); // Basic normalization
+    }
+
+    deleteChat(taskId) {
+        if (confirm('Are you sure you want to delete this chat permanently?')) {
+            const shell = this.getTaskShell(taskId);
+            if (shell) shell.remove();
+            this.vscode.postMessage({ type: 'deleteTask', taskId });
+            this.debugLog(`TX: deleteTask ${taskId}`);
+        }
+    }
+
+    copyChatToClipboard(taskId) {
+        const shell = this.getTaskShell(taskId);
+        if (!shell) return;
+
+        let transcript = '';
+        
+        // 1. User Command
+        const userBubble = shell.querySelector('.user-bubble');
+        if (userBubble) {
+            transcript += `USER: ${userBubble.innerText}\n\n`;
+        }
+
+        // 2. Task Body (Coder/Reviewer logs)
+        const body = shell.querySelector('.task-body');
+        if (body) {
+            const logs = body.querySelectorAll('.event-log, .code-result-container, .markdown-log');
+            logs.forEach(log => {
+                if (log.classList.contains('code-result-container')) {
+                    const header = log.querySelector('.code-header');
+                    const code = log.querySelector('code');
+                    const fileName = header ? header.innerText.split(' ')[0] : 'code';
+                    transcript += `--- ${fileName} ---\n${code.innerText}\n\n`;
+                } else if (log.classList.contains('review-log')) {
+                    transcript += `REVIEWER: ${log.innerText}\n\n`;
+                } else if (log.classList.contains('success-log')) {
+                    transcript += `SYSTEM: ${log.innerText}\n\n`;
+                } else if (log.classList.contains('markdown-log')) {
+                    transcript += `${log.innerText}\n\n`;
+                } else if (log.classList.contains('thought-log')) {
+                    // Skip thoughts for a clean transcript
+                } else {
+                    transcript += `${log.innerText}\n\n`;
+                }
+            });
+        }
+
+        navigator.clipboard.writeText(transcript.trim()).then(() => {
+            this.debugLog('System: Transcript copied to clipboard.');
+            // Visual feedback
+            const statusChip = shell.querySelector('#task-status');
+            const originalText = statusChip.innerText;
+            statusChip.innerText = 'COPIED!';
+            setTimeout(() => { statusChip.innerText = originalText; }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy!', err);
+        });
     }
 }
 

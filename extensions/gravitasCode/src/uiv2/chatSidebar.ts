@@ -151,6 +151,12 @@ export class ChatSidebarProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 }
+                case 'deleteTask': {
+                    if (message.taskId) {
+                        TaskManager.getInstance().deleteTask(message.taskId);
+                    }
+                    break;
+                }
                 case 'error': {
                     CentralLogger.getInstance().error('system', `Gravitas Chat Frontend Error: ${message.message}\n${message.stack}`);
                     break;

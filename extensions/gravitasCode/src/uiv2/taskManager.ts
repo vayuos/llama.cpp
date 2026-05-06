@@ -571,7 +571,7 @@ export class TaskManager {
             }
 
             this.saveTasks();
-            this._onDidTaskUpdate.fire({ id: 'deleted', status: TaskState.CREATED } as any);
+            this._onDidTaskUpdate.fire({ id, status: 'DELETED' } as any);
         }
     }
 

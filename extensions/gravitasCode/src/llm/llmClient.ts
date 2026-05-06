@@ -39,14 +39,29 @@ export class LLMClient {
             top_k: options.top_k ?? 40,
             repeat_penalty: options.repeat_penalty ?? 1.1,
             stop: options.stop || [],
-            cache_prompt: false // 🛡️ CRITICAL: Clear KV cache for this specific task
+            cache_prompt: false
         };
 
-        const logger = require('../core/logger').CentralLogger.getInstance();
-        logger.debug('system', `Gravitas LLM Request: ${JSON.stringify(body, null, 2)}`);
-
         if (onChunk) {
-            // Streaming mode: SSE
+            return this.generateStreamingWithRetry(body, onChunk, 3, signal);
+        }
+
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        const data = await this.http.post('/v1/chat/completions', body, 3, signal);
+        
+        if (!data || !data.choices || data.choices.length === 0) {
+            throw new Error('Malformed response from LLM server (choices missing).');
+        }
+
+        return {
+            content: data.choices[0].message.content,
+            usage: data.usage
+        };
+    }
+
+    private async generateStreamingWithRetry(body: any, onChunk: (text: string) => void, retries: number, signal?: AbortSignal): Promise<LLMResponse> {
+        const logger = require('../core/logger').CentralLogger.getInstance();
+        try {
             const response = await (this.http as any).client.post('/v1/chat/completions', body, { responseType: 'stream', signal });
             let fullContent = '';
             let lineBuffer = '';
@@ -54,22 +69,20 @@ export class LLMClient {
             return new Promise((resolve, reject) => {
                 const onAbort = () => {
                     response.data.destroy();
-                    reject(new Error('LLM Stream aborted via signal.'));
+                    reject(new Error('LLM Stream aborted.'));
                 };
                 if (signal) signal.addEventListener('abort', onAbort);
 
                 response.data.on('data', (chunk: Buffer) => {
                     lineBuffer += chunk.toString();
                     const lines = lineBuffer.split('\n');
-                    lineBuffer = lines.pop() || ''; // Keep the last partial line
+                    lineBuffer = lines.pop() || '';
 
                     for (const line of lines) {
                         const trimmedLine = line.trim();
                         if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
-                        
                         const message = trimmedLine.replace(/^data: /, '');
                         if (message === '[DONE]') break;
-                        
                         try {
                             const parsed = JSON.parse(message);
                             const content = parsed.choices?.[0]?.delta?.content || '';
@@ -77,36 +90,36 @@ export class LLMClient {
                                 fullContent += content;
                                 onChunk(content);
                             }
-                        } catch (e) {
-                            // Non-json or partial json on this line, skip or log
-                        }
+                        } catch (e) {}
                     }
                 });
                 response.data.on('end', () => {
                     if (signal) signal.removeEventListener('abort', onAbort);
-                    logger.debug('system', `Gravitas LLM Stream Completed. Total content length: ${fullContent.length} chars.`);
                     resolve({ content: fullContent });
                 });
-                response.data.on('error', (err: Error) => {
+                response.data.on('error', (err: any) => {
                     if (signal) signal.removeEventListener('abort', onAbort);
-                    logger.error('system', `Gravitas LLM Stream Error: ${err.message}`);
                     reject(err);
                 });
             });
+        } catch (e: any) {
+            if (retries > 0 && this.isRetryable(e)) {
+                logger.warn('system', `LLM Streaming failed (${e.message}). Retrying... (${retries} left)`);
+                await new Promise(r => setTimeout(r, 1000));
+                return this.generateStreamingWithRetry(body, onChunk, retries - 1, signal);
+            }
+            throw e;
         }
+    }
 
-        const data = await this.http.post('/v1/chat/completions', body, 2, signal);
-        logger.debug('system', `Gravitas LLM Response: ${JSON.stringify(data, null, 2)}`);
-
-        if (!data || !data.choices || data.choices.length === 0) {
-            logger.error('system', `Gravitas LLM Error: Malformed response from server. Data: ${JSON.stringify(data)}`);
-            throw new Error('Malformed response from LLM server (choices missing).');
-        }
-
-        // OpenAI-compatible response { choices: [{ message: { content: string } }] }
-        return {
-            content: data.choices[0].message.content,
-            usage: data.usage
-        };
+    private isRetryable(e: any): boolean {
+        const code = e.code;
+        const message = e.message?.toLowerCase() || '';
+        return (
+            code === 'ECONNREFUSED' || 
+            code === 'ECONNRESET' || 
+            code === 'ETIMEDOUT' || 
+            message.includes('socket hang up')
+        );
     }
 }
